@@ -1,0 +1,33 @@
+{
+  "name": "dashboard",
+  "version": "0.1.0",
+  "description": "Scrimspec Dashboard - YouTube ingestion and analysis UI",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier -w src",
+    "format:check": "prettier --check src",
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests yet' && exit 0",
+    "clean": "rm -rf .next"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@scrimspec/shared-types": "workspace:*",
+    "@scrimspec/db": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "prettier": "^3.1.0",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "eslint": "^8.55.0",
+    "eslint-config-next": "^14.0.0"
+  }
+}
