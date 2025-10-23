@@ -1,0 +1,12 @@
+# Core dependencies
+psycopg2-binary==2.9.9          # PostgreSQL adapter
+google-auth-oauthlib==1.2.0     # Google OAuth2 authentication
+google-auth-httplib2==0.2.0     # Google HTTP library
+google-api-python-client==2.107.0  # Google API client
+
+# Optional: AI/ML analyzers
+google-generativeai==0.3.0      # Gemini API
+supabase==2.3.5                 # Supabase client (for Storage)
+
+# Development
+python-dotenv==1.0.0            # Environment variable loading
