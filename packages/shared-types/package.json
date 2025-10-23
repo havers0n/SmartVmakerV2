@@ -13,6 +13,10 @@
   "scripts": {
     "build": "tsc",
     "type-check": "tsc --noEmit",
+    "test": "echo 'No tests yet' && exit 0",
+    "lint": "echo 'No linting configured' && exit 0",
+    "format": "echo 'No formatting configured' && exit 0",
+    "format:check": "echo 'No formatting configured' && exit 0",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
