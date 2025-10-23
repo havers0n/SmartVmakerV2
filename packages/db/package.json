@@ -1,0 +1,40 @@
+{
+  "name": "@scrimspec/db",
+  "version": "0.1.0",
+  "description": "Database layer with Drizzle ORM for Scrimspec",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./queries": {
+      "types": "./dist/queries/index.d.ts",
+      "default": "./dist/queries/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "migrate": "drizzle-kit migrate",
+    "studio": "drizzle-kit studio",
+    "generate": "drizzle-kit generate:postgres",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@scrimspec/shared-types": "workspace:*",
+    "drizzle-orm": "^0.29.1",
+    "@supabase/supabase-js": "^2.38.4",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "drizzle-kit": "^0.20.13",
+    "@types/pg": "^8.11.3"
+  }
+}
