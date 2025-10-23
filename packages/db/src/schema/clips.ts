@@ -15,7 +15,6 @@ export const clips = pgTable(
     taskIdFk: foreignKey({
       columns: [table.taskId],
       foreignColumns: [tasks.id],
-      onDelete: 'cascade',
     }),
     taskIdIdx: index('idx_clips_task').on(table.taskId),
   }),

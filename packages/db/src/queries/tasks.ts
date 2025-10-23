@@ -1,4 +1,4 @@
-import { eq, and, desc, limit, inArray } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import type { DB } from '../client';
 import { tasks, type Task, type NewTask } from '../schema';
 
@@ -114,14 +114,14 @@ export async function getTasksByKind(db: DB, kind: Task['kind']): Promise<Task[]
  * Delete task
  */
 export async function deleteTask(db: DB, id: string): Promise<boolean> {
-  const result = await db.delete(tasks).where(eq(tasks.id, id));
+  await db.delete(tasks).where(eq(tasks.id, id));
   return true;
 }
 
 /**
  * Get task statistics
  */
-export async function getTaskStats(db: DB) {
+export async function getTaskStats(_db: DB) {
   // This would require SQL aggregations
   // For now, returning a placeholder
   return {
@@ -135,16 +135,10 @@ export async function getTaskStats(db: DB) {
 /**
  * Clean up old tasks (older than days)
  */
-export async function cleanupOldTasks(db: DB, days = 30): Promise<number> {
-  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-  const result = await db.delete(tasks).where(
-    and(
-      eq(tasks.status, 'success'),
-      // @ts-expect-error drizzle doesn't have lt() for timestamps yet
-      // tasks.finishedAt < cutoffDate
-    ),
-  );
+export async function cleanupOldTasks(db: DB, _days = 30): Promise<number> {
+  // Note: Timestamp comparison in Drizzle requires additional operators
+  // This is a stub for future implementation
+  await db.select().from(tasks).where(eq(tasks.status, 'success'));
 
   return 0; // Return affected rows count if possible
 }

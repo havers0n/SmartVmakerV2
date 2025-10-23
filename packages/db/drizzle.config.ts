@@ -7,9 +7,6 @@ export default {
   dbCredentials: {
     connectionString: process.env.DATABASE_URL || 'postgresql://localhost/scrimspec',
   },
-  migrations: {
-    prefix: 'timestamp',
-  },
   strict: true,
   verbose: true,
 } satisfies Config;

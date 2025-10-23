@@ -1,6 +1,6 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { createClient } from '@supabase/supabase-js';
-import postgres from 'postgres';
+import { Pool } from 'pg';
 
 import * as schema from './schema';
 
@@ -8,15 +8,15 @@ import * as schema from './schema';
 // Database Connection Factory
 // ============================================================================
 
-let pgClient: postgres.Sql | null = null;
+let pgClient: Pool | null = null;
 
-export function getPgClient(): postgres.Sql {
+export function getPgClient(): Pool {
   if (!pgClient) {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
       throw new Error('DATABASE_URL environment variable is not set');
     }
-    pgClient = postgres(databaseUrl);
+    pgClient = new Pool({ connectionString: databaseUrl });
   }
   return pgClient;
 }

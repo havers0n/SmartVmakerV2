@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, timestamp, index, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { type TaskKind, type TaskStatus } from '@scrimspec/shared-types';
 
 export const tasks = pgTable(
