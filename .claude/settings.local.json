@@ -43,7 +43,10 @@
       "Bash(git commit:*)",
       "mcp__supabase_rw__get_project_url",
       "Bash(supabase projects:*)",
-      "Bash(supabase link:*)"
+      "Bash(supabase link:*)",
+      "Bash(git checkout:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
     ],
     "deny": [],
     "ask": []
