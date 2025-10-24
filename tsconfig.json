@@ -27,7 +27,9 @@
     "paths": {
       "@/*": ["./packages/*/src"],
       "@shared/*": ["./packages/shared-types/src/*"],
-      "@db/*": ["./packages/db/src/*"]
+      "@db/*": ["./packages/db/src/*"],
+      "@project/api-client": ["./packages/api-client/src"],
+      "@project/shared-types": ["./packages/shared-types/src"]
     }
   },
   "include": ["packages/**/*.ts", "apps/**/*.ts", "tools/**/*.ts"],
