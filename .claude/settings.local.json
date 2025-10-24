@@ -36,7 +36,14 @@
       "mcp__supabase_rw__execute_sql",
       "mcp__supabase_rw__generate_typescript_types",
       "mcp__supabase_rw__list_tables",
-      "mcp__supabase_rw__get_advisors"
+      "mcp__supabase_rw__get_advisors",
+      "mcp__supabase_rw__list_migrations",
+      "mcp__supabase_rw__list_extensions",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__supabase_rw__get_project_url",
+      "Bash(supabase projects:*)",
+      "Bash(supabase link:*)"
     ],
     "deny": [],
     "ask": []
