@@ -27,7 +27,8 @@
     "format:check": "echo 'No formatting configured' && exit 0",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "generate": "drizzle-kit generate:postgres",
+    "generate": "drizzle-kit generate:pg",
+    "push": "drizzle-kit push:pg",
     "clean": "rm -rf dist"
   },
   "dependencies": {
