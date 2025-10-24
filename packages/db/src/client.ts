@@ -5,20 +5,30 @@ import { Pool } from 'pg';
 import * as schema from './schema';
 
 // ============================================================================
-// Database Connection Factory
+// Database Connection Factory with Hot Reload Support
 // ============================================================================
 
-let pgClient: Pool | null = null;
+// Use globalThis to preserve pool across hot reloads in development
+const globalForDb = globalThis as unknown as {
+  __pgPool: Pool | undefined;
+};
 
 export function getPgClient(): Pool {
-  if (!pgClient) {
+  if (!globalForDb.__pgPool) {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
       throw new Error('DATABASE_URL environment variable is not set');
     }
-    pgClient = new Pool({ connectionString: databaseUrl });
+
+    globalForDb.__pgPool = new Pool({
+      connectionString: databaseUrl,
+      ssl:
+        process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: false }
+          : undefined,
+    });
   }
-  return pgClient;
+  return globalForDb.__pgPool;
 }
 
 export function getDrizzleClient() {
