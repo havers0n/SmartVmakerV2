@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { QueryProvider } from '@/src/providers/query-client';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Scrimspec Dashboard',
