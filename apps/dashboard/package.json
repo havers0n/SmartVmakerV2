@@ -19,7 +19,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@scrimspec/shared-types": "workspace:*",
-    "@scrimspec/db": "workspace:*"
+    "@scrimspec/db": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
@@ -28,6 +30,9 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "eslint": "^8.55.0",
-    "eslint-config-next": "^14.0.0"
+    "eslint-config-next": "^14.0.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
   }
 }
