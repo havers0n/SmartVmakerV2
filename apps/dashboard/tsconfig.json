@@ -8,7 +8,13 @@
         "name": "next"
       }
     ],
-    "allowJs": true
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@project/api-client": ["../../packages/api-client/src"],
+      "@project/shared-types": ["../../packages/shared-types/src"]
+    }
   },
   "include": [
     "next-env.d.ts",
