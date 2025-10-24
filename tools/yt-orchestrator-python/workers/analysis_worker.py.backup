@@ -20,10 +20,6 @@ from pathlib import Path
 import tempfile
 
 import psycopg2
- 
-# Import storage helper (add parent directory to path)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from storage import upload_json, upload_raw, get_public_url
 from psycopg2.extras import RealDictCursor
 
 # Setup logging
@@ -296,15 +292,22 @@ class JobQueue:
 
 
 class StorageManager:
-    """Handles artifact storage (Supabase)."""
+    """Handles artifact storage (local/S3/Supabase)."""
 
-    def __init__(self):
-        """Initialize storage manager with Supabase client."""
-        logger.info('Using Supabase Storage for artifacts')
+    def __init__(self, storage_dir: str = '/tmp/scrimspec-artifacts'):
+        """
+        Initialize storage manager.
+
+        Args:
+            storage_dir: Base directory for storing artifacts
+        """
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f'Storage directory: {self.storage_dir}')
 
     def save_analysis(self, video_id: str, analyzer: str, data: Dict) -> str:
         """
-        Save analysis data to Supabase Storage.
+        Save analysis data to storage.
 
         Args:
             video_id: YouTube video ID
@@ -312,41 +315,38 @@ class StorageManager:
             data: Analysis data to store
 
         Returns:
-            Public URL to stored file
+            Path/URL to stored file
         """
-        try:
-            # Generate storage path
-            path_key = f'analysis/{video_id}_{analyzer}.json'
+        filename = f'{video_id}_{analyzer}.json'
+        filepath = self.storage_dir / filename
 
-            # Upload to Supabase Storage
-            public_url = upload_json(path_key, data)
-            logger.info(f'Saved analysis to Supabase: {public_url}')
-            return public_url
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            logger.info(f'Saved analysis to {filepath}')
+            # Return local path - in production, upload to S3/Supabase and return URL
+            return str(filepath)
 
         except Exception as e:
-            logger.error(f'Error saving analysis to Supabase: {e}')
+            logger.error(f'Error saving analysis: {e}')
             raise
 
-    def upload_to_supabase(self, data: Dict, video_id: str, analyzer: str) -> Optional[str]:
+    def upload_to_supabase(self, filepath: str, bucket: str = 'analysis-artifacts') -> Optional[str]:
         """
-        Upload analysis data to Supabase Storage.
+        Upload artifact to Supabase Storage.
 
         Args:
-            data: Analysis data dictionary
-            video_id: YouTube video ID
-            analyzer: Analyzer name
+            filepath: Local file path
+            bucket: Supabase storage bucket name
 
         Returns:
             Public URL or None
         """
-        try:
-            path_key = f'analysis/{video_id}_{analyzer}.json'
-            public_url = upload_json(path_key, data)
-            logger.info(f'Uploaded analysis to Supabase: {public_url}')
-            return public_url
-        except Exception as e:
-            logger.error(f'Failed to upload to Supabase: {e}')
-            return None
+        # TODO: Implement Supabase Storage upload
+        # For now, just return the local path
+        logger.info(f'TODO: Upload {filepath} to Supabase Storage bucket {bucket}')
+        return filepath
 
 
 def run_worker(poll_interval: int = 5) -> None:
@@ -396,21 +396,21 @@ def run_worker(poll_interval: int = 5) -> None:
                 analyzer_obj = VideoAnalyzer(analyzer)
                 analysis = analyzer_obj.analyze(video_id, video['url'])
 
-                # Upload to Supabase and get public URL
-                analysis_url = storage.save_analysis(video_id, analyzer, analysis)
+                # Save analysis to storage
+                analysis_path = storage.save_analysis(video_id, analyzer, analysis)
 
-                if not analysis_url:
-                    raise ValueError('Failed to upload analysis to Supabase Storage')
+                # Upload to Supabase (if configured)
+                analysis_url = storage.upload_to_supabase(analysis_path)
 
-                # Save metadata to database with Supabase URL
+                # Save metadata to database
                 queue.save_analysis(
                     video_id,
                     analyzer,
                     analysis_url=analysis_url,
-                    metadata={'analyzer': analyzer, 'beats_count': len(analysis.get('key_frames', []))},
+                    metadata=analysis,
                 )
 
-                logger.info(f'Job {job_id}: Analysis complete, saved to {analysis_url}')
+                logger.info(f'Job {job_id}: Analysis complete')
 
                 # Mark as done
                 queue.update_job_status(job_id, 'done')

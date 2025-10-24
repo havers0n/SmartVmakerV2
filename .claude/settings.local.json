@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(dir:*)",
+      "Bash(node --version:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(pnpm dev)",
+      "Bash(pnpm install)",
+      "Bash(npm run dev:*)",
+      "Bash(test:*)",
+      "Bash(rm:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(npx next dev)",
+      "Bash(TURBOPACK=false npx next dev:*)",
+      "Bash(npx next dev:*)",
+      "Bash(npm config set:*)",
+      "Bash(pnpm config set:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(pnpm build:*)",
+      "Bash(curl:*)",
+      "Bash(pnpm generate:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(pnpm migrate:*)",
+      "Bash(npx tsx:*)",
+      "Bash(node -e:*)",
+      "Bash(pkill:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase_rw__apply_migration",
+      "mcp__supabase_rw__execute_sql",
+      "mcp__supabase_rw__generate_typescript_types",
+      "mcp__supabase_rw__list_tables",
+      "mcp__supabase_rw__get_advisors"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase",
+    "supabase_rw"
+  ]
+}
