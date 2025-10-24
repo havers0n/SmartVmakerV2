@@ -37,6 +37,11 @@ out/
 archive/
 public/downloads/
 
+# Database backups (sensitive data)
+backups/*.sql
+backups/*.json
+backups/*.dump
+
 # Python
 __pycache__/
 *.py[cod]
