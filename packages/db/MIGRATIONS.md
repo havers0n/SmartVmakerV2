@@ -9,13 +9,24 @@ To apply migrations to your database:
 pnpm migrate:run
 ```
 
+The script will automatically load `.env` from the project root.
+
 ## Requirements
 
-Ensure `DATABASE_URL` environment variable is set:
+Ensure `DATABASE_URL` is set in your `.env` file in the project root:
 
 ```bash
-export DATABASE_URL="postgresql://user:pass@host:port/dbname"
+# .env (root of project)
+DATABASE_URL="postgresql://user:pass@host:port/dbname"
+
+# For Supabase (example):
+DATABASE_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-region.pooler.supabase.com:5432/postgres"
 ```
+
+**Note:** For Supabase:
+- Use the **Transaction** pooler connection string (port 5432)
+- Get it from: Supabase Dashboard → Settings → Database → Connection string
+- Format: `postgresql://postgres.[ref]:[password]@[host]:5432/postgres`
 
 For SSL connections (e.g., Supabase), the connection will use `ssl: { rejectUnauthorized: false }` in production.
 
