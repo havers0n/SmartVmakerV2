@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { ScenarioCreate } from "@project/shared-types/hwar";
+import { ScenarioCreate } from "@scrimspec/shared-types/hwar";
 import { db } from "@/src/lib/db";
 import { scenarios } from "@/src/lib/schema";
 

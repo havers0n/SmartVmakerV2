@@ -29,7 +29,7 @@ export async function GET() {
 
     return NextResponse.json<SuccessResponse>({
       ok: true,
-      harvests: rows.map((row) => ({
+      harvests: rows.map((row: typeof harvests.$inferSelect) => ({
         id: row.id,
         query: row.query,
         createdAt: row.createdAt,

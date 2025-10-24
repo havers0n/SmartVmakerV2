@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./hwar": {
+      "types": "./dist/hwar.d.ts",
+      "default": "./dist/hwar.js"
     }
   },
   "scripts": {
@@ -18,6 +22,9 @@
     "format": "echo 'No formatting configured' && exit 0",
     "format:check": "echo 'No formatting configured' && exit 0",
     "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

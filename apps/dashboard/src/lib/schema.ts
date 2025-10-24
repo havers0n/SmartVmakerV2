@@ -1,5 +1,8 @@
 /**
- * Re-export schema from @scrimspec/db for convenience
+ * Re-export schema tables from @scrimspec/db
  */
 
-export * from '@scrimspec/db/schema';
+import { schema } from '@scrimspec/db';
+
+export const scenarios = schema.scenarios;
+export const harvests = schema.harvests;

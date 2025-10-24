@@ -46,7 +46,8 @@
       "Bash(supabase link:*)",
       "Bash(git checkout:*)",
       "Bash(git push:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(pnpm type-check:*)"
     ],
     "deny": [],
     "ask": []
