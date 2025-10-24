@@ -1,5 +1,8 @@
-import { Link, useLocation } from "wouter";
-import { cn } from "@/lib/utils";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "../../../lib/utils";
 import { 
   BookMarked, 
   Users2, 
@@ -8,14 +11,14 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Presets", href: "/library/presets", icon: BookMarked },
-  { name: "Characters", href: "/library/characters", icon: Users2 },
-  { name: "Datasets", href: "/library/datasets", icon: FolderOpen },
-  { name: "Templates", href: "/library/templates", icon: Layout },
+  { name: "Presets", href: "/hwar/library/presets", icon: BookMarked },
+  { name: "Characters", href: "/hwar/library/characters", icon: Users2 },
+  { name: "Datasets", href: "/hwar/library/datasets", icon: FolderOpen },
+  { name: "Templates", href: "/hwar/library/templates", icon: Layout },
 ];
 
 export function LibrarySidebar() {
-  const [location] = useLocation();
+  const pathname = usePathname();
 
   return (
     <aside className="w-64 border-r bg-sidebar h-[calc(100vh-4rem)] overflow-y-auto">
@@ -23,7 +26,7 @@ export function LibrarySidebar() {
         <div className="space-y-1">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const isActive = location === item.href;
+            const isActive = pathname === item.href;
             
             return (
               <Link key={item.href} href={item.href} data-testid={`link-${item.name.toLowerCase()}`}>

@@ -24,6 +24,7 @@ export default function RootLayout({
                 <li><a href="/ingest">Ingest Videos</a></li>
                 <li><a href="/analysis">Analyze Videos</a></li>
                 <li><a href="/generation">Generate Content</a></li>
+                <li><a href="/hwar">HWAR</a></li>
               </ul>
             </nav>
           </header>

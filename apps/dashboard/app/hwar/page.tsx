@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function Page() {
-  return <div className="text-2xl font-semibold">HelloWhoAreYou · Overview</div>;
+  redirect("/hwar/create");
 }

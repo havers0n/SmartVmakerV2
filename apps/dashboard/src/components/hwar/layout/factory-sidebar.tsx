@@ -1,5 +1,8 @@
-import { Link, useLocation } from "wouter";
-import { cn } from "@/lib/utils";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "../../../lib/utils";
 import { 
   List, 
   Users, 
@@ -14,29 +17,29 @@ const navigation = [
   {
     section: "Harvests",
     items: [
-      { name: "Harvests", href: "/factory/harvests", icon: Download },
-      { name: "Analysis Queue", href: "/factory/analysis", icon: FlaskConical },
+      { name: "Harvests", href: "/hwar/factory/harvests", icon: Download },
+      { name: "Analysis Queue", href: "/hwar/factory/analysis", icon: FlaskConical },
     ],
   },
   {
     section: "Pipeline",
     items: [
-      { name: "Queues", href: "/factory/queues", icon: List },
-      { name: "Workers", href: "/factory/workers", icon: Users },
-      { name: "Batches", href: "/factory/batches", icon: Package },
+      { name: "Queues", href: "/hwar/factory/queues", icon: List },
+      { name: "Workers", href: "/hwar/factory/workers", icon: Users },
+      { name: "Batches", href: "/hwar/factory/batches", icon: Package },
     ],
   },
   {
     section: "Insights",
     items: [
-      { name: "Analytics", href: "/factory/analytics", icon: BarChart3 },
-      { name: "Settings", href: "/factory/settings", icon: Settings },
+      { name: "Analytics", href: "/hwar/factory/analytics", icon: BarChart3 },
+      { name: "Settings", href: "/hwar/factory/settings", icon: Settings },
     ],
   },
 ];
 
 export function FactorySidebar() {
-  const [location] = useLocation();
+  const pathname = usePathname();
 
   return (
     <aside className="w-64 border-r bg-sidebar h-[calc(100vh-4rem)] overflow-y-auto">
@@ -49,7 +52,7 @@ export function FactorySidebar() {
             <div className="mt-2 space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = location === item.href;
+                const isActive = pathname === item.href;
                 
                 return (
                   <Link key={item.href} href={item.href} data-testid={`link-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
