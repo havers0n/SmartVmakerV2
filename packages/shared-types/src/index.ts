@@ -3,6 +3,9 @@
  * Central type definitions for the entire monorepo
  */
 
+// Export HWAR types
+export * from './hwar';
+
 // ============================================================================
 // TASK TYPES
 // ============================================================================

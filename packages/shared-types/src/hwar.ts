@@ -1,0 +1,13 @@
+import { z } from "zod";
+
+// ============================================================================
+// HWAR (HelloWhoAreYou) TYPES
+// ============================================================================
+
+export const ScenarioCreate = z.object({
+  topic: z.string().min(3),
+  durationSec: z.number().int().min(5).max(90),
+  tags: z.array(z.string()).max(12)
+});
+
+export type ScenarioCreate = z.infer<typeof ScenarioCreate>;
