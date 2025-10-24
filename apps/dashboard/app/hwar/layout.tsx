@@ -6,6 +6,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <a className="block hover:underline" href="/hwar/create">Create</a>
         <a className="block hover:underline" href="/hwar/factory">Factory</a>
         <a className="block hover:underline" href="/hwar/library">Library</a>
+        <hr className="my-2" />
+        <a className="block hover:underline text-blue-600" href="/hwar/dev">Dev Smoke Test</a>
       </aside>
       <main className="flex-1 p-6">{children}</main>
     </div>
