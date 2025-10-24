@@ -3,16 +3,12 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/src/lib/db";
+import { serverError } from "@/src/lib/http";
 
 type SuccessResponse = {
   ok: true;
   now: string;
   provider: "drizzle+pg";
-};
-
-type ErrorResponse = {
-  ok: false;
-  error: string;
 };
 
 export async function GET() {
@@ -27,12 +23,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[Health] DB check failed:", error instanceof Error ? error.message : "Unknown error");
-    return NextResponse.json<ErrorResponse>(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Database connection failed",
-      },
-      { status: 500 }
-    );
+    return serverError(error);
   }
 }

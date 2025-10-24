@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
 import { harvests } from "@/src/lib/schema";
 import { desc } from "drizzle-orm";
+import { serverError } from "@/src/lib/http";
 
 type SuccessResponse = {
   ok: true;
@@ -12,11 +13,6 @@ type SuccessResponse = {
     query: string;
     createdAt: Date;
   }>;
-};
-
-type ErrorResponse = {
-  ok: false;
-  error: string;
 };
 
 export async function GET() {
@@ -36,13 +32,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("[API] Error fetching harvests:", error);
-    return NextResponse.json<ErrorResponse>(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown database error",
-      },
-      { status: 500 }
-    );
+    console.error("[API] Error fetching harvests:", error instanceof Error ? error.message : "Unknown error");
+    return serverError(error);
   }
 }

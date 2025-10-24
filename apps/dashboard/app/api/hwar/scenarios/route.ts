@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ScenarioCreate } from "@scrimspec/shared-types/hwar";
 import { db } from "@/src/lib/db";
 import { scenarios } from "@/src/lib/schema";
+import { badRequest, serverError } from "@/src/lib/http";
 
 type SuccessResponse = {
   ok: true;
@@ -16,21 +17,13 @@ type SuccessResponse = {
   };
 };
 
-type ErrorResponse = {
-  ok: false;
-  error: string | Record<string, unknown>;
-};
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = ScenarioCreate.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json<ErrorResponse>(
-        { ok: false, error: parsed.error.format() },
-        { status: 400 }
-      );
+      return badRequest(parsed.error.format());
     }
 
     const [scenario] = await db
@@ -43,10 +36,7 @@ export async function POST(req: NextRequest) {
       .returning();
 
     if (!scenario) {
-      return NextResponse.json<ErrorResponse>(
-        { ok: false, error: "Failed to create scenario" },
-        { status: 500 }
-      );
+      return serverError("Failed to create scenario");
     }
 
     return NextResponse.json<SuccessResponse>({
@@ -60,13 +50,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[API] Error creating scenario:", error);
-    return NextResponse.json<ErrorResponse>(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown database error",
-      },
-      { status: 500 }
-    );
+    console.error("[API] Error creating scenario:", error instanceof Error ? error.message : "Unknown error");
+    return serverError(error);
   }
 }
