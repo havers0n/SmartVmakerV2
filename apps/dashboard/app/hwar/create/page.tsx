@@ -7,7 +7,6 @@ import { Card } from "../../../src/components/ui/card";
 import { Plus, FolderOpen } from "lucide-react";
 import { EmptyState } from "../../../src/components/ui/empty-state";
 import { StatusBadge } from "../../../src/components/ui/status-badge";
-import { makeClient } from "@project/api-client";
 // TODO: Import the correct Project type
 // import type { Project } from "@shared/schema";
 

@@ -1,9 +1,6 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/src/lib/db";
-import { harvests, hwar_analysis_tasks, hwar_workers, hwar_queues, hwar_batches } from "@/src/lib/schema";
-import { count, eq } from "drizzle-orm";
 import { serverError } from "@/src/lib/http";
 
 type SuccessResponse = {

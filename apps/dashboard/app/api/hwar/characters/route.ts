@@ -28,11 +28,6 @@ type CharacterCreateResponse = {
   };
 };
 
-type ErrorResponse = {
-  ok: false;
-  error: string;
-};
-
 export async function GET() {
   try {
     const rows = await db
