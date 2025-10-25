@@ -2,20 +2,20 @@
   "name": "@scrimspec/db",
   "version": "0.1.0",
   "description": "Database layer with Drizzle ORM for Scrimspec",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
     },
     "./schema": {
-      "types": "./dist/schema/index.d.ts",
-      "default": "./dist/schema/index.js"
+      "types": "./dist/src/schema/index.d.ts",
+      "default": "./dist/src/schema/index.js"
     },
     "./queries": {
-      "types": "./dist/queries/index.d.ts",
-      "default": "./dist/queries/index.js"
+      "types": "./dist/src/queries/index.d.ts",
+      "default": "./dist/src/queries/index.js"
     }
   },
   "scripts": {
