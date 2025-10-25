@@ -32,7 +32,7 @@ export async function GET() {
 
     return NextResponse.json<SuccessResponse>({
       ok: true,
-      tasks: rows.map((row) => ({
+      tasks: rows.map((row: typeof hwar_analysis_tasks.$inferSelect) => ({
         id: row.id,
         kind: row.kind,
         status: row.status,
