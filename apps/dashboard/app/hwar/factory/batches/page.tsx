@@ -3,6 +3,8 @@
 import { Card } from "@/src/components/ui/card";
 import { Button } from "@/src/components/ui/button";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
+import { Badge } from "@/src/components/ui/badge";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Package, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -35,22 +37,28 @@ export default function Batches() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-6">
-          {[1, 2].map((i) => (
-            <Card key={i} className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                  <Skeleton className="h-8 w-16" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kind</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       ) : batches.length === 0 ? (
         <EmptyState
           icon={Package}
@@ -62,28 +70,36 @@ export default function Batches() {
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-6">
-          {batches.map((batch) => (
-            <Card key={batch.id} className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">{batch.kind}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Created {new Date(batch.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 text-xs rounded-full bg-secondary">
-                    {batch.status}
-                  </span>
-                  <Button variant="outline" size="sm">
-                    View
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kind</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {batches.map((batch) => (
+                <TableRow key={batch.id}>
+                  <TableCell className="font-medium">{batch.kind}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="capitalize">{batch.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(batch.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm">
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

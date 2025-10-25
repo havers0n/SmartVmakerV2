@@ -1,7 +1,9 @@
 "use client";
 
 import { Card } from "@/src/components/ui/card";
+import { Button } from "@/src/components/ui/button";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { FolderOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -27,22 +29,26 @@ export default function Datasets() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-                <div className="flex gap-2">
-                  <Skeleton className="h-4 w-12" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3, 4].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-4 w-32 ml-auto" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       ) : datasets.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
@@ -50,24 +56,33 @@ export default function Datasets() {
           description="Datasets will be created automatically when you run harvests and analyze videos"
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {datasets.map((dataset) => (
-            <Card key={dataset.id} className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">{dataset.name}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Created {new Date(dataset.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="text-sm text-muted-foreground hover:text-foreground">View</button>
-                  <button className="text-sm text-muted-foreground hover:text-foreground">Download</button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {datasets.map((dataset) => (
+                <TableRow key={dataset.id}>
+                  <TableCell className="font-medium">{dataset.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(dataset.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="sm">View</Button>
+                      <Button variant="ghost" size="sm">Download</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );
