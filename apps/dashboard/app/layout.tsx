@@ -12,6 +12,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const enableHwarNewUi = process.env.ENABLE_HWAR_NEW_UI === 'true';
+
   return (
     <html lang="en">
       <body>
@@ -24,7 +26,7 @@ export default function RootLayout({
                 <li><a href="/ingest">Ingest Videos</a></li>
                 <li><a href="/analysis">Analyze Videos</a></li>
                 <li><a href="/generation">Generate Content</a></li>
-                <li><a href="/hwar">HWAR</a></li>
+                {enableHwarNewUi && <li><a href="/hwar">HWAR</a></li>}
               </ul>
             </nav>
           </header>
