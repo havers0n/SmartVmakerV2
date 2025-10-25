@@ -1,6 +1,16 @@
 'use client';
 
 import { FormEvent, useState, useEffect } from 'react';
+import { Button } from '@/shared/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Skeleton } from '@/shared/components/ui/skeleton';
+import { EmptyState } from '@/shared/components/ui/empty-state';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import { Checkbox } from '@/shared/components/ui/checkbox';
+import { Badge } from '@/shared/components/ui/badge';
 
 interface Short {
   id: string;
@@ -128,250 +138,239 @@ export default function GenerationPage() {
     }
   };
 
+  // Get status badge variant
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'completed': return 'default';
+      case 'failed': return 'destructive';
+      case 'processing': return 'secondary';
+      default: return 'outline';
+    }
+  };
+
   return (
-    <div>
-      <h2>Generation & Asset Creation</h2>
-      <p>Create shorts from templates and generate video assets using MiniMax or Hailuo.</p>
+    <div className="container py-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Generation & Asset Creation</CardTitle>
+          <CardDescription>Create shorts from templates and generate video assets using MiniMax or Hailuo.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreateShort} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="templateId">Template ID</Label>
+                <Input
+                  id="templateId"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                  placeholder="e.g., template-001"
+                  disabled={loading}
+                />
+                <p className="text-sm text-muted-foreground">
+                  The ID of the template to base the short on
+                </p>
+              </div>
 
-      {/* Form Section */}
-      <section style={{ marginTop: '2rem', maxWidth: '600px', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '4px' }}>
-        <h3>Create New Short</h3>
-        <form onSubmit={handleCreateShort} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label htmlFor="templateId">
-              <strong>Template ID</strong>
-            </label>
-            <input
-              type="text"
-              id="templateId"
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              placeholder="e.g., template-001"
-              disabled={loading}
-              style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem' }}
-            />
-            <small style={{ color: '#666', display: 'block', marginTop: '0.25rem' }}>
-              The ID of the template to base the short on
-            </small>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="provider">Provider</Label>
+                <Select value={provider} onValueChange={(value) => setProvider(value as 'minimax' | 'hailuo')}>
+                  <SelectTrigger disabled={loading}>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minimax">MiniMax</SelectItem>
+                    <SelectItem value="hailuo">Hailuo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Video generation provider to use
+                </p>
+              </div>
+            </div>
 
-          <div>
-            <label htmlFor="provider">
-              <strong>Provider</strong>
-            </label>
-            <select
-              id="provider"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as 'minimax' | 'hailuo')}
-              disabled={loading}
-              style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem' }}
-            >
-              <option value="minimax">MiniMax</option>
-              <option value="hailuo">Hailuo</option>
-            </select>
-            <small style={{ color: '#666', display: 'block', marginTop: '0.25rem' }}>
-              Video generation provider to use
-            </small>
-          </div>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Short'}
+            </Button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: '0.75rem',
-              backgroundColor: loading ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '1rem',
-            }}
-          >
-            {loading ? 'Creating...' : 'Create Short'}
-          </button>
-        </form>
+          {error && (
+            <div className="mt-4 p-4 bg-destructive/10 text-destructive rounded-md">
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f8d7da', color: '#721c24', borderRadius: '4px' }}>
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#d4edda', color: '#155724', borderRadius: '4px' }}>
-            {success}
-          </div>
-        )}
-      </section>
+          {success && (
+            <div className="mt-4 p-4 bg-success/10 text-success rounded-md">
+              {success}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Status Section */}
-      <section style={{ marginTop: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>Generation Status</h3>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-              Auto-refresh (3s)
-            </label>
-            <button
-              onClick={fetchStatus}
-              disabled={loadingStatus}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loadingStatus ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {loadingStatus ? 'Refreshing...' : 'Refresh'}
-            </button>
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Generation Status</CardTitle>
+              <CardDescription>Monitor your generation jobs and assets</CardDescription>
+            </div>
+            <div className="flex items-center gap-4">
+              <Label className="flex items-center gap-2">
+                <Checkbox
+                  checked={autoRefresh}
+                  onCheckedChange={(checked) => setAutoRefresh(checked as boolean)}
+                />
+                Auto-refresh (3s)
+              </Label>
+              <Button
+                onClick={fetchStatus}
+                disabled={loadingStatus}
+                variant="outline"
+              >
+                {loadingStatus ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {statusData && (
-          <>
-            {/* Summary Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
-              <div style={{ padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#007bff' }}>
-                  {statusData.count.shorts}
-                </div>
-                <div style={{ color: '#666' }}>Shorts</div>
+        </CardHeader>
+        <CardContent>
+          {statusData ? (
+            <>
+              {/* Summary Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-primary">{statusData.count.shorts}</div>
+                    <div className="text-sm text-muted-foreground">Shorts</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-success">{statusData.count.assets}</div>
+                    <div className="text-sm text-muted-foreground">Assets</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-warning">{statusData.count.jobs}</div>
+                    <div className="text-sm text-muted-foreground">Jobs</div>
+                  </CardContent>
+                </Card>
               </div>
-              <div style={{ padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#28a745' }}>
-                  {statusData.count.assets}
-                </div>
-                <div style={{ color: '#666' }}>Assets</div>
-              </div>
-              <div style={{ padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px', textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ffc107' }}>
-                  {statusData.count.jobs}
-                </div>
-                <div style={{ color: '#666' }}>Jobs</div>
-              </div>
-            </div>
 
-            {/* Shorts Table */}
-            <div style={{ marginBottom: '2rem' }}>
-              <h4>Shorts</h4>
-              {statusData.shorts.length === 0 ? (
-                <p style={{ color: '#666' }}>No shorts yet</p>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f5f5f5' }}>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>ID</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Template</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Status</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Assets</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {statusData.shorts.map((short) => (
-                        <tr key={short.id} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td style={{ padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                            {short.id.substring(0, 8)}...
-                          </td>
-                          <td style={{ padding: '0.75rem' }}>{short.templateId}</td>
-                          <td style={{ padding: '0.75rem' }}>
-                            <span style={{
-                              padding: '0.25rem 0.5rem',
-                              borderRadius: '3px',
-                              backgroundColor: short.status === 'completed' ? '#d4edda' :
-                                             short.status === 'failed' ? '#f8d7da' :
-                                             short.status === 'processing' ? '#d1ecf1' : '#e2e3e5',
-                              color: short.status === 'completed' ? '#155724' :
-                                    short.status === 'failed' ? '#721c24' :
-                                    short.status === 'processing' ? '#0c5460' : '#383d41',
-                              fontSize: '0.85rem',
-                            }}>
-                              {short.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem' }}>
-                            {short.completedCount}/{short.assetCount}
-                          </td>
-                          <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: '#666' }}>
-                            {new Date(short.createdAt).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+              {/* Shorts Table */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-4">Shorts</h3>
+                {statusData.shorts.length === 0 ? (
+                  <EmptyState
+                    title="No shorts yet"
+                    description="Create a short using the form above to get started."
+                  />
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Template</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Assets</TableHead>
+                          <TableHead>Created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {statusData.shorts.map((short) => (
+                          <TableRow key={short.id}>
+                            <TableCell className="font-mono text-sm">
+                              {short.id.substring(0, 8)}...
+                            </TableCell>
+                            <TableCell>{short.templateId}</TableCell>
+                            <TableCell>
+                              <Badge variant={getStatusVariant(short.status)}>
+                                {short.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {short.completedCount}/{short.assetCount}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(short.createdAt).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
 
-            {/* Assets Table */}
-            <div style={{ marginBottom: '2rem' }}>
-              <h4>Assets ({statusData.count.assets})</h4>
-              {statusData.assets.length === 0 ? (
-                <p style={{ color: '#666' }}>No assets yet</p>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f5f5f5' }}>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Short ID</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Type</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Status</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Storage URL</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {statusData.assets.map((asset) => (
-                        <tr key={asset.id} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td style={{ padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                            {asset.shortId.substring(0, 8)}...
-                          </td>
-                          <td style={{ padding: '0.75rem' }}>{asset.assetType}</td>
-                          <td style={{ padding: '0.75rem' }}>
-                            <span style={{
-                              padding: '0.25rem 0.5rem',
-                              borderRadius: '3px',
-                              backgroundColor: asset.status === 'completed' ? '#d4edda' :
-                                             asset.status === 'failed' ? '#f8d7da' :
-                                             asset.status === 'processing' ? '#d1ecf1' : '#e2e3e5',
-                              color: asset.status === 'completed' ? '#155724' :
-                                    asset.status === 'failed' ? '#721c24' :
-                                    asset.status === 'processing' ? '#0c5460' : '#383d41',
-                              fontSize: '0.85rem',
-                            }}>
-                              {asset.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
-                            {asset.storageUrl ? (
-                              <a href={asset.storageUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#007bff', textDecoration: 'underline' }}>
-                                View
-                              </a>
-                            ) : (
-                              <span style={{ color: '#666' }}>Pending...</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
-                            {asset.apiCostUsd ? `$${asset.apiCostUsd.toFixed(4)}` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {/* Assets Table */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Assets ({statusData.count.assets})</h3>
+                {statusData.assets.length === 0 ? (
+                  <EmptyState
+                    title="No assets yet"
+                    description="Assets will appear here once shorts are created."
+                  />
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Short ID</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Storage URL</TableHead>
+                          <TableHead>Cost</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {statusData.assets.map((asset) => (
+                          <TableRow key={asset.id}>
+                            <TableCell className="font-mono text-sm">
+                              {asset.shortId.substring(0, 8)}...
+                            </TableCell>
+                            <TableCell>{asset.assetType}</TableCell>
+                            <TableCell>
+                              <Badge variant={getStatusVariant(asset.status)}>
+                                {asset.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {asset.storageUrl ? (
+                                <a 
+                                  href={asset.storageUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-primary hover:underline"
+                                >
+                                  View
+                                </a>
+                              ) : (
+                                <span className="text-muted-foreground">Pending...</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {asset.apiCostUsd ? `$${asset.apiCostUsd.toFixed(4)}` : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <Skeleton className="h-4 w-[250px]" />
+              <Skeleton className="h-4 w-[200px]" />
+              <Skeleton className="h-4 w-[300px]" />
             </div>
-          </>
-        )}
-      </section>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
