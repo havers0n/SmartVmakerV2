@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="bg-background text-foreground">
+    <html className="bg-background text-foreground" lang="en">
       <body className="min-h-screen">
         <QueryProvider>
           <TooltipProvider>
