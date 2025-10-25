@@ -3,6 +3,7 @@
 import { Card } from "@/src/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
+import { Skeleton } from "@/src/components/ui/skeleton";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { List } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -39,9 +40,26 @@ export default function Queues() {
 
         <TabsContent value="all">
           {isLoading ? (
-            <div className="animate-pulse">
-              <Card className="h-96"></Card>
-            </div>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[1, 2, 3, 4].map((i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           ) : queues.length === 0 ? (
             <EmptyState
               icon={List}
