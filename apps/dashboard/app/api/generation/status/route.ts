@@ -11,7 +11,7 @@ import {
   generationAssets,
   generationQueue,
 } from '@scrimspec/db/schema';
-import { eq, desc, limit } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 const db = getDrizzleClient();
 
