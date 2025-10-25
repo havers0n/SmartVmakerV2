@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import { QueryProvider } from '@/src/providers/query-client';
+import { TooltipProvider } from '@/src/components/ui/tooltip';
+import { Toaster } from '@/src/components/ui/toaster';
+import { Header } from '@/src/components/layout/header';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -12,32 +15,17 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const enableHwarNewUi = process.env.NEXT_PUBLIC_ENABLE_HWAR_NEW_UI === 'true';
-
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="bg-background text-foreground">
+      <body className="min-h-screen">
         <QueryProvider>
-          <header style={{ borderBottom: '1px solid #ccc', padding: '1rem' }}>
-            <h1>Scrimspec Dashboard</h1>
-            <nav>
-              <ul style={{ listStyle: 'none', display: 'flex', gap: '2rem' }}>
-                <li><a href="/">Home</a></li>
-                <li><a href="/ingest">Ingest Videos</a></li>
-                <li><a href="/analysis">Analyze Videos</a></li>
-                <li><a href="/generation">Generate Content</a></li>
-                {enableHwarNewUi && <li><a href="/hwar">HWAR</a></li>}
-              </ul>
-            </nav>
-          </header>
-
-          <main style={{ padding: '2rem' }}>
-            {children}
-          </main>
-
-          <footer style={{ borderTop: '1px solid #ccc', padding: '1rem', marginTop: '2rem', textAlign: 'center', color: '#666' }}>
-            <p>&copy; 2025 Scrimspec. All rights reserved.</p>
-          </footer>
+          <TooltipProvider>
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1">{children}</main>
+            </div>
+            <Toaster />
+          </TooltipProvider>
         </QueryProvider>
       </body>
     </html>
