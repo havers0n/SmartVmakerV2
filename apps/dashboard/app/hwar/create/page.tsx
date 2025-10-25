@@ -23,7 +23,7 @@ type Project = {
   costUsd?: number;
 };
 
-const api = makeClient();
+// const api = makeClient(); // Commented out since it's not used
 
 export default function CreateIndex() {
   const router = useRouter();

@@ -1,4 +1,6 @@
-import { Link } from "wouter";
+"use client";
+
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Settings, DollarSign } from "lucide-react";
 
@@ -17,17 +19,17 @@ export function AppHeader() {
           </Link>
           
           <nav className="flex items-center gap-8">
-            <Link href="/create" data-testid="link-create">
+            <Link href="/hwar/create" data-testid="link-create">
               <span className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors cursor-pointer">
                 Create
               </span>
             </Link>
-            <Link href="/factory" data-testid="link-factory">
+            <Link href="/hwar/factory" data-testid="link-factory">
               <span className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors cursor-pointer">
                 Factory
               </span>
             </Link>
-            <Link href="/library" data-testid="link-library">
+            <Link href="/hwar/library" data-testid="link-library">
               <span className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors cursor-pointer">
                 Library
               </span>
