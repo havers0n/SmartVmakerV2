@@ -12,7 +12,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const enableHwarNewUi = process.env.ENABLE_HWAR_NEW_UI === 'true';
+  const enableHwarNewUi = process.env.NEXT_PUBLIC_ENABLE_HWAR_NEW_UI === 'true';
 
   return (
     <html lang="en">
