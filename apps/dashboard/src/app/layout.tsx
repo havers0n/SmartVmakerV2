@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { QueryProvider } from '@/providers/query-client';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/toaster';
-import { Header } from '@/components/layout/header';
+import { QueryProvider } from '../shared/providers/query-client';
+import { TooltipProvider } from '../shared/components/ui/tooltip';
+import { Toaster } from '../shared/components/ui/toaster';
+import { Header } from '../shared/components/layout/header';
 import './globals.css';
 
 export const metadata: Metadata = {
