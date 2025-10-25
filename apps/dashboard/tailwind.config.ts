@@ -3,11 +3,10 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   darkMode: ["class"],
   content: [
-    "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
-    // Added content paths for HelloWhoAreYou components
-    "./client/index.html",
-    "./client/src/**/*.{js,jsx,ts,tsx}",
+    "./src/app/**/*.{ts,tsx,mdx}",
+    "./src/components/**/*.{ts,tsx,mdx}",
+    "./src/features/**/*.{ts,tsx,mdx}",
+    "./src/shared/**/*.{ts,tsx,mdx}",
   ],
   theme: {
     extend: {

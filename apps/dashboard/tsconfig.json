@@ -11,18 +11,14 @@
     "allowJs": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/src/*": ["./src/*"],
-      "@project/api-client": ["../../packages/api-client/src"],
-      "@project/shared-types": ["../../packages/shared-types/src"],
-      "@scrimspec/shared-types/hwar": ["../../packages/shared-types/src/hwar"],
-      "@scrimspec/db/schema": ["../../packages/db/src/schema"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*",
+    "*.ts",
+    "*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [
