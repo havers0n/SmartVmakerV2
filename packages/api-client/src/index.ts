@@ -15,7 +15,28 @@ export const makeClient = (base = "/api") => {
           body: JSON.stringify(body),
           headers: { "Content-Type": "application/json" }
         }),
-      listHarvests: () => fetcher(`/hwar/harvests`)
+      listHarvests: () => fetcher(`/hwar/harvests`),
+      // Added methods for Create pages
+      listProjects: () => fetcher(`/hwar/projects`),
+      getProject: (id: string) => fetcher(`/hwar/projects/${id}`),
+      createProject: (body: unknown) =>
+        fetcher(`/hwar/projects`, {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "Content-Type": "application/json" }
+        }),
+      updateProject: (id: string, body: unknown) =>
+        fetcher(`/hwar/projects/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(body),
+          headers: { "Content-Type": "application/json" }
+        }),
+      generateScenarios: (projectId: string, body: unknown) =>
+        fetcher(`/hwar/projects/${projectId}/scenarios/generate`, {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "Content-Type": "application/json" }
+        })
     }
   };
 };
