@@ -1,0 +1,342 @@
+{
+  "audit_date": "2025-10-25",
+  "project": "Scrimspec Monorepo",
+  "branch": "feat/hwar-frontend-migration",
+  "audit_scope": "HelloWhoAreYou → apps/dashboard UI/UX integration",
+
+  "routes": {
+    "overview": "ok",
+    "create": "ok",
+    "create_new": "ok",
+    "create_id": "ok",
+    "factory": "ok",
+    "factory_harvests": "ok",
+    "factory_analysis": "ok",
+    "factory_queues": "ok",
+    "factory_workers": "ok",
+    "factory_batches": "ok",
+    "factory_analytics": "ok",
+    "factory_settings": "ok",
+    "library": "ok",
+    "library_presets": "ok",
+    "library_characters": "ok",
+    "library_datasets": "ok",
+    "library_templates": "ok",
+    "dev": "ok",
+    "layout": "ok",
+    "total_pages": 19,
+    "coverage": "complete"
+  },
+
+  "components": {
+    "shadcn_count": 49,
+    "custom_count": 2,
+    "missing": [],
+    "custom_components": [
+      "empty-state",
+      "status-badge"
+    ],
+    "ui_imports_resolved": true,
+    "path_alias_used": "@/src/components/ui/*"
+  },
+
+  "theme": {
+    "parity": "ok",
+    "tailwind_config": {
+      "darkMode": "ok",
+      "plugins": "ok",
+      "borderRadius": "ok",
+      "colors": "ok",
+      "fontFamily": "ok",
+      "keyframes": "ok",
+      "animation": "ok"
+    },
+    "css_variables": {
+      "root_block": "ok",
+      "dark_block": "ok",
+      "elevation_utilities": "ok",
+      "shadow_scale": "ok",
+      "computed_borders": "ok"
+    },
+    "missing_tokens": [],
+    "visual_drift": "none"
+  },
+
+  "providers": {
+    "query_client": true,
+    "tooltip_provider": false,
+    "toaster": false,
+    "theme_provider": false,
+    "notes": "TooltipProvider and Toaster components exist but not wired to layout"
+  },
+
+  "router": {
+    "wouter_leftovers": 0,
+    "use_client_missing": 0,
+    "next_router_usage": 5,
+    "next_link_usage": true,
+    "conversion_status": "complete"
+  },
+
+  "root_route": {
+    "uses_app_router": true,
+    "legacy_pages_router_found": false,
+    "current_root_ui": "old",
+    "hwar_route_ui": "new",
+    "feature_flag": {
+      "name": "ENABLE_HWAR_NEW_UI",
+      "type": "server-side",
+      "issue": "Not NEXT_PUBLIC_ prefixed",
+      "location": "app/layout.tsx:15"
+    }
+  },
+
+  "api_client_coverage": "high",
+  "api_client": {
+    "total_methods": 25,
+    "create_methods": 6,
+    "factory_methods": 11,
+    "library_methods": 8,
+    "route_handlers_count": 11,
+    "missing_methods": []
+  },
+
+  "data_fetching": {
+    "tanstack_query_usage": 14,
+    "pages_with_useQuery": 14,
+    "pages_with_useMutation": 5,
+    "coverage": "high"
+  },
+
+  "forms": {
+    "react_hook_form_usage": 0,
+    "zod_usage": 0,
+    "form_validation": "missing",
+    "affected_pages": [
+      "/hwar/create",
+      "/hwar/create/new",
+      "/hwar/create/[id]"
+    ]
+  },
+
+  "build": {
+    "dashboard_build": "fail",
+    "typecheck": "fail",
+    "typescript_errors": 43,
+    "error_categories": {
+      "db_schema_version_conflicts": 11,
+      "missing_imports": 3,
+      "implicit_any_types": 20,
+      "unused_imports": 6,
+      "playwright_types": 3
+    }
+  },
+
+  "loading_states": {
+    "skeletons": "missing",
+    "empty_states": "partial",
+    "error_states": "not_audited"
+  },
+
+  "ux_completeness": {
+    "loading_skeletons": false,
+    "empty_states": false,
+    "tables_for_lists": false,
+    "forms_with_validation": false,
+    "sidebar_component": "basic",
+    "theme_toggle": false
+  },
+
+  "blockers": [
+    {
+      "id": "P0-1",
+      "severity": "critical",
+      "issue": "TypeScript errors blocking build",
+      "count": 43,
+      "estimate_hours": 4
+    },
+    {
+      "id": "P0-2",
+      "severity": "critical",
+      "issue": "Missing TooltipProvider in layout",
+      "impact": "Tooltips broken",
+      "estimate_hours": 0.17
+    },
+    {
+      "id": "P0-3",
+      "severity": "critical",
+      "issue": "Missing Toaster in layout",
+      "impact": "Toast notifications fail",
+      "estimate_hours": 0.08
+    },
+    {
+      "id": "P0-4",
+      "severity": "high",
+      "issue": "Server-side feature flag (not NEXT_PUBLIC_)",
+      "impact": "Flag not client-accessible",
+      "estimate_hours": 0.08
+    }
+  ],
+
+  "polish_items": [
+    {
+      "id": "P1-1",
+      "priority": "medium",
+      "issue": "Missing loading skeletons",
+      "affected_pages": 12,
+      "estimate_hours": 3
+    },
+    {
+      "id": "P1-2",
+      "priority": "medium",
+      "issue": "Missing empty states",
+      "affected_pages": 12,
+      "estimate_hours": 1.5
+    },
+    {
+      "id": "P1-3",
+      "priority": "medium",
+      "issue": "Missing table components for data lists",
+      "affected_pages": 12,
+      "estimate_hours": 3
+    },
+    {
+      "id": "P1-4",
+      "priority": "medium",
+      "issue": "Missing forms with validation (Create pages)",
+      "affected_pages": 3,
+      "estimate_hours": 4
+    },
+    {
+      "id": "P1-5",
+      "priority": "low",
+      "issue": "Basic sidebar layout (not shadcn sidebar)",
+      "affected_pages": 1,
+      "estimate_hours": 2
+    }
+  ],
+
+  "nice_to_have": [
+    {
+      "id": "P2-1",
+      "priority": "low",
+      "issue": "No theme toggle UI",
+      "estimate_hours": 2
+    },
+    {
+      "id": "P2-2",
+      "priority": "low",
+      "issue": "Heavy charts not lazy-loaded",
+      "estimate_hours": 1
+    },
+    {
+      "id": "P2-3",
+      "priority": "low",
+      "issue": "A11y audit needed",
+      "estimate_hours": 3
+    },
+    {
+      "id": "P2-4",
+      "priority": "low",
+      "issue": "Unused CSS variables (token consolidation)",
+      "estimate_hours": 1
+    }
+  ],
+
+  "quick_wins": [
+    {
+      "task": "Fix NEXT_PUBLIC_ prefix for feature flag",
+      "impact": "high",
+      "effort_minutes": 5
+    },
+    {
+      "task": "Add TooltipProvider to layout",
+      "impact": "high",
+      "effort_minutes": 10
+    },
+    {
+      "task": "Add Toaster to layout",
+      "impact": "high",
+      "effort_minutes": 5
+    },
+    {
+      "task": "Remove unused imports in API routes",
+      "impact": "medium",
+      "effort_minutes": 30
+    },
+    {
+      "task": "Fix implicit any types in API routes",
+      "impact": "medium",
+      "effort_minutes": 60
+    }
+  ],
+
+  "effort_estimates": {
+    "p0_blockers_hours": 5,
+    "p1_polish_hours": 11.5,
+    "p2_nice_to_have_hours": 9,
+    "total_hours": 25.5,
+    "total_days_8h": 3.2
+  },
+
+  "acceptance_criteria": {
+    "visual_parity": {
+      "css_variables": true,
+      "tailwind_config": true,
+      "elevation_utilities": true,
+      "spacing_padding": "not_audited",
+      "interactive_states": "not_audited"
+    },
+    "navigation_states": {
+      "next_link_usage": true,
+      "no_wouter_imports": true,
+      "loading_skeletons": false,
+      "empty_states": false,
+      "error_states": "not_audited"
+    },
+    "green_build": {
+      "typecheck_passes": false,
+      "build_succeeds": false,
+      "smoke_tests_pass": "not_audited"
+    },
+    "stable_imports": {
+      "no_wouter": true,
+      "ui_imports_resolve": true,
+      "no_unresolved_components": true
+    },
+    "providers_wired": {
+      "query_client": true,
+      "tooltip_provider": false,
+      "toaster": false
+    }
+  },
+
+  "recommendation": {
+    "status": "NO-GO to expose / → /hwar",
+    "reason": "TypeScript errors blocking production build",
+    "gated_launch_ready": "After P0 fixes (5 hours)",
+    "full_production_ready": "After P0 + P1 (16 hours)",
+    "next_phase": "Fix P0 blockers → ship gated /hwar launch",
+    "eta_days": {
+      "gated_launch": 1,
+      "production_ux": 2,
+      "full_polish": 4
+    }
+  },
+
+  "summary": {
+    "pages_migrated": 19,
+    "components_present": 49,
+    "router_conversion": "complete",
+    "theme_parity": "complete",
+    "api_coverage": "high",
+    "build_status": "fail",
+    "top_blockers": [
+      "TypeScript errors (43)",
+      "Missing TooltipProvider",
+      "Missing Toaster"
+    ],
+    "ready_for_production": false,
+    "ready_for_gated_launch": "After P0 fixes"
+  }
+}
