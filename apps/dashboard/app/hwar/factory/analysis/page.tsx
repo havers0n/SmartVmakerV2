@@ -22,7 +22,7 @@ type AnalysisTask = {
 };
 
 export default function Analysis() {
-  const { data: tasks = [], isLoading } = useQuery<AnalysisTask[]>({
+  const { data: tasks = [], isLoading, error, refetch } = useQuery<AnalysisTask[]>({
     queryKey: ["analysis-tasks"],
     queryFn: () => client.hwar.listAnalysisTasks(),
   });
@@ -40,7 +40,17 @@ export default function Analysis() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load analysis tasks</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <Card>
           <Table>
             <TableHeader>

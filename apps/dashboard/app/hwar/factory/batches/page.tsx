@@ -18,7 +18,7 @@ type Batch = {
 };
 
 export default function Batches() {
-  const { data: batches = [], isLoading } = useQuery<Batch[]>({
+  const { data: batches = [], isLoading, error, refetch } = useQuery<Batch[]>({
     queryKey: ["batches"],
     queryFn: () => client.hwar.listBatches(),
   });
@@ -36,7 +36,17 @@ export default function Batches() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load batches</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <Card>
           <Table>
             <TableHeader>

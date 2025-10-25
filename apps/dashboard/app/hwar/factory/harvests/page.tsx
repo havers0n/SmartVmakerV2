@@ -60,7 +60,7 @@ export default function Harvests() {
     },
   });
 
-  const { data: harvests = [], isLoading } = useQuery<Harvest[]>({
+  const { data: harvests = [], isLoading, error, refetch } = useQuery<Harvest[]>({
     queryKey: ["harvests"],
     queryFn: () => client.hwar.listHarvests(),
   });
@@ -224,7 +224,17 @@ export default function Harvests() {
         </Dialog>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load harvests</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 gap-6">
           {[1, 2].map((i) => (
             <Card key={i} className="p-6 animate-pulse">

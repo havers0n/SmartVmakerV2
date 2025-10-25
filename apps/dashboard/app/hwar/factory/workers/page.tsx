@@ -29,7 +29,7 @@ type Worker = {
 
 export default function Workers() {
   const queryClient = useQueryClient();
-  const { data: workers = [], isLoading } = useQuery<Worker[]>({
+  const { data: workers = [], isLoading, error, refetch } = useQuery<Worker[]>({
     queryKey: ["workers"],
     queryFn: () => client.hwar.listWorkers(),
   });
@@ -65,7 +65,17 @@ export default function Workers() {
         <p className="text-sm text-muted-foreground">Manage worker concurrency and budgets</p>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load workers</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="p-6">

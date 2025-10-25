@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/src/components/ui/card";
+import { Button } from "@/src/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 import { Skeleton } from "@/src/components/ui/skeleton";
@@ -17,7 +18,7 @@ type Queue = {
 };
 
 export default function Queues() {
-  const { data: queues = [], isLoading } = useQuery<Queue[]>({
+  const { data: queues = [], isLoading, error, refetch } = useQuery<Queue[]>({
     queryKey: ["queues"],
     queryFn: () => client.hwar.listQueues(),
   });
@@ -39,7 +40,17 @@ export default function Queues() {
         </TabsList>
 
         <TabsContent value="all">
-          {isLoading ? (
+          {error ? (
+            <Card className="p-8">
+              <div className="text-center">
+                <h3 className="text-lg font-medium mb-2">Failed to load queues</h3>
+                <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+                <Button onClick={() => refetch()} variant="outline">
+                  Retry
+                </Button>
+              </div>
+            </Card>
+          ) : isLoading ? (
             <Card>
               <Table>
                 <TableHeader>

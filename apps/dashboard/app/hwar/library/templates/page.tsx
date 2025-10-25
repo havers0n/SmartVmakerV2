@@ -16,7 +16,7 @@ type Template = {
 };
 
 export default function Templates() {
-  const { data: templates = [], isLoading } = useQuery<Template[]>({
+  const { data: templates = [], isLoading, error, refetch } = useQuery<Template[]>({
     queryKey: ["templates"],
     queryFn: () => client.hwar.listTemplates(),
   });
@@ -34,7 +34,17 @@ export default function Templates() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load templates</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="p-6">

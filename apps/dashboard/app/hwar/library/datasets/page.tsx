@@ -16,7 +16,7 @@ type Dataset = {
 };
 
 export default function Datasets() {
-  const { data: datasets = [], isLoading } = useQuery<Dataset[]>({
+  const { data: datasets = [], isLoading, error, refetch } = useQuery<Dataset[]>({
     queryKey: ["datasets"],
     queryFn: () => client.hwar.listDatasets(),
   });
@@ -28,7 +28,17 @@ export default function Datasets() {
         <p className="text-sm text-muted-foreground">Browse harvest data, analysis documents, and signals</p>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <Card className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Failed to load datasets</h3>
+            <p className="text-sm text-muted-foreground mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : isLoading ? (
         <Card>
           <Table>
             <TableHeader>
