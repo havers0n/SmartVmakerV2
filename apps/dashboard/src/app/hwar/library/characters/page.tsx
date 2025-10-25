@@ -1,10 +1,10 @@
 "use client";
 
-import { Card } from "@/src/components/ui/card";
-import { Button } from "@/src/components/ui/button";
-import { Badge } from "@/src/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/src/components/ui/avatar";
-import { EmptyState } from "@/src/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Users2, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { client } from "@project/api-client";

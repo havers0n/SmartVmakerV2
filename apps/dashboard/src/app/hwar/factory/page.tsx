@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/src/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Download, FlaskConical, List, Users, BarChart3 } from "lucide-react";
 import Link from "next/link";
 

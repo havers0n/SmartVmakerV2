@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Button } from "../../../../src/components/ui/button";
-import { Card } from "../../../../src/components/ui/card";
-// import { Badge } from "../../../../src/components/ui/badge"; // Removed unused import
+import { Button } from "../../@/components/ui/button";
+import { Card } from "../../@/components/ui/card";
+// import { Badge } from "../../@/components/ui/badge"; // Removed unused import
 import { ArrowLeft, Play } from "lucide-react";
-import { useToast } from "../../../../src/hooks/use-toast";
-import { StatusBadge } from "../../../../src/components/ui/status-badge";
+import { useToast } from "../../@/hooks/use-toast";
+import { StatusBadge } from "../../@/components/ui/status-badge";
 import { makeClient } from "@project/api-client";
 // import type { Project, ScenarioConceptType } from "@shared/schema";
 

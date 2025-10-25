@@ -1,10 +1,10 @@
 "use client";
 
-import { Card } from "@/src/components/ui/card";
-import { Label } from "@/src/components/ui/label";
-import { Input } from "@/src/components/ui/input";
-import { Button } from "@/src/components/ui/button";
-import { useToast } from "@/src/hooks/use-toast";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
   const { toast } = useToast();

@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "../../../../src/components/ui/button";
-import { Card } from "../../../../src/components/ui/card";
-import { Label } from "../../../../src/components/ui/label";
-import { Input } from "../../../../src/components/ui/input";
-import { Textarea } from "../../../../src/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../../src/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../src/components/ui/tabs";
-import { Badge } from "../../../../src/components/ui/badge";
+import { Button } from "../../@/components/ui/button";
+import { Card } from "../../@/components/ui/card";
+import { Label } from "../../@/components/ui/label";
+import { Input } from "../../@/components/ui/input";
+import { Textarea } from "../../@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../@/components/ui/tabs";
+import { Badge } from "../../@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
-import { useToast } from "../../../../src/hooks/use-toast";
-import { cn } from "../../../../src/lib/utils";
+import { useToast } from "../../@/hooks/use-toast";
+import { cn } from "../../@/lib/utils";
 import { makeClient } from "@project/api-client";
 
 // Mock data for now

@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { serverError } from "@/src/lib/http";
+import { serverError } from "@/lib/http";
 
 type SuccessResponse = {
   ok: true;

@@ -1,14 +1,14 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/src/components/ui/card";
-import { Button } from "@/src/components/ui/button";
-import { Slider } from "@/src/components/ui/slider";
-import { Badge } from "@/src/components/ui/badge";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { EmptyState } from "@/src/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Play, Pause, Server } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { cn } from "@/lib/utils";
 import { client } from "@project/api-client";
 
 type Worker = {

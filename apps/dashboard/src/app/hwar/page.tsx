@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button } from "@/src/components/ui/button";
-import { Card } from "@/src/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Video, Factory, Library, ArrowRight } from "lucide-react";
 
 export default function Home() {

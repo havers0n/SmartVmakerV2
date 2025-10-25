@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "../../../src/components/ui/button";
-import { Card } from "../../../src/components/ui/card";
+import { Button } from "../@/components/ui/button";
+import { Card } from "../@/components/ui/card";
 import { Plus, FolderOpen } from "lucide-react";
-import { EmptyState } from "../../../src/components/ui/empty-state";
-import { StatusBadge } from "../../../src/components/ui/status-badge";
+import { EmptyState } from "../@/components/ui/empty-state";
+import { StatusBadge } from "../@/components/ui/status-badge";
 // TODO: Import the correct Project type
 // import type { Project } from "@shared/schema";
 

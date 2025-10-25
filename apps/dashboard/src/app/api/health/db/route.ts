@@ -2,8 +2,8 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
-import { db } from "@/src/lib/db";
-import { serverError } from "@/src/lib/http";
+import { db } from "@/lib/db";
+import { serverError } from "@/lib/http";
 
 type SuccessResponse = {
   ok: true;

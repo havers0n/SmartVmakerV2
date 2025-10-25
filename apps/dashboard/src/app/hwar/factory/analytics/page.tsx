@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/src/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { client } from "@project/api-client";

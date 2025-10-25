@@ -1,11 +1,11 @@
 "use client";
 
-import { Card } from "@/src/components/ui/card";
-import { Button } from "@/src/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { StatusBadge } from "@/src/components/ui/status-badge";
-import { EmptyState } from "@/src/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FlaskConical, RotateCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { client } from "@project/api-client";

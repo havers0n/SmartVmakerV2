@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/src/lib/db";
-import { hwar_workers } from "@/src/lib/schema";
+import { db } from "@/lib/db";
+import { hwar_workers } from "@/lib/schema";
 import { desc, eq } from "drizzle-orm";
-import { serverError } from "@/src/lib/http";
+import { serverError } from "@/lib/http";
 import { z } from "zod";
 
 type SuccessResponse = {

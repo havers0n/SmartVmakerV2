@@ -2,9 +2,9 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ScenarioCreate } from "@scrimspec/shared-types/hwar";
-import { db } from "@/src/lib/db";
-import { scenarios } from "@/src/lib/schema";
-import { badRequest, serverError } from "@/src/lib/http";
+import { db } from "@/lib/db";
+import { scenarios } from "@/lib/schema";
+import { badRequest, serverError } from "@/lib/http";
 
 type SuccessResponse = {
   ok: true;
