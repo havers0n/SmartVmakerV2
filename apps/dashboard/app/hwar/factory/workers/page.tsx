@@ -6,7 +6,8 @@ import { Button } from "@/src/components/ui/button";
 import { Slider } from "@/src/components/ui/slider";
 import { Badge } from "@/src/components/ui/badge";
 import { Skeleton } from "@/src/components/ui/skeleton";
-import { Play, Pause } from "lucide-react";
+import { EmptyState } from "@/src/components/ui/empty-state";
+import { Play, Pause, Server } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { client } from "@project/api-client";
 
@@ -108,6 +109,12 @@ export default function Workers() {
             </Card>
           ))}
         </div>
+      ) : workers.length === 0 ? (
+        <EmptyState
+          icon={Server}
+          title="No workers configured"
+          description="Workers process video generation and analysis tasks. Contact your administrator to configure workers."
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {workers.map((worker) => {
