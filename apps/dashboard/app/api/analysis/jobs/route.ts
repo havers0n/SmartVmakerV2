@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
  * GET /api/analysis/jobs
  * Get list of analysis jobs
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     // TODO: Query database for analysis_queue jobs
 

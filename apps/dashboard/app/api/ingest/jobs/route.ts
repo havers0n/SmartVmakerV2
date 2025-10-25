@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { query, publishedAfter, duration = 'short' } = body ?? {};
+    const { query, publishedAfter: _publishedAfter, duration: _duration = 'short' } = body ?? {};
 
     // Validate required fields
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
  * GET /api/ingest/jobs
  * Get list of ingest jobs
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     // TODO: Query database for ingest_queue jobs
 

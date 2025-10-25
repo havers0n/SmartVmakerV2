@@ -54,7 +54,7 @@ export async function GET(req: Request) {
     }
 
     // Get assets for these shorts
-    const shortIds = shorts.map((s) => s.id);
+    const shortIds = shorts.map((s: any) => s.id);
     let assets = await db
       .select()
       .from(generationAssets)
@@ -63,21 +63,21 @@ export async function GET(req: Request) {
     // For multiple shorts, fetch all and filter
     if (shortIds.length > 1) {
       const allAssets = await db.select().from(generationAssets);
-      assets = allAssets.filter((a) => shortIds.includes(a.shortId));
+      assets = allAssets.filter((a: any) => shortIds.includes(a.shortId));
     }
 
     // Filter assets by status if requested
     if (assetStatus) {
-      assets = assets.filter((a) => a.status === assetStatus);
+      assets = assets.filter((a: any) => a.status === assetStatus);
     }
 
     // Get jobs for these assets
-    const assetIds = assets.map((a) => a.id);
-    let jobs = [];
+    const assetIds = assets.map((a: any) => a.id);
+    let jobs: any[] = [];
 
     if (assetIds.length > 0) {
       const allJobs = await db.select().from(generationQueue);
-      jobs = allJobs.filter((j) => assetIds.includes(j.assetId));
+      jobs = allJobs.filter((j: any) => assetIds.includes(j.assetId));
     }
 
     return NextResponse.json({
