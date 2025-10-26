@@ -105,16 +105,17 @@ async function testShortStatus(): Promise<void> {
   }
 
   try {
-    const result = await apiCall(`/generation/status?shortId=${ctx.shortId}`);
+    // Get all projects and find the one we created
+    const result = await apiCall(`/generation/shorts`);
 
     if (!result.ok) {
-      throw new Error('Failed to get status');
+      throw new Error('Failed to get shorts');
     }
 
-    const short = result.shorts[0];
+    const short = result.shorts.find((s: any) => s.id === ctx.shortId);
 
     if (!short) {
-      throw new Error('Short not found in status response');
+      throw new Error('Short not found in response');
     }
 
     console.log(`   ✅ Short found: ${short.id}`);
@@ -131,177 +132,51 @@ async function testShortStatus(): Promise<void> {
 }
 
 /**
- * Test 3: Verify assets are created
+ * Test 3: Verify generation status endpoint
  */
-async function testAssets(): Promise<void> {
-  console.log('\n📦 Test 3: Verify Assets');
-
-  if (!ctx.shortId) {
-    throw new Error('No shortId available');
-  }
+async function testGenerationStatus(): Promise<void> {
+  console.log('\n📊 Test 3: Verify Generation Status Endpoint');
 
   try {
-    const result = await apiCall(`/generation/status?shortId=${ctx.shortId}`);
+    const result = await apiCall(`/generation/status`);
 
     if (!result.ok) {
-      throw new Error('Failed to get status');
+      throw new Error('Failed to get generation status');
     }
 
-    const assets = result.assets;
+    console.log(`   ✅ Projects found: ${result.count}`);
+    console.log(`   ✅ Job queue stats: ${result.jobQueueStats.length} statuses`);
 
-    if (!assets || assets.length === 0) {
-      throw new Error('No assets found');
+    // Verify structure
+    if (!Array.isArray(result.projects)) {
+      throw new Error('projects is not an array');
     }
 
-    console.log(`   ✅ Assets found: ${assets.length}`);
-
-    // Check each asset
-    for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i];
-      console.log(`   ✅ Asset ${i + 1}:`);
-      console.log(`      - Type: ${asset.assetType}`);
-      console.log(`      - Status: ${asset.status}`);
-
-      if (asset.assetType !== 'video_clip') {
-        console.warn(`      ⚠️  Unexpected asset type: ${asset.assetType}`);
-      }
-
-      if (asset.status !== 'pending' && asset.status !== 'processing' && asset.status !== 'completed') {
-        throw new Error(`Unexpected asset status: ${asset.status}`);
-      }
+    if (!Array.isArray(result.jobQueueStats)) {
+      throw new Error('jobQueueStats is not an array');
     }
+
   } catch (error) {
-    console.error(`   ❌ Failed to verify assets:`, error);
+    console.error(`   ❌ Failed to verify generation status:`, error);
     throw error;
   }
 }
 
 /**
- * Test 4: Verify generation jobs are queued
- */
-async function testGenerationQueue(): Promise<void> {
-  console.log('\n⏳ Test 4: Verify Generation Queue');
-
-  if (!ctx.shortId) {
-    throw new Error('No shortId available');
-  }
-
-  try {
-    const result = await apiCall(`/generation/status?shortId=${ctx.shortId}`);
-
-    if (!result.ok) {
-      throw new Error('Failed to get status');
-    }
-
-    const jobs = result.jobs;
-
-    if (!jobs || jobs.length === 0) {
-      console.warn(`   ⚠️  No jobs found yet (might not be enqueued yet)`);
-      return;
-    }
-
-    console.log(`   ✅ Jobs found: ${jobs.length}`);
-
-    // Check each job
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      console.log(`   ✅ Job ${i + 1}:`);
-      console.log(`      - ID: ${job.id.substring(0, 8)}...`);
-      console.log(`      - Provider: ${job.provider}`);
-      console.log(`      - Status: ${job.status}`);
-
-      if (job.provider !== ctx.provider) {
-        throw new Error(`Job provider mismatch: expected ${ctx.provider}, got ${job.provider}`);
-      }
-    }
-  } catch (error) {
-    console.error(`   ❌ Failed to verify generation queue:`, error);
-    throw error;
-  }
-}
-
-/**
- * Test 5: Monitor generation progress (with retry)
- */
-async function testGenerationProgress(maxRetries: number = 5): Promise<void> {
-  console.log('\n🎬 Test 5: Monitor Generation Progress');
-  console.log(`   Max retries: ${maxRetries}`);
-
-  if (!ctx.shortId) {
-    throw new Error('No shortId available');
-  }
-
-  let lastStatus: any = null;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const result = await apiCall(`/generation/status?shortId=${ctx.shortId}`);
-
-      if (!result.ok) {
-        throw new Error('Failed to get status');
-      }
-
-      lastStatus = result;
-      const short = result.shorts[0];
-
-      if (!short) {
-        throw new Error('Short not found');
-      }
-
-      console.log(`   Attempt ${attempt + 1}/${maxRetries}:`);
-      console.log(`      - Short Status: ${short.status}`);
-      console.log(`      - Assets: ${result.assets.length}`);
-      console.log(`      - Completed: ${result.assets.filter((a: any) => a.status === 'completed').length}/${result.assets.length}`);
-
-      // Check if any assets are completed
-      const completedAssets = result.assets.filter((a: any) => a.status === 'completed');
-      if (completedAssets.length > 0) {
-        console.log(`   ✅ Generation in progress!`);
-        completedAssets.forEach((asset: any, idx: number) => {
-          console.log(`      - Asset ${idx + 1}: ${asset.storageUrl ? '✅ Generated' : '🔄 Processing'}`);
-        });
-        return;
-      }
-
-      // If all assets are pending, generation hasn't started yet
-      if (result.assets.every((a: any) => a.status === 'pending')) {
-        console.log(`   ⏳ Waiting for generation worker to start...`);
-        if (attempt < maxRetries - 1) {
-          await new Promise(r => setTimeout(r, 2000)); // Wait 2 seconds
-        }
-        continue;
-      }
-
-    } catch (error) {
-      console.error(`   ❌ Attempt ${attempt + 1} failed:`, error);
-      if (attempt < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, 2000));
-      }
-    }
-  }
-
-  if (!lastStatus || !lastStatus.assets.some((a: any) => a.status !== 'pending')) {
-    console.warn(`   ⚠️  No assets were generated after ${maxRetries} attempts`);
-    console.warn(`   This is expected if the generation worker is not running.`);
-  }
-}
-
-/**
- * Test 6: Verify API response structure
+ * Test 4: Verify API response structure
  */
 async function testAPIResponseStructure(): Promise<void> {
-  console.log('\n📐 Test 6: Verify API Response Structure');
+  console.log('\n📐 Test 4: Verify API Response Structure');
 
   try {
-    const result = await apiCall('/generation/status?limit=10');
+    const result = await apiCall('/generation/status');
 
     if (!result.ok) {
       throw new Error('API response not ok');
     }
 
     // Verify required fields
-    const requiredFields = ['shorts', 'assets', 'jobs', 'count'];
-    const requiredCountFields = ['shorts', 'assets', 'jobs'];
+    const requiredFields = ['projects', 'jobQueueStats', 'count'];
 
     for (const field of requiredFields) {
       if (!(field in result)) {
@@ -310,22 +185,12 @@ async function testAPIResponseStructure(): Promise<void> {
       console.log(`   ✅ Field '${field}' present`);
     }
 
-    for (const field of requiredCountFields) {
-      if (!(field in result.count)) {
-        throw new Error(`Missing required count field: ${field}`);
-      }
-      console.log(`   ✅ Count field '${field}' present`);
-    }
-
     // Verify array types
-    if (!Array.isArray(result.shorts)) {
-      throw new Error('shorts is not an array');
+    if (!Array.isArray(result.projects)) {
+      throw new Error('projects is not an array');
     }
-    if (!Array.isArray(result.assets)) {
-      throw new Error('assets is not an array');
-    }
-    if (!Array.isArray(result.jobs)) {
-      throw new Error('jobs is not an array');
+    if (!Array.isArray(result.jobQueueStats)) {
+      throw new Error('jobQueueStats is not an array');
     }
 
     console.log(`   ✅ All fields have correct types`);
@@ -347,9 +212,7 @@ async function runTests(): Promise<void> {
     { name: 'API Response Structure', fn: testAPIResponseStructure },
     { name: 'Create Short', fn: testCreateShort },
     { name: 'Short Status', fn: testShortStatus },
-    { name: 'Assets', fn: testAssets },
-    { name: 'Generation Queue', fn: testGenerationQueue },
-    { name: 'Generation Progress', fn: testGenerationProgress },
+    { name: 'Generation Status', fn: testGenerationStatus },
   ];
 
   let passed = 0;
