@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@/shared/components/ui/card";
 import { BookMarked, Users2, FolderOpen, Layout } from "lucide-react";
 import Link from "next/link";
 

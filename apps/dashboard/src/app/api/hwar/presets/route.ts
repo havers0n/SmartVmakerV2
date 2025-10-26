@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { hwar_presets } from "@/lib/schema";
+import { db } from "@/shared/lib/db";
+import { hwar_presets } from "@/shared/lib/schema";
 import { desc } from "drizzle-orm";
-import { serverError } from "@/lib/http";
+import { serverError } from "@/shared/lib/http";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -33,7 +33,7 @@ export async function GET() {
     const rows = await db
       .select()
       .from(hwar_presets)
-      .orderBy(desc(hwar_presets.createdAt))
+      .orderBy(desc(hwar_presets.created_at))
       .limit(100);
 
     return NextResponse.json<SuccessResponse>({
@@ -42,7 +42,7 @@ export async function GET() {
         id: row.id,
         name: row.name,
         meta: row.meta || {},
-        createdAt: row.createdAt,
+        createdAt: row.created_at,
       })),
     });
   } catch (error) {
@@ -80,19 +80,19 @@ export async function POST(request: Request) {
         id: uuidv4(),
         name,
         meta: presetMeta,
-        createdAt: new Date(),
+        created_at: new Date(),
       })
       .returning();
 
     const preset = rows[0];
-    
+
     return NextResponse.json<PresetCreateResponse>({
       ok: true,
       preset: {
         id: preset.id,
         name: preset.name,
         meta: preset.meta || {},
-        createdAt: preset.createdAt,
+        createdAt: preset.created_at,
       },
     });
   } catch (error) {

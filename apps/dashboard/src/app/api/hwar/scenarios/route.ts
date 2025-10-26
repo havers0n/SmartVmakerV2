@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { ScenarioCreate } from "@scrimspec/shared-types/hwar";
-import { db } from "@/lib/db";
-import { scenarios } from "@/lib/schema";
-import { badRequest, serverError } from "@/lib/http";
+import { ScenarioCreate } from "@scrimspec/shared-types";
+import { db } from "@/shared/lib/db";
+import { scenarios } from "@/shared/lib/schema";
+import { badRequest, serverError } from "@/shared/lib/http";
 
 type SuccessResponse = {
   ok: true;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       .insert(scenarios)
       .values({
         topic: parsed.data.topic,
-        durationSec: parsed.data.durationSec,
+        duration_sec: parsed.data.durationSec,
         tags: parsed.data.tags,
       })
       .returning();
@@ -44,9 +44,9 @@ export async function POST(req: NextRequest) {
       scenario: {
         id: scenario.id,
         topic: scenario.topic,
-        durationSec: scenario.durationSec,
+        durationSec: scenario.duration_sec,
         tags: scenario.tags as string[],
-        createdAt: scenario.createdAt,
+        createdAt: scenario.created_at,
       },
     });
   } catch (error) {

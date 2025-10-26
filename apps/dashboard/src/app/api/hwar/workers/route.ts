@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { hwar_workers } from "@/lib/schema";
+import { db } from "@/shared/lib/db";
+import { hwar_workers } from "@/shared/lib/schema";
 import { desc, eq } from "drizzle-orm";
-import { serverError } from "@/lib/http";
+import { serverError } from "@/shared/lib/http";
 import { z } from "zod";
 
 type SuccessResponse = {
@@ -37,7 +37,7 @@ export async function GET() {
     const rows = await db
       .select()
       .from(hwar_workers)
-      .orderBy(desc(hwar_workers.updatedAt))
+      .orderBy(desc(hwar_workers.updated_at))
       .limit(100);
 
     return NextResponse.json<SuccessResponse>({
@@ -46,7 +46,7 @@ export async function GET() {
         id: row.id,
         name: row.name,
         status: row.status,
-        updatedAt: row.updatedAt,
+        updatedAt: row.updated_at,
       })),
     });
   } catch (error) {
@@ -74,7 +74,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const rows = await db
       .update(hwar_workers)
-      .set({ status, updatedAt: new Date() })
+      .set({ status, updated_at: new Date() })
       .where(eq(hwar_workers.id, id))
       .returning();
 
@@ -86,14 +86,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     const worker = rows[0];
-    
+
     return NextResponse.json<WorkerUpdateResponse>({
       ok: true,
       worker: {
         id: worker.id,
         name: worker.name,
         status: worker.status,
-        updatedAt: worker.updatedAt,
+        updatedAt: worker.updated_at,
       },
     });
   } catch (error) {

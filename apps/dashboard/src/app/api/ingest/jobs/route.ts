@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { desc } from 'drizzle-orm';
+import { db } from '@/shared/lib/db';
+import { ingestJobQueue } from '@/shared/lib/schema';
 
 /**
  * POST /api/ingest/jobs
@@ -24,16 +27,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO: Call database to insert into ingest_queue table
-    // For now, just return success response structure
-
-    const jobId = crypto.randomUUID();
+    // Insert into ingest_queue table
+    const [job] = await db.insert(ingestJobQueue).values({
+      query,
+      published_after: _publishedAfter ? new Date(_publishedAfter) : null,
+      duration: _duration ? parseInt(_duration) : null,
+      status: 'pending',
+      retry_count: 0,
+    }).returning();
 
     return NextResponse.json(
       {
         success: true,
-        jobId,
-        status: 'pending',
+        jobId: job.id,
+        status: job.status,
         message: `Ingest job created: will search for "${query}"`,
       },
       { status: 201 },
@@ -51,13 +58,18 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(_req: NextRequest) {
   try {
-    // TODO: Query database for ingest_queue jobs
+    // Query database for ingest_queue jobs, ordered by most recent first
+    const jobs = await db
+      .select()
+      .from(ingestJobQueue)
+      .orderBy(desc(ingestJobQueue.created_at))
+      .limit(50);
 
     return NextResponse.json(
       {
         success: true,
-        jobs: [],
-        message: 'No ingest jobs found',
+        jobs,
+        message: jobs.length > 0 ? `Found ${jobs.length} ingest jobs` : 'No ingest jobs found',
       },
       { status: 200 },
     );

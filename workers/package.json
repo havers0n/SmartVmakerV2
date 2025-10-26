@@ -1,0 +1,22 @@
+{
+  "name": "@scrimspec/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "tsx ingest-worker.ts",
+    "analysis": "tsx analysis-worker.ts",
+    "dev:ingest": "tsx watch ingest-worker.ts",
+    "dev:analysis": "tsx watch analysis-worker.ts"
+  },
+  "dependencies": {
+    "@scrimspec/db": "workspace:*",
+    "dotenv": "^16.4.7",
+    "googleapis": "^164.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.23",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}

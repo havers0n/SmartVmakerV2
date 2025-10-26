@@ -1,7 +1,8 @@
 import { bigint, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const job = pgTable('job', {
-    jobid: bigint('jobid', { mode: 'number' }).notNull().default('nextval(cron.jobid_seq'),
+    jobid: bigint('jobid', { mode: 'number' }).notNull().default(sql`nextval('cron.jobid_seq')`),
     schedule: text('schedule').notNull(),
     command: text('command').notNull(),
     nodename: text('nodename').notNull().default('localhost'),
@@ -20,7 +21,7 @@ export type NewJob = typeof job.$inferInsert;
 
 export const jobRunDetails = pgTable('job_run_details', {
     jobid: bigint('jobid', { mode: 'number' }),
-    runid: bigint('runid', { mode: 'number' }).notNull().default('nextval(cron.runid_seq').primaryKey(),
+    runid: bigint('runid', { mode: 'number' }).notNull().default(sql`nextval('cron.runid_seq')`).primaryKey(),
     job_pid: integer('job_pid'),
     database: text('database'),
     username: text('username'),

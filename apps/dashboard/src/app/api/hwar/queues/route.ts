@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { hwar_queues } from "@/lib/schema";
+import { db } from "@/shared/lib/db";
+import { hwar_queues } from "@/shared/lib/schema";
 import { desc } from "drizzle-orm";
-import { serverError } from "@/lib/http";
+import { serverError } from "@/shared/lib/http";
 
 type SuccessResponse = {
   ok: true;
@@ -21,7 +21,7 @@ export async function GET() {
     const rows = await db
       .select()
       .from(hwar_queues)
-      .orderBy(desc(hwar_queues.updatedAt))
+      .orderBy(desc(hwar_queues.updated_at))
       .limit(100);
 
     return NextResponse.json<SuccessResponse>({
@@ -30,7 +30,7 @@ export async function GET() {
         id: row.id,
         name: row.name,
         size: row.size || 0,
-        updatedAt: row.updatedAt,
+        updatedAt: row.updated_at,
       })),
     });
   } catch (error) {

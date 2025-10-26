@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "../../@/components/ui/button";
-import { Card } from "../../@/components/ui/card";
-import { Label } from "../../@/components/ui/label";
-import { Input } from "../../@/components/ui/input";
-import { Textarea } from "../../@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../@/components/ui/tabs";
-import { Badge } from "../../@/components/ui/badge";
+import { Button } from "@/shared/components/ui/button";
+import { Card } from "@/shared/components/ui/card";
+import { Label } from "@/shared/components/ui/label";
+import { Input } from "@/shared/components/ui/input";
+import { Textarea } from "@/shared/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
+import { Badge } from "@/shared/components/ui/badge";
 import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
-import { useToast } from "../../@/hooks/use-toast";
-import { cn } from "../../@/lib/utils";
+import { useToast } from "@/shared/hooks/use-toast";
+import { cn } from "@/shared/lib/utils";
 import { makeClient } from "@project/api-client";
 
 // Mock data for now

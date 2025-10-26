@@ -1,4 +1,5 @@
 import { bigint, boolean, json, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const auditLogEntries = pgTable('audit_log_entries', {
     instance_id: uuid('instance_id'),
@@ -197,7 +198,7 @@ export type NewOneTimeTokens = typeof oneTimeTokens.$inferInsert;
 
 export const refreshTokens = pgTable('refresh_tokens', {
     instance_id: uuid('instance_id'),
-    id: bigint('id', { mode: 'number' }).notNull().default('nextval(auth.refresh_tokens_id_seq').primaryKey(),
+    id: bigint('id', { mode: 'number' }).notNull().default(sql`nextval('auth.refresh_tokens_id_seq')`).primaryKey(),
     token: text('token'),
     user_id: text('user_id'),
     revoked: boolean('revoked'),

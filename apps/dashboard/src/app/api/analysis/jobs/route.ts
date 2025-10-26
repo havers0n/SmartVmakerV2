@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { desc } from 'drizzle-orm';
+import { db } from '@/shared/lib/db';
+import { analysisJobQueue } from '@/shared/lib/schema';
 
 /**
  * POST /api/analysis/jobs
@@ -30,19 +33,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO: Call database to insert multiple rows into analysis_queue table
-    // For now, just return success response structure
+    // Insert multiple analysis jobs into database
+    const jobs = await db
+      .insert(analysisJobQueue)
+      .values(
+        videoIds.map((videoId) => ({
+          video_id: videoId,
+          analyzer,
+          status: 'pending' as const,
+          retry_count: 0,
+        }))
+      )
+      .returning();
 
-    const jobIds = videoIds.map(() => crypto.randomUUID());
+    const jobIds = jobs.map((job: typeof analysisJobQueue.$inferSelect) => job.id);
 
     return NextResponse.json(
       {
         success: true,
         jobIds,
-        count: videoIds.length,
+        count: jobs.length,
         analyzer,
         status: 'pending',
-        message: `Created ${videoIds.length} analysis jobs with analyzer: ${analyzer}`,
+        message: `Created ${jobs.length} analysis jobs with analyzer: ${analyzer}`,
       },
       { status: 201 },
     );
@@ -59,13 +72,18 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(_req: NextRequest) {
   try {
-    // TODO: Query database for analysis_queue jobs
+    // Query database for analysis_queue jobs, ordered by most recent first
+    const jobs = await db
+      .select()
+      .from(analysisJobQueue)
+      .orderBy(desc(analysisJobQueue.created_at))
+      .limit(50);
 
     return NextResponse.json(
       {
         success: true,
-        jobs: [],
-        message: 'No analysis jobs found',
+        jobs,
+        message: jobs.length > 0 ? `Found ${jobs.length} analysis jobs` : 'No analysis jobs found',
       },
       { status: 200 },
     );

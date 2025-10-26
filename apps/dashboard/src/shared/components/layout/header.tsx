@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, navigationMenuTriggerStyle } from '@/shared/components/ui/navigation-menu';
-import { cn } from '@/shared/lib/utils';
 
 export function Header() {
   const pathname = usePathname();

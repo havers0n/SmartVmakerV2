@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { harvests } from "@/lib/schema";
+import { db } from "@/shared/lib/db";
+import { harvests } from "@/shared/lib/schema";
 import { desc } from "drizzle-orm";
-import { serverError } from "@/lib/http";
+import { serverError } from "@/shared/lib/http";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -31,7 +31,7 @@ export async function GET() {
     const rows = await db
       .select()
       .from(harvests)
-      .orderBy(desc(harvests.createdAt))
+      .orderBy(desc(harvests.created_at))
       .limit(100);
 
     return NextResponse.json<SuccessResponse>({
@@ -39,7 +39,7 @@ export async function GET() {
       harvests: rows.map((row: typeof harvests.$inferSelect) => ({
         id: row.id,
         query: row.query,
-        createdAt: row.createdAt,
+        createdAt: row.created_at,
       })),
     });
   } catch (error) {
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       .values({
         id: uuidv4(),
         query,
-        createdAt: new Date(),
+        created_at: new Date(),
       })
       .returning();
 
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       harvest: {
         id: harvest.id,
         query: harvest.query,
-        createdAt: harvest.createdAt,
+        createdAt: harvest.created_at,
       },
     });
   } catch (error) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
+import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Label } from '@/shared/components/ui/label';
@@ -9,15 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import { Video as VideoIcon, ExternalLink } from 'lucide-react';
 
 interface Video {
   id: string;
   title: string;
   url: string;
-  channel_title?: string;
-  duration_seconds?: number;
-  view_count?: number;
-  published_at?: string;
+  channelTitle?: string | null;
+  durationSeconds?: number | null;
+  viewCount?: number | null;
+  publishedAt?: string | null;
+  createdAt?: string | null;
+  // Analysis data
+  analysisStatus?: string | null;
+  analysisJobId?: string | null;
+  analyzer?: string | null;
+  analysisId?: string | null;
+  analysisUrl?: string | null;
 }
 
 interface AnalysisResult {
@@ -148,6 +157,22 @@ export default function AnalysisPage() {
     return num.toString();
   }
 
+  function getStatusBadge(video: Video) {
+    if (video.analysisUrl) {
+      return <Badge variant="default" className="bg-green-500">Completed</Badge>;
+    }
+    if (video.analysisStatus === 'processing') {
+      return <Badge variant="secondary">Processing</Badge>;
+    }
+    if (video.analysisStatus === 'pending') {
+      return <Badge variant="outline">Pending</Badge>;
+    }
+    if (video.analysisStatus === 'failed') {
+      return <Badge variant="destructive">Failed</Badge>;
+    }
+    return <Badge variant="outline" className="opacity-50">Not Queued</Badge>;
+  }
+
   return (
     <div className="container py-6">
       <Card>
@@ -182,6 +207,7 @@ export default function AnalysisPage() {
           {/* Empty State */}
           {!loading && videos.length === 0 && (
             <EmptyState
+              icon={VideoIcon}
               title="No videos yet"
               description="Go to the Ingest page to search YouTube for videos."
               action={{
@@ -214,12 +240,14 @@ export default function AnalysisPage() {
                     <TableHead>Channel</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Views</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Analyzer</TableHead>
                     <TableHead>Published</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {videos.map(video => (
-                    <TableRow 
+                    <TableRow
                       key={video.id}
                       className={selectedVideos.has(video.id) ? "bg-muted" : ""}
                     >
@@ -234,20 +262,25 @@ export default function AnalysisPage() {
                           href={video.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-primary hover:underline"
+                          className="font-medium text-primary hover:underline inline-flex items-center gap-1"
                         >
                           {video.title}
+                          <ExternalLink className="h-3 w-3" />
                         </a>
                       </TableCell>
-                      <TableCell>{video.channel_title}</TableCell>
+                      <TableCell>{video.channelTitle}</TableCell>
                       <TableCell>
-                        {video.duration_seconds && formatSeconds(video.duration_seconds)}
+                        {video.durationSeconds && formatSeconds(video.durationSeconds)}
                       </TableCell>
                       <TableCell>
-                        {video.view_count && formatNumber(video.view_count)}
+                        {video.viewCount && formatNumber(video.viewCount)}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(video)}</TableCell>
+                      <TableCell>
+                        {video.analyzer && <span className="text-sm text-muted-foreground">{video.analyzer}</span>}
                       </TableCell>
                       <TableCell>
-                        {video.published_at && new Date(video.published_at).toLocaleDateString()}
+                        {video.publishedAt && new Date(video.publishedAt).toLocaleDateString()}
                       </TableCell>
                     </TableRow>
                   ))}

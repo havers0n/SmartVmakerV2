@@ -2,103 +2,51 @@
  * GET /api/generation/status
  * Get generation status for all shorts and assets.
  * Supports filtering and pagination.
+ *
+ * TODO: This route needs to be updated to use correct schema tables:
+ * - generationShorts -> generationProjects
+ * - generationAssets -> assets
+ * - generationQueue -> generationJobQueue
  */
 
 import { NextResponse } from 'next/server';
-import { getDrizzleClient } from '@scrimspec/db';
-import {
-  generationShorts,
-  generationAssets,
-  generationQueue,
-} from '@scrimspec/db/schema';
-import { eq, desc } from 'drizzle-orm';
+// Temporarily disabled until schema is updated
+// import { getDrizzleClient } from '@scrimspec/db';
+// import {
+//   generationProjects,
+//   assets,
+//   generationJobQueue,
+// } from '@scrimspec/db/schema';
+// import { eq, desc } from 'drizzle-orm';
 
-const db = getDrizzleClient();
+// const db = getDrizzleClient();
 
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
+  // TODO: Temporarily disabled - needs schema migration
+  return NextResponse.json(
+    {
+      error: 'This endpoint is temporarily disabled pending schema migration',
+      message: 'Please use /api/hwar/factory/stats for generation statistics',
+    },
+    { status: 501 } // Not Implemented
+  );
+
+  // TODO: Re-enable after updating to use correct schema:
+  /*
   try {
     const url = new URL(req.url);
-    const shortId = url.searchParams.get('shortId');
-    const assetStatus = url.searchParams.get('status'); // 'pending', 'processing', 'completed', 'failed'
-    const pageSize = Math.min(
-      parseInt(url.searchParams.get('limit') || '50', 10),
-      200,
-    );
+    const projectId = url.searchParams.get('projectId');
+    const assetStatus = url.searchParams.get('status');
+    const pageSize = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
 
-    // Build shorts query with filters
-    let shortsConditions = [];
-
-    if (shortId) {
-      shortsConditions.push(eq(generationShorts.id, shortId));
-    }
-
-    const shorts = await db
-      .select()
-      .from(generationShorts)
-      .where(shortsConditions.length > 0 ? shortsConditions[0] : undefined)
-      .orderBy(desc(generationShorts.createdAt))
-      .limit(pageSize);
-
-    if (!shorts.length) {
-      return NextResponse.json({
-        ok: true,
-        shorts: [],
-        assets: [],
-        jobs: [],
-        count: {
-          shorts: 0,
-          assets: 0,
-          jobs: 0,
-        },
-      });
-    }
-
-    // Get assets for these shorts
-    const shortIds = shorts.map((s: any) => s.id);
-    let assets = await db
-      .select()
-      .from(generationAssets)
-      .where(eq(generationAssets.shortId, shortIds[0]));
-
-    // For multiple shorts, fetch all and filter
-    if (shortIds.length > 1) {
-      const allAssets = await db.select().from(generationAssets);
-      assets = allAssets.filter((a: any) => shortIds.includes(a.shortId));
-    }
-
-    // Filter assets by status if requested
-    if (assetStatus) {
-      assets = assets.filter((a: any) => a.status === assetStatus);
-    }
-
-    // Get jobs for these assets
-    const assetIds = assets.map((a: any) => a.id);
-    let jobs: any[] = [];
-
-    if (assetIds.length > 0) {
-      const allJobs = await db.select().from(generationQueue);
-      jobs = allJobs.filter((j: any) => assetIds.includes(j.assetId));
-    }
-
-    return NextResponse.json({
-      ok: true,
-      shorts,
-      assets,
-      jobs,
-      count: {
-        shorts: shorts.length,
-        assets: assets.length,
-        jobs: jobs.length,
-      },
-    });
-
+    // Use generationProjects, assets, generationJobQueue instead
+    // ...implementation
   } catch (error) {
     console.error('[API] Error getting generation status:', error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 },
     );
   }
+  */
 }

@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { hwar_datasets } from "@/lib/schema";
+import { db } from "@/shared/lib/db";
+import { hwar_datasets } from "@/shared/lib/schema";
 import { desc } from "drizzle-orm";
-import { serverError } from "@/lib/http";
+import { serverError } from "@/shared/lib/http";
 
 type SuccessResponse = {
   ok: true;
@@ -20,7 +20,7 @@ export async function GET() {
     const rows = await db
       .select()
       .from(hwar_datasets)
-      .orderBy(desc(hwar_datasets.createdAt))
+      .orderBy(desc(hwar_datasets.created_at))
       .limit(100);
 
     return NextResponse.json<SuccessResponse>({
@@ -28,7 +28,7 @@ export async function GET() {
       datasets: rows.map((row: typeof hwar_datasets.$inferSelect) => ({
         id: row.id,
         name: row.name,
-        createdAt: row.createdAt,
+        createdAt: row.created_at,
       })),
     });
   } catch (error) {

@@ -11,6 +11,7 @@ import { EmptyState } from '@/shared/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Badge } from '@/shared/components/ui/badge';
+import { Film, Image } from 'lucide-react';
 
 interface Short {
   id: string;
@@ -264,6 +265,7 @@ export default function GenerationPage() {
                 <h3 className="text-lg font-semibold mb-4">Shorts</h3>
                 {statusData.shorts.length === 0 ? (
                   <EmptyState
+                    icon={Film}
                     title="No shorts yet"
                     description="Create a short using the form above to get started."
                   />
@@ -310,6 +312,7 @@ export default function GenerationPage() {
                 <h3 className="text-lg font-semibold mb-4">Assets ({statusData.count.assets})</h3>
                 {statusData.assets.length === 0 ? (
                   <EmptyState
+                    icon={Image}
                     title="No assets yet"
                     description="Assets will appear here once shorts are created."
                   />
