@@ -17,19 +17,26 @@
     "format:check": "turbo run format:check",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "types:pull": "pnpm --filter db run types:pull"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",
     "eslint": "^8.55.0",
     "prettier": "^3.1.0",
+    "tsx": "^4.20.6",
     "turbo": "^2.0.0",
     "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=7.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "drizzle-orm": "0.29.1"
+    }
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1"

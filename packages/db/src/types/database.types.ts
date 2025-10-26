@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -12,100 +12,700 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  public: {
+  aes_core: {
     Tables: {
-      analysis_queue: {
+      beats: {
         Row: {
-          analyzer: string
-          created_at: string
-          error: string | null
+          action_prompt: string | null
+          contrast: Database["aes_core"]["Enums"]["contrast_enum"] | null
+          description: string
+          duration_seconds: number
+          emotion: Database["aes_core"]["Enums"]["emotion_enum"]
           id: string
-          metadata: Json | null
-          status: string
-          updated_at: string
-          video_id: string
-          video_legacy_id: string
+          intended_impact: string | null
+          meta: Json
+          order: number
+          phase: Database["aes_core"]["Enums"]["phase_enum"]
+          template_id: string
         }
         Insert: {
-          analyzer: string
-          created_at?: string
-          error?: string | null
+          action_prompt?: string | null
+          contrast?: Database["aes_core"]["Enums"]["contrast_enum"] | null
+          description: string
+          duration_seconds: number
+          emotion: Database["aes_core"]["Enums"]["emotion_enum"]
           id?: string
-          metadata?: Json | null
-          status?: string
-          updated_at?: string
-          video_id: string
-          video_legacy_id: string
+          intended_impact?: string | null
+          meta?: Json
+          order: number
+          phase: Database["aes_core"]["Enums"]["phase_enum"]
+          template_id: string
         }
         Update: {
-          analyzer?: string
-          created_at?: string
-          error?: string | null
+          action_prompt?: string | null
+          contrast?: Database["aes_core"]["Enums"]["contrast_enum"] | null
+          description?: string
+          duration_seconds?: number
+          emotion?: Database["aes_core"]["Enums"]["emotion_enum"]
           id?: string
-          metadata?: Json | null
-          status?: string
-          updated_at?: string
-          video_id?: string
-          video_legacy_id?: string
+          intended_impact?: string | null
+          meta?: Json
+          order?: number
+          phase?: Database["aes_core"]["Enums"]["phase_enum"]
+          template_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "analysis_queue_video_id_fk"
-            columns: ["video_id"]
+            foreignKeyName: "beats_template_id_fkey"
+            columns: ["template_id"]
             isOneToOne: false
-            referencedRelation: "youtube_videos"
+            referencedRelation: "story_templates"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      story_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          tags: string[] | null
+          target_duration_seconds: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          tags?: string[] | null
+          target_duration_seconds: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          tags?: string[] | null
+          target_duration_seconds?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      contrast_enum:
+        | "small_vs_big"
+        | "slow_vs_fast"
+        | "alone_vs_together"
+        | "sad_vs_happy"
+        | "problem_vs_solution"
+        | "before_vs_after"
+      emotion_enum:
+        | "joy"
+        | "sadness"
+        | "surprise"
+        | "anticipation"
+        | "tension"
+        | "relief"
+        | "empathy"
+        | "curiosity"
+        | "humor"
+        | "awe"
+      phase_enum: "HOOK" | "BUILD" | "PAYOFF" | "RESOLUTION"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  analytics: {
+    Tables: {
+      metrics_snapshots: {
+        Row: {
+          comments: number | null
+          generation_project_id: string
+          id: string
+          likes: number | null
+          retention_percentage: number | null
+          snapshot_at: string
+          views: number | null
+          watch_time_seconds: number | null
+        }
+        Insert: {
+          comments?: number | null
+          generation_project_id: string
+          id?: string
+          likes?: number | null
+          retention_percentage?: number | null
+          snapshot_at?: string
+          views?: number | null
+          watch_time_seconds?: number | null
+        }
+        Update: {
+          comments?: number | null
+          generation_project_id?: string
+          id?: string
+          likes?: number | null
+          retention_percentage?: number | null
+          snapshot_at?: string
+          views?: number | null
+          watch_time_seconds?: number | null
+        }
+        Relationships: []
+      }
+      performance_metrics: {
+        Row: {
+          comments: number | null
+          engagement_rate: number | null
+          generation_project_id: string
+          id: string
+          last_updated: string | null
+          like_rate: number | null
+          likes: number | null
+          retention_percentage: number | null
+          views: number | null
+          viral_score: number | null
+          watch_time_seconds: number | null
+          youtube_url: string | null
+        }
+        Insert: {
+          comments?: number | null
+          engagement_rate?: number | null
+          generation_project_id: string
+          id?: string
+          last_updated?: string | null
+          like_rate?: number | null
+          likes?: number | null
+          retention_percentage?: number | null
+          views?: number | null
+          viral_score?: number | null
+          watch_time_seconds?: number | null
+          youtube_url?: string | null
+        }
+        Update: {
+          comments?: number | null
+          engagement_rate?: number | null
+          generation_project_id?: string
+          id?: string
+          last_updated?: string | null
+          like_rate?: number | null
+          likes?: number | null
+          retention_percentage?: number | null
+          views?: number | null
+          viral_score?: number | null
+          watch_time_seconds?: number | null
+          youtube_url?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      recompute_metrics: { Args: { p_short_id: string }; Returns: undefined }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  generation_pipeline: {
+    Tables: {
+      asset_generation_jobs: {
+        Row: {
+          asset_id: string
+          created_at: string
+          error: string | null
+          id: string
+          provider: string
+          status: Database["public"]["Enums"]["app_job_status"]
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider?: string
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider?: string
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "analysis_queue_video_id_fk"
-            columns: ["video_id"]
+            foreignKeyName: "generation_pipeline_jobs_asset_id_fk"
+            columns: ["asset_id"]
             isOneToOne: false
-            referencedRelation: "youtube_videos_legacy"
-            referencedColumns: ["uuid_id"]
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
           },
         ]
       }
       assets: {
         Row: {
-          aspect_ratio: string | null
-          created_at: string
+          api_cost_usd: number | null
+          asset_type: string
+          beat_id: string | null
+          content_hash: string | null
+          created_at: string | null
+          deleted_at: string | null
+          generation_project_id: string
           id: string
-          kind: string
-          legacy_id: string
-          model: string | null
-          prompt: string | null
-          quality_score: number | null
-          role: string | null
-          selected: boolean | null
-          url: string | null
+          meta: Json
+          minimax_job_id: string | null
+          status: Database["public"]["Enums"]["app_job_status"]
+          storage_bucket: string | null
+          storage_path: string | null
+          storage_url: string
+          updated_at: string | null
         }
         Insert: {
-          aspect_ratio?: string | null
-          created_at?: string
+          api_cost_usd?: number | null
+          asset_type: string
+          beat_id?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          generation_project_id: string
           id?: string
-          kind: string
-          legacy_id: string
-          model?: string | null
-          prompt?: string | null
-          quality_score?: number | null
-          role?: string | null
-          selected?: boolean | null
-          url?: string | null
+          meta?: Json
+          minimax_job_id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"]
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_url: string
+          updated_at?: string | null
         }
         Update: {
-          aspect_ratio?: string | null
-          created_at?: string
+          api_cost_usd?: number | null
+          asset_type?: string
+          beat_id?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          generation_project_id?: string
           id?: string
-          kind?: string
-          legacy_id?: string
-          model?: string | null
-          prompt?: string | null
-          quality_score?: number | null
-          role?: string | null
-          selected?: boolean | null
-          url?: string | null
+          meta?: Json
+          minimax_job_id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"]
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_url?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_generation_project_id_fkey"
+            columns: ["generation_project_id"]
+            isOneToOne: false
+            referencedRelation: "generation_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_projects: {
+        Row: {
+          api_cost_usd: number | null
+          channel_id: string | null
+          created_at: string | null
+          deleted_at: string | null
+          error_message: string | null
+          final_video_url: string | null
+          id: string
+          meta: Json
+          minimax_cost: number | null
+          owner_id: string | null
+          status: Database["public"]["Enums"]["app_job_status"]
+          template_id: string | null
+          updated_at: string | null
+          upload_status: string | null
+          youtube_video_id: string | null
+        }
+        Insert: {
+          api_cost_usd?: number | null
+          channel_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          id?: string
+          meta?: Json
+          minimax_cost?: number | null
+          owner_id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"]
+          template_id?: string | null
+          updated_at?: string | null
+          upload_status?: string | null
+          youtube_video_id?: string | null
+        }
+        Update: {
+          api_cost_usd?: number | null
+          channel_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          id?: string
+          meta?: Json
+          minimax_cost?: number | null
+          owner_id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"]
+          template_id?: string | null
+          updated_at?: string | null
+          upload_status?: string | null
+          youtube_video_id?: string | null
         }
         Relationships: []
+      }
+    }
+    Views: {
+      jobs: {
+        Row: {
+          asset_id: string | null
+          created_at: string | null
+          error: string | null
+          id: string | null
+          provider: string | null
+          status: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string | null
+          provider?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string | null
+          provider?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_pipeline_jobs_asset_id_fk"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  jobs: {
+    Tables: {
+      analysis_job_queue: {
+        Row: {
+          analyzer: string
+          created_at: string | null
+          error: string | null
+          error_message: string | null
+          id: string
+          retry_count: number
+          status: Database["public"]["Enums"]["app_job_status"]
+          updated_at: string | null
+          video_id: string
+        }
+        Insert: {
+          analyzer: string
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+          video_id: string
+        }
+        Update: {
+          analyzer?: string
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+          video_id?: string
+        }
+        Relationships: []
+      }
+      generation_job_queue: {
+        Row: {
+          asset_id: string
+          created_at: string | null
+          error: string | null
+          error_message: string | null
+          id: string
+          provider: string
+          retry_count: number
+          status: Database["public"]["Enums"]["app_job_status"]
+          updated_at: string | null
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          provider: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          provider?: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ingest_job_queue: {
+        Row: {
+          created_at: string | null
+          duration: number | null
+          error: string | null
+          error_message: string | null
+          id: string
+          published_after: string | null
+          query: string
+          retry_count: number
+          status: Database["public"]["Enums"]["app_job_status"]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration?: number | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          published_after?: string | null
+          query: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration?: number | null
+          error?: string | null
+          error_message?: string | null
+          id?: string
+          published_after?: string | null
+          query?: string
+          retry_count?: number
+          status?: Database["public"]["Enums"]["app_job_status"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      analysis_queue: {
+        Row: {
+          analyzer: string | null
+          created_at: string | null
+          error: string | null
+          error_message: string | null
+          id: string | null
+          status: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at: string | null
+          video_id: string | null
+        }
+        Insert: {
+          analyzer?: string | null
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+          video_id?: string | null
+        }
+        Update: {
+          analyzer?: string | null
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+          video_id?: string | null
+        }
+        Relationships: []
+      }
+      generation_queue: {
+        Row: {
+          asset_id: string | null
+          created_at: string | null
+          error: string | null
+          error_message: string | null
+          id: string | null
+          provider: string | null
+          status: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          provider?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          provider?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ingest_queue: {
+        Row: {
+          created_at: string | null
+          duration: number | null
+          error: string | null
+          error_message: string | null
+          id: string | null
+          published_after: string | null
+          query: string | null
+          status: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration?: number | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          published_after?: string | null
+          query?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration?: number | null
+          error?: string | null
+          error_message?: string | null
+          id?: string | null
+          published_after?: string | null
+          query?: string | null
+          status?: Database["public"]["Enums"]["app_job_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  public: {
+    Tables: {
+      analysis_results: {
+        Row: {
+          aes_breakdown: Json | null
+          analysis_url: string | null
+          analyzer: string
+          analyzer_name: string | null
+          created_at: string
+          emotional_tags: Json | null
+          id: string
+          overall_score: number | null
+          updated_at: string
+          version: number
+          video_id: string
+        }
+        Insert: {
+          aes_breakdown?: Json | null
+          analysis_url?: string | null
+          analyzer: string
+          analyzer_name?: string | null
+          created_at?: string
+          emotional_tags?: Json | null
+          id?: string
+          overall_score?: number | null
+          updated_at?: string
+          version?: number
+          video_id: string
+        }
+        Update: {
+          aes_breakdown?: Json | null
+          analysis_url?: string | null
+          analyzer?: string
+          analyzer_name?: string | null
+          created_at?: string
+          emotional_tags?: Json | null
+          id?: string
+          overall_score?: number | null
+          updated_at?: string
+          version?: number
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "youtube_videos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       audit_log: {
         Row: {
@@ -160,7 +760,7 @@ export type Database = {
           plan_path: string | null
           quality_score: number | null
           started_at: string
-          status: string
+          status: Database["public"]["Enums"]["app_job_status"]
           total: number
         }
         Insert: {
@@ -173,7 +773,7 @@ export type Database = {
           plan_path?: string | null
           quality_score?: number | null
           started_at?: string
-          status?: string
+          status?: Database["public"]["Enums"]["app_job_status"]
           total?: number
         }
         Update: {
@@ -186,7 +786,7 @@ export type Database = {
           plan_path?: string | null
           quality_score?: number | null
           started_at?: string
-          status?: string
+          status?: Database["public"]["Enums"]["app_job_status"]
           total?: number
         }
         Relationships: []
@@ -197,42 +797,35 @@ export type Database = {
           created_at: string
           duration_s: number | null
           id: string
+          legacy_task_id: string
           public_url: string | null
           task_id: string
-          task_legacy_id: string
         }
         Insert: {
           beat_id?: string | null
           created_at?: string
           duration_s?: number | null
           id?: string
+          legacy_task_id: string
           public_url?: string | null
           task_id: string
-          task_legacy_id: string
         }
         Update: {
           beat_id?: string | null
           created_at?: string
           duration_s?: number | null
           id?: string
+          legacy_task_id?: string
           public_url?: string | null
           task_id?: string
-          task_legacy_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "clips_task_id_fk"
+            foreignKeyName: "clips_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
-            referencedRelation: "tasks"
+            referencedRelation: "legacy_tasks"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clips_task_id_fk"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_legacy"
-            referencedColumns: ["uuid_id"]
           },
         ]
       }
@@ -300,36 +893,7 @@ export type Database = {
           topic?: string | null
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "generation_events_first_asset_fk"
-            columns: ["chosen_first_asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "generation_events_first_asset_fk"
-            columns: ["chosen_first_asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets_legacy"
-            referencedColumns: ["uuid_id"]
-          },
-          {
-            foreignKeyName: "generation_events_last_asset_fk"
-            columns: ["chosen_last_asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "generation_events_last_asset_fk"
-            columns: ["chosen_last_asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets_legacy"
-            referencedColumns: ["uuid_id"]
-          },
-        ]
+        Relationships: []
       }
       id_uuid_mapping: {
         Row: {
@@ -349,42 +913,6 @@ export type Database = {
           legacy_id?: string
           table_name?: string
           uuid_id?: string
-        }
-        Relationships: []
-      }
-      ingest_queue: {
-        Row: {
-          created_at: string
-          duration: string
-          error: string | null
-          id: string
-          metadata: Json | null
-          published_after: string | null
-          query: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          duration?: string
-          error?: string | null
-          id?: string
-          metadata?: Json | null
-          published_after?: string | null
-          query: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          duration?: string
-          error?: string | null
-          id?: string
-          metadata?: Json | null
-          published_after?: string | null
-          query?: string
-          status?: string
-          updated_at?: string
         }
         Relationships: []
       }
@@ -418,7 +946,7 @@ export type Database = {
         }
         Relationships: []
       }
-      tasks: {
+      legacy_tasks: {
         Row: {
           batch_id: string | null
           deleted_at: string | null
@@ -433,7 +961,7 @@ export type Database = {
           prompt: string | null
           public_url: string | null
           started_at: string
-          status: string
+          status: Database["public"]["Enums"]["app_job_status"]
           topic: string | null
         }
         Insert: {
@@ -450,7 +978,7 @@ export type Database = {
           prompt?: string | null
           public_url?: string | null
           started_at?: string
-          status: string
+          status?: Database["public"]["Enums"]["app_job_status"]
           topic?: string | null
         }
         Update: {
@@ -467,56 +995,15 @@ export type Database = {
           prompt?: string | null
           public_url?: string | null
           started_at?: string
-          status?: string
+          status?: Database["public"]["Enums"]["app_job_status"]
           topic?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "tasks_batch_id_fk"
+            foreignKeyName: "tasks_batch_id_fkey"
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "batches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      video_analysis: {
-        Row: {
-          analysis_url: string | null
-          analyzer: string
-          created_at: string
-          id: string
-          metadata: Json | null
-          updated_at: string
-          video_id: string
-          video_legacy_id: string
-        }
-        Insert: {
-          analysis_url?: string | null
-          analyzer: string
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          updated_at?: string
-          video_id: string
-          video_legacy_id: string
-        }
-        Update: {
-          analysis_url?: string | null
-          analyzer?: string
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          updated_at?: string
-          video_id?: string
-          video_legacy_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "video_analysis_video_id_fk"
-            columns: ["video_id"]
-            isOneToOne: false
-            referencedRelation: "youtube_videos"
             referencedColumns: ["id"]
           },
         ]
@@ -526,11 +1013,9 @@ export type Database = {
           channel_title: string | null
           comment_count: number | null
           created_at: string
-          deleted_at: string | null
           description: string | null
           duration_seconds: number | null
           id: string
-          legacy_id: string
           like_count: number | null
           published_at: string | null
           tags: Json | null
@@ -538,16 +1023,15 @@ export type Database = {
           updated_at: string
           url: string
           view_count: number | null
+          youtube_id: string | null
         }
         Insert: {
           channel_title?: string | null
           comment_count?: number | null
           created_at?: string
-          deleted_at?: string | null
           description?: string | null
           duration_seconds?: number | null
           id?: string
-          legacy_id: string
           like_count?: number | null
           published_at?: string | null
           tags?: Json | null
@@ -555,16 +1039,15 @@ export type Database = {
           updated_at?: string
           url: string
           view_count?: number | null
+          youtube_id?: string | null
         }
         Update: {
           channel_title?: string | null
           comment_count?: number | null
           created_at?: string
-          deleted_at?: string | null
           description?: string | null
           duration_seconds?: number | null
           id?: string
-          legacy_id?: string
           like_count?: number | null
           published_at?: string | null
           tags?: Json | null
@@ -572,80 +1055,137 @@ export type Database = {
           updated_at?: string
           url?: string
           view_count?: number | null
-        }
-        Relationships: []
-      }
-      yt_samples: {
-        Row: {
-          channel_title: string | null
-          comment_rate: number | null
-          comments: number | null
-          duration_category: string | null
-          duration_s: number | null
-          engagement_rate: number | null
-          id: string
-          inserted_at: string | null
-          legacy_video_id: string
-          like_rate: number | null
-          likes: number | null
-          num_tags: number | null
-          tags_from_report: string[] | null
-          title: string | null
-          views: number | null
-          viral_score: number | null
-          virality_category: string | null
-        }
-        Insert: {
-          channel_title?: string | null
-          comment_rate?: number | null
-          comments?: number | null
-          duration_category?: string | null
-          duration_s?: number | null
-          engagement_rate?: number | null
-          id?: string
-          inserted_at?: string | null
-          legacy_video_id: string
-          like_rate?: number | null
-          likes?: number | null
-          num_tags?: number | null
-          tags_from_report?: string[] | null
-          title?: string | null
-          views?: number | null
-          viral_score?: number | null
-          virality_category?: string | null
-        }
-        Update: {
-          channel_title?: string | null
-          comment_rate?: number | null
-          comments?: number | null
-          duration_category?: string | null
-          duration_s?: number | null
-          engagement_rate?: number | null
-          id?: string
-          inserted_at?: string | null
-          legacy_video_id?: string
-          like_rate?: number | null
-          likes?: number | null
-          num_tags?: number | null
-          tags_from_report?: string[] | null
-          title?: string | null
-          views?: number | null
-          viral_score?: number | null
-          virality_category?: string | null
+          youtube_id?: string | null
         }
         Relationships: []
       }
     }
     Views: {
-      [key: string]: {
-        Row: Record<string, any>
-        Insert?: Record<string, any>
-        Update?: Record<string, any>
-        Relationships?: any[]
+      clips_with_legacy: {
+        Row: {
+          beat_id: string | null
+          created_at: string | null
+          duration_s: number | null
+          id: string | null
+          public_url: string | null
+          task_id: string | null
+          task_legacy_id: string | null
+          task_text_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clips_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "legacy_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_audit_log_recent: {
+        Row: {
+          action: string | null
+          changed_fields: string[] | null
+          created_at: string | null
+          fields_changed_count: number | null
+          id: string | null
+          record_id: string | null
+          table_name: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      v_audit_stats: {
+        Row: {
+          action: string | null
+          action_count: number | null
+          first_action_at: string | null
+          last_action_at: string | null
+          table_name: string | null
+        }
+        Relationships: []
+      }
+      v_cron_jobs: {
+        Row: {
+          active: boolean | null
+          command: string | null
+          database: string | null
+          jobid: number | null
+          jobname: string | null
+          nodename: string | null
+          nodeport: number | null
+          schedule: string | null
+          username: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          command?: string | null
+          database?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          nodename?: string | null
+          nodeport?: number | null
+          schedule?: string | null
+          username?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          command?: string | null
+          database?: string | null
+          jobid?: number | null
+          jobname?: string | null
+          nodename?: string | null
+          nodeport?: number | null
+          schedule?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      v_generation_costs_by_user: {
+        Row: {
+          first_short_at: string | null
+          last_short_at: string | null
+          owner_id: string | null
+          total_assets: number | null
+          total_assets_cost: number | null
+          total_cost: number | null
+          total_shorts: number | null
+          total_shorts_cost: number | null
+        }
+        Relationships: []
+      }
+      v_index_dependencies: {
+        Row: {
+          constraint_description: string | null
+          constraint_name: unknown
+          constraint_type: unknown
+          index_size: string | null
+          indexname: unknown
+          schemaname: unknown
+          tablename: unknown
+        }
+        Relationships: []
       }
     }
     Functions: {
+      auto_score_scenario: { Args: { p_scenario: Json }; Returns: Json }
+      build_llm_system_prompt: {
+        Args: { p_duration_category?: string; p_topic?: string }
+        Returns: string
+      }
       clean_old_audit_logs: { Args: { days_to_keep?: number }; Returns: number }
+      find_similar_videos: {
+        Args: { p_duration_s: number; p_limit?: number; p_topic: string }
+        Returns: {
+          analysis_url: string
+          duration_seconds: number
+          emotional_tags: Json
+          engagement_rate: number
+          overall_score: number
+          title: string
+          video_id: string
+        }[]
+      }
       get_audit_history: {
         Args: { p_record_id: string; p_table_name: string }
         Returns: {
@@ -662,10 +1202,20 @@ export type Database = {
         Args: { p_table_name: string; p_uuid: string }
         Returns: string
       }
+      get_materialized_view_stats: {
+        Args: never
+        Returns: {
+          last_refreshed: string
+          row_count: number
+          size_pretty: string
+          view_name: string
+        }[]
+      }
       get_metadata_schema: {
         Args: { column_name?: string; table_name: string }
         Returns: Json
       }
+      get_top_patterns_for_llm: { Args: never; Returns: Json }
       get_uuid_by_legacy_id: {
         Args: { p_legacy_id: string; p_table_name: string }
         Returns: string
@@ -674,10 +1224,22 @@ export type Database = {
         Args: { days_old?: number; table_name: string }
         Returns: number
       }
-      refresh_all_analytics_views: { Args: Record<string, never>; Returns: undefined }
+      refresh_all_analytics_views: { Args: never; Returns: undefined }
+      refresh_yt_priors: { Args: never; Returns: undefined }
       restore_deleted_record: {
         Args: { record_id: string; table_name: string }
         Returns: boolean
+      }
+      safe_jsonb: { Args: { s: string }; Returns: Json }
+      score_scenario: {
+        Args: { _duration: string; _tags: string[] }
+        Returns: {
+          src: string
+          success_est: number
+          tag: string
+          viral_est: number
+          weight: number
+        }[]
       }
       soft_delete_record: {
         Args: { record_id: string; table_name: string }
@@ -687,6 +1249,229 @@ export type Database = {
         Args: { data: Json; schema_name_param: string }
         Returns: boolean
       }
+    }
+    Enums: {
+      app_job_status: "pending" | "processing" | "completed" | "failed"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  studio: {
+    Tables: {
+      analysis_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      batches: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      characters: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name?: string
+        }
+        Relationships: []
+      }
+      datasets: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      harvests: {
+        Row: {
+          created_at: string
+          id: string
+          query: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          query: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          query?: string
+        }
+        Relationships: []
+      }
+      presets: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name?: string
+        }
+        Relationships: []
+      }
+      queues: {
+        Row: {
+          id: string
+          name: string
+          size: number | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          size?: number | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          size?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scenarios: {
+        Row: {
+          created_at: string
+          duration_sec: number
+          id: string
+          tags: Json
+          topic: string
+        }
+        Insert: {
+          created_at?: string
+          duration_sec: number
+          id?: string
+          tags?: Json
+          topic: string
+        }
+        Update: {
+          created_at?: string
+          duration_sec?: number
+          id?: string
+          tags?: Json
+          topic?: string
+        }
+        Relationships: []
+      }
+      templates: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name?: string
+        }
+        Relationships: []
+      }
+      workers: {
+        Row: {
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
@@ -796,3 +1581,65 @@ export type Enums<
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  aes_core: {
+    Enums: {
+      contrast_enum: [
+        "small_vs_big",
+        "slow_vs_fast",
+        "alone_vs_together",
+        "sad_vs_happy",
+        "problem_vs_solution",
+        "before_vs_after",
+      ],
+      emotion_enum: [
+        "joy",
+        "sadness",
+        "surprise",
+        "anticipation",
+        "tension",
+        "relief",
+        "empathy",
+        "curiosity",
+        "humor",
+        "awe",
+      ],
+      phase_enum: ["HOOK", "BUILD", "PAYOFF", "RESOLUTION"],
+    },
+  },
+  analytics: {
+    Enums: {},
+  },
+  generation_pipeline: {
+    Enums: {},
+  },
+  jobs: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      app_job_status: ["pending", "processing", "completed", "failed"],
+    },
+  },
+  studio: {
+    Enums: {},
+  },
+} as const

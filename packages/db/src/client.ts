@@ -20,13 +20,18 @@ export function getPgClient(): Pool {
       throw new Error('DATABASE_URL environment variable is not set');
     }
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     globalForDb.__pgPool = new Pool({
       connectionString: databaseUrl,
-      ssl:
-        process.env.NODE_ENV === 'production'
-          ? { rejectUnauthorized: false }
-          : undefined,
+      ssl: isProduction
+        ? { rejectUnauthorized: true }  // Production: strict SSL validation
+        : { rejectUnauthorized: false }, // Development: allow self-signed certs
     });
+
+    if (!isProduction) {
+      console.warn('⚠️  WARNING: SSL certificate validation is disabled in development mode');
+    }
   }
   return globalForDb.__pgPool;
 }

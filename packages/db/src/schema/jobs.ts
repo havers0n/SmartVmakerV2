@@ -1,65 +1,55 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  timestamp,
-  index,
-  jsonb,
-} from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-/**
- * YouTube ingestion job queue
- * Tracks jobs for searching and ingesting videos from YouTube
- */
-export const ingestQueue = pgTable(
-  'ingest_queue',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    query: text('query').notNull(), // Search query (keywords)
-    publishedAfter: timestamp('published_after', { withTimezone: true }), // Only videos after this date
-    duration: text('duration').default('short').notNull(), // 'short', 'medium', 'long'
-    status: text('status')
-      .notNull()
-      .default('pending'), // 'pending', 'processing', 'done', 'failed'
-    error: text('error'), // Error message if failed
-    metadata: jsonb('metadata'), // Additional data (limit, etc.)
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    statusIdx: index('idx_ingest_queue_status').on(table.status),
-    createdAtIdx: index('idx_ingest_queue_created_at').on(table.createdAt),
-  }),
-);
+export const analysisJobQueue = pgTable('analysis_job_queue', {
+    id: uuid('id').notNull().defaultRandom().primaryKey(),
+    analyzer: text('analyzer').notNull(),
+    error: text('error'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    error_message: text('error_message'),
+    video_id: uuid('video_id').notNull(),
+    status: text('status').notNull().default('pending'),
+    retry_count: integer('retry_count').notNull(),
+});
 
-export type IngestQueue = typeof ingestQueue.$inferSelect;
-export type NewIngestQueue = typeof ingestQueue.$inferInsert;
 
-/**
- * Video analysis job queue
- * Tracks jobs for analyzing videos with different analyzers
- */
-export const analysisQueue = pgTable(
-  'analysis_queue',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    videoId: text('video_id').notNull(), // YouTube video ID
-    analyzer: text('analyzer').notNull(), // 'gemini', 'nanobanana', etc.
-    status: text('status')
-      .notNull()
-      .default('pending'), // 'pending', 'processing', 'done', 'failed'
-    error: text('error'), // Error message if failed
-    metadata: jsonb('metadata'), // Additional data
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    videoIdIdx: index('idx_analysis_queue_video_id').on(table.videoId),
-    statusIdx: index('idx_analysis_queue_status').on(table.status),
-    analyzerIdx: index('idx_analysis_queue_analyzer').on(table.analyzer),
-    createdAtIdx: index('idx_analysis_queue_created_at').on(table.createdAt),
-  }),
-);
+export type AnalysisJobQueue = typeof analysisJobQueue.$inferSelect;
 
-export type AnalysisQueue = typeof analysisQueue.$inferSelect;
-export type NewAnalysisQueue = typeof analysisQueue.$inferInsert;
+export type NewAnalysisJobQueue = typeof analysisJobQueue.$inferInsert;
+
+
+export const generationJobQueue = pgTable('generation_job_queue', {
+    id: uuid('id').notNull().defaultRandom().primaryKey(),
+    asset_id: uuid('asset_id').notNull(),
+    provider: text('provider').notNull(),
+    error: text('error'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    error_message: text('error_message'),
+    status: text('status').notNull().default('pending'),
+    retry_count: integer('retry_count').notNull(),
+});
+
+
+export type GenerationJobQueue = typeof generationJobQueue.$inferSelect;
+
+export type NewGenerationJobQueue = typeof generationJobQueue.$inferInsert;
+
+
+export const ingestJobQueue = pgTable('ingest_job_queue', {
+    id: uuid('id').notNull().defaultRandom().primaryKey(),
+    query: text('query').notNull(),
+    published_after: timestamp('published_after', { withTimezone: true }),
+    duration: integer('duration'),
+    error: text('error'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    error_message: text('error_message'),
+    status: text('status').notNull().default('pending'),
+    retry_count: integer('retry_count').notNull(),
+});
+
+
+export type IngestJobQueue = typeof ingestJobQueue.$inferSelect;
+
+export type NewIngestJobQueue = typeof ingestJobQueue.$inferInsert;

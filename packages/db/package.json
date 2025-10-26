@@ -30,7 +30,8 @@
     "studio": "drizzle-kit studio",
     "generate": "drizzle-kit generate:pg",
     "push": "drizzle-kit push:pg",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "types:pull": "node scripts/generate-supabase-types.ts"
   },
   "dependencies": {
     "@scrimspec/shared-types": "workspace:*",
@@ -43,6 +44,8 @@
     "typescript": "^5.3.3",
     "drizzle-kit": "^0.20.13",
     "@types/pg": "^8.11.3",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "@supabase/cli": "^1.200.3",
+    "supabase": "^1.200.3"
   }
 }
