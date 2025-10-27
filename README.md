@@ -215,6 +215,118 @@ CMD ["node", "packages/orchestrator/dist/src/server.js"]
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
 
+
+
+📦 Управление Базой Данных и Миграции
+
+Этот раздел описывает правила и процессы для работы со схемой базы данных в этом проекте.
+
+📜 Основной Принцип: Schema-First
+
+Единственным источником правды для схемы БД является Drizzle-схема, которая находится в файле packages/db/migrations/schema.ts.
+
+ЗАПРЕЩЕНО вносить изменения в структуру таблиц (добавлять колонки, менять типы) напрямую через UI Supabase. Все изменения должны проходить через описанный ниже процесс, чтобы код и база данных оставались синхронизированными.
+
+Workflow №1: Стандартный Процесс Внесения Изменений
+
+Это основной рабочий процесс, который вы будете использовать в 99% случаев.
+
+✏️ Шаг 1: Изменить схему в коде
+
+Откройте файл packages/db/migrations/schema.ts и внесите необходимые изменения. Например, добавьте новое поле в таблицу:
+
+code
+TypeScript
+download
+content_copy
+expand_less
+// packages/db/migrations/schema.ts
+export const projects = pgTable("projects", {
+  id: uuid("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"), // <-- Ваше новое поле
+});
+✨ Шаг 2: Сгенерировать SQL-миграцию
+
+Выполните в терминале следующую команду из корня проекта:
+
+code
+Bash
+download
+content_copy
+expand_less
+pnpm --filter db generate
+
+Drizzle Kit сравнит ваш измененный schema.ts с последним состоянием и создаст новый SQL-файл в папке packages/db/migrations/ (например, 0001_add_description.sql).
+
+🚀 Шаг 3: Применить миграцию к базе данных
+
+Выполните команду для запуска миграции:
+
+code
+Bash
+download
+content_copy
+expand_less
+pnpm --filter db migrate:run
+
+Скрипт подключится к БД, выполнит новый SQL-файл и обновит историю в таблице __drizzle_migrations.
+
+⚠️ Внимание! Если при выполнении этой команды в среде WSL возникает ошибка SSL, используйте "команду-вездеход":
+
+code
+Bash
+download
+content_copy
+expand_less
+NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm --filter db migrate:run
+Workflow №2: "Полная Перезагрузка" (Re-sync с существующей БД)
+
+Этот процесс нужен только в экстренных случаях, если схема в коде и реальная БД сильно рассинхронизировались (например, после ручных правок в UI Supabase). Этот процесс полностью перезаписывает вашу Drizzle-схему.
+
+1. Очистка
+
+Удалите содержимое папки packages/db/migrations/.
+
+Удалите таблицу __drizzle_migrations в базе данных через SQL Editor Supabase (DROP TABLE IF EXISTS __drizzle_migrations;).
+
+2. Интроспекция ("Фотография" БД)
+
+Запустите команду, которая прочитает реальную БД и сгенерирует из нее Drizzle-схему (schema.ts) и "нулевую" миграцию (0000_....sql).
+
+code
+Bash
+download
+content_copy
+expand_less
+NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm --filter db run schema:pull
+3. Очистка "нулевой" миграции
+
+Откройте сгенерированный SQL-файл (например, migrations/0000_....sql), полностью удалите его содержимое и сохраните файл пустым. Это необходимо, чтобы избежать ошибки unterminated /* comment.
+
+4. Запись в историю
+
+Запустите мигратор, чтобы он "применил" пустую миграцию и записал ее в историю.
+
+code
+Bash
+download
+content_copy
+expand_less
+NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm --filter db migrate:run
+
+После этого шага система снова полностью синхронизирована, и вы можете вернуться к Стандартному Workflow.
+
+🔧 Устранение Неполадок
+
+Проблема: Ошибка SELF_SIGNED_CERT_IN_CHAIN (SSL).
+
+Решение: Выполняйте команду с префиксом NODE_TLS_REJECT_UNAUTHORIZED=0. Это безопасно для локальной разработки.
+
+Проблема: Ошибка ENETUNREACH (проблема с сетью/IPv6).
+
+Решение: Убедитесь, что в файле packages/db/src/client.ts в конфигурации new Pool(...) добавлена опция family: 4,.
+
 ## 📄 License
 
 MIT

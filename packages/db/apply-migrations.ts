@@ -10,7 +10,8 @@ const pool = new Pool({
   connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4, // Force IPv4 to avoid DNS resolution issues
 });
 
 async function applyMigrations() {

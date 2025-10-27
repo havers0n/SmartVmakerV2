@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import type { Config } from 'drizzle-kit';
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
@@ -6,11 +7,11 @@ import { resolve } from 'path';
 dotenvConfig({ path: resolve(__dirname, '../../.env') });
 
 export default {
-  schema: './src/schema',
+  schema: './migrations/schema.ts', // <-- УКАЗЫВАЕМ ПРАВИЛЬНЫЙ ФАЙЛ
   out: './migrations',
   driver: 'pg',
   dbCredentials: {
-    connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || 'postgresql://localhost/scrimspec',
+    connectionString: process.env.DRIZZLE_DATABASE_URL || process.env.DATABASE_URL || 'postgresql://localhost/scrimspec',
   },
   strict: true,
   verbose: true,

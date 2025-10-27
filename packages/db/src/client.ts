@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
 
-import * as schema from './schema';
+import * as schema from '../migrations/schema';
 
 // ============================================================================
 // Database Connection Factory with Hot Reload Support
@@ -27,6 +27,7 @@ export function getPgClient(): Pool {
       ssl: isProduction
         ? { rejectUnauthorized: true }  // Production: strict SSL validation
         : { rejectUnauthorized: false }, // Development: allow self-signed certs
+      family: 4, // Force IPv4 to avoid DNS resolution issues
     });
 
     if (!isProduction) {

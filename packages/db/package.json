@@ -31,7 +31,9 @@
     "generate": "drizzle-kit generate:pg",
     "push": "drizzle-kit push:pg",
     "clean": "rm -rf dist",
-    "types:pull": "node scripts/generate-supabase-types.ts"
+    "introspect": "tsx introspect-database.ts",
+    "schema:pull": "drizzle-kit introspect:pg",
+    "types:pull": "tsx scripts/generate-supabase-types.ts"
   },
   "dependencies": {
     "@scrimspec/shared-types": "workspace:*",

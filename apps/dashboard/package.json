@@ -46,6 +46,8 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@scrimspec/db": "workspace:*",
     "@scrimspec/shared-types": "workspace:*",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.76.1",
     "@tanstack/react-query": "^5.0.0",
     "@types/uuid": "^11.0.0",
     "class-variance-authority": "^0.7.1",

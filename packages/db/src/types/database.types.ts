@@ -1,4 +1,14 @@
-﻿export type Json =
+/**
+ * Auto-generated types from Supabase database
+ * Generated at: 2025-10-27T17:31:30.680Z
+ * 
+ * This file is generated directly from the live Supabase database.
+ * The database is the single source of truth.
+ * 
+ * To regenerate: pnpm types:pull
+ */
+
+export type Json =
   | string
   | number
   | boolean

@@ -2,51 +2,87 @@
  * GET /api/generation/status
  * Get generation status for all shorts and assets.
  * Supports filtering and pagination.
- *
- * TODO: This route needs to be updated to use correct schema tables:
- * - generationShorts -> generationProjects
- * - generationAssets -> assets
- * - generationQueue -> generationJobQueue
  */
 
 import { NextResponse } from 'next/server';
-// Temporarily disabled until schema is updated
-// import { getDrizzleClient } from '@scrimspec/db';
-// import {
-//   generationProjects,
-//   assets,
-//   generationJobQueue,
-// } from '@scrimspec/db/schema';
-// import { eq, desc } from 'drizzle-orm';
+import { db } from '@/shared/lib/db';
+import { 
+  generationProjects, 
+  assets, 
+  generationJobQueue 
+} from '@/shared/lib/schema';
+import { eq, desc, and, sql } from 'drizzle-orm';
 
-// const db = getDrizzleClient();
-
-export async function GET(_req: Request) {
-  // TODO: Temporarily disabled - needs schema migration
-  return NextResponse.json(
-    {
-      error: 'This endpoint is temporarily disabled pending schema migration',
-      message: 'Please use /api/hwar/factory/stats for generation statistics',
-    },
-    { status: 501 } // Not Implemented
-  );
-
-  // TODO: Re-enable after updating to use correct schema:
-  /*
+export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const projectId = url.searchParams.get('projectId');
     const assetStatus = url.searchParams.get('status');
     const pageSize = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
 
-    // Use generationProjects, assets, generationJobQueue instead
-    // ...implementation
+    // Build where conditions
+    const conditions = [];
+    if (projectId) {
+      conditions.push(eq(generationProjects.id, projectId));
+    }
+    if (assetStatus) {
+      conditions.push(eq(assets.status, assetStatus));
+    }
+
+    // Get generation projects with counts
+    const projects = await db
+      .select({
+        id: generationProjects.id,
+        templateId: generationProjects.template_id,
+        finalVideoUrl: generationProjects.final_video_url,
+        status: generationProjects.status,
+        ownerId: generationProjects.owner_id,
+        createdAt: generationProjects.created_at,
+        updatedAt: generationProjects.updated_at,
+        assetCount: sql<number>`count(${assets.id})`.as('asset_count'),
+        pendingAssets: sql<number>`count(case when ${assets.status} = 'pending' then 1 end)`.as('pending_assets'),
+        processingAssets: sql<number>`count(case when ${assets.status} = 'processing' then 1 end)`.as('processing_assets'),
+        completedAssets: sql<number>`count(case when ${assets.status} = 'completed' then 1 end)`.as('completed_assets'),
+        failedAssets: sql<number>`count(case when ${assets.status} = 'failed' then 1 end)`.as('failed_assets'),
+      })
+      .from(generationProjects)
+      .leftJoin(assets, eq(generationProjects.id, assets.generation_project_id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(
+        generationProjects.id,
+        generationProjects.template_id,
+        generationProjects.final_video_url,
+        generationProjects.status,
+        generationProjects.owner_id,
+        generationProjects.created_at,
+        generationProjects.updated_at
+      )
+      .orderBy(desc(generationProjects.created_at))
+      .limit(pageSize);
+
+    // Get job queue stats
+    const jobQueueStats = await db
+      .select({
+        status: generationJobQueue.status,
+        count: sql<number>`count(*)`.as('count'),
+      })
+      .from(generationJobQueue)
+      .groupBy(generationJobQueue.status);
+
+    return NextResponse.json({
+      ok: true,
+      projects,
+      jobQueueStats,
+      count: projects.length,
+    });
   } catch (error) {
     console.error('[API] Error getting generation status:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Failed to fetch generation status'
+      },
       { status: 500 },
     );
   }
-  */
 }

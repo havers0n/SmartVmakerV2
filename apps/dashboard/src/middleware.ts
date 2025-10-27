@@ -10,6 +10,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 // Simple in-memory rate limiting (for development only!)
 // In production, use Redis-based rate limiting
@@ -45,6 +47,21 @@ setInterval(() => {
 export async function middleware(req: NextRequest) {
   // Only protect API routes
   if (req.nextUrl.pathname.startsWith('/api/')) {
+    // Allow access to health checks and generation endpoints for testing
+    const publicApiPaths = ['/api/health', '/api/generation'];
+    const isPublicApiPath = publicApiPaths.some(path => req.nextUrl.pathname.startsWith(path));
+    
+    if (isPublicApiPath) {
+      // Add security headers
+      const response = NextResponse.next();
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      response.headers.set('X-Frame-Options', 'DENY');
+      response.headers.set('X-XSS-Protection', '1; mode=block');
+      response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+      return response;
+    }
+
     const ip = req.ip ?? req.headers.get('x-forwarded-for') ?? '127.0.0.1';
 
     // Basic rate limiting
@@ -65,13 +82,34 @@ export async function middleware(req: NextRequest) {
       );
     }
 
-    // TODO: Add authentication check here
-    // For now, we log a warning in development
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(
-        '⚠️  WARNING: API routes are not protected by authentication!\n' +
-        '   Implement Supabase Auth or NextAuth.js before deploying to production.\n' +
-        `   Request: ${req.method} ${req.nextUrl.pathname}`
+    // Create Supabase client for authentication check
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value;
+          },
+        },
+      }
+    );
+
+    // Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Unauthorized',
+          code: 'UNAUTHORIZED',
+        }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
 
@@ -85,6 +123,35 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // Protect all routes except login, signup, and public API routes
+  const publicPaths = ['/login', '/signup'];
+  const isPublicPath = publicPaths.some(path => req.nextUrl.pathname === path);
+  
+  if (!isPublicPath && !req.nextUrl.pathname.startsWith('/api/')) {
+    // Create Supabase client for authentication check
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value;
+          },
+        },
+      }
+    );
+
+    // Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // Redirect to login page
+      const redirectUrl = new URL('/login', req.url);
+      redirectUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 
@@ -96,5 +163,6 @@ export const config = {
      * - webhooks (if you have them)
      */
     '/api/:path*',
+    '/((?!_next/static|_next/image|favicon.ico|login|signup).*)',
   ],
 };

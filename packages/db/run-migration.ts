@@ -8,6 +8,15 @@ config({ path: path.resolve(__dirname, '../../.env') });
 
 async function runMigrations() {
   console.log('📦 Environment loaded');
+
+  // =================== НАЧАЛО ИЗМЕНЕНИЙ ===================
+  // Принудительно используем пулер для миграций, если он задан
+  if (process.env.DRIZZLE_DATABASE_URL) {
+    console.log('🔧 Using DRIZZLE_DATABASE_URL for migration...');
+    process.env.DATABASE_URL = process.env.DRIZZLE_DATABASE_URL;
+  }
+  // ==================== КОНЕЦ ИЗМЕНЕНИЙ ====================
+
   console.log('🔗 DATABASE_URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Not set');
 
   const dbClient = getPgClient();
