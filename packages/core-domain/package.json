@@ -1,0 +1,32 @@
+{
+  "name": "@scrimspec/core-domain",
+  "version": "0.1.0",
+  "description": "Core domain schemas and validation for Scrimspec",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schemas/ingest": {
+      "types": "./dist/schemas/ingest.d.ts",
+      "default": "./dist/schemas/ingest.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests yet' && exit 0",
+    "lint": "echo 'No linting configured' && exit 0",
+    "format": "echo 'No formatting configured' && exit 0",
+    "format:check": "echo 'No formatting configured' && exit 0",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
