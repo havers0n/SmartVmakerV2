@@ -1,5 +1,13 @@
-import { pgTable, pgEnum, uuid, text, timestamp, integer, index, jsonb, numeric, bigint, unique, uniqueIndex, inet, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, pgEnum, uuid, text, timestamp, integer, index, jsonb, numeric, bigint, unique, uniqueIndex, inet, primaryKey, boolean, pgSchema } from "drizzle-orm/pg-core"
 
+// =================== SCHEMAS ===================
+export const aesCore = pgSchema("aes_core");
+export const analytics = pgSchema("analytics");
+export const generationPipeline = pgSchema("generation_pipeline");
+export const jobs = pgSchema("jobs");
+export const studio = pgSchema("studio");
+
+// =================== ENUMS ===================
 export const factorType = pgEnum("factor_type", ['totp', 'webauthn', 'phone'])
 export const factorStatus = pgEnum("factor_status", ['unverified', 'verified'])
 export const aalLevel = pgEnum("aal_level", ['aal1', 'aal2', 'aal3'])
@@ -36,8 +44,8 @@ export const generationEvents = pgTable("generation_events", {
 	hookStrength: numeric("hook_strength"),
 	emotionalCurve: text("emotional_curve").array(),
 	evaluator: text("evaluator"),
-	chosenFirstAssetId: uuid("chosen_first_asset_id").references(() => assets.id, { onDelete: "set null" } ),
-	chosenLastAssetId: uuid("chosen_last_asset_id").references(() => assets.id, { onDelete: "set null" } ),
+	chosenFirstAssetId: uuid("chosen_first_asset_id").references(() => assets.id, { onDelete: 'set null' }),
+	chosenLastAssetId: uuid("chosen_last_asset_id").references(() => assets.id, { onDelete: 'set null' })
 },
 (table) => {
 	return {
@@ -77,7 +85,7 @@ export const legacyTasks = pgTable("legacy_tasks", {
 	params: jsonb("params"),
 	fileId: text("file_id"),
 	error: text("error"),
-	batchId: uuid("batch_id").references(() => batches.id, { onDelete: "set null" } ),
+	batchId: uuid("batch_id").references(() => batches.id, { onDelete: 'set null' }),
 	topic: text("topic"),
 	lang: text("lang"),
 	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
@@ -119,7 +127,7 @@ export const clips = pgTable("clips", {
 	publicUrl: text("public_url"),
 	durationS: integer("duration_s"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	taskId: uuid("task_id").notNull().references(() => legacyTasks.id, { onDelete: "cascade" } ),
+	taskId: uuid("task_id").notNull().references(() => legacyTasks.id, { onDelete: 'cascade' }),
 },
 (table) => {
 	return {
@@ -148,6 +156,9 @@ export const youtubeVideos = pgTable("youtube_videos", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	youtubeId: text("youtube_id"),
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	// Новые колонки для YouTube API
+	thumbnails: jsonb("thumbnails"),
+	liveBroadcastContent: text("live_broadcast_content"),
 },
 (table) => {
 	return {
@@ -172,7 +183,7 @@ export const analysisResults = pgTable("analysis_results", {
 	emotionalTags: jsonb("emotional_tags"),
 	analyzerName: text("analyzer_name"),
 	version: integer("version").default(1).notNull(),
-	videoId: uuid("video_id").notNull().references(() => youtubeVideos.id, { onDelete: "cascade" } ),
+	videoId: uuid("video_id").notNull().references(() => youtubeVideos.id, { onDelete: 'cascade' }),
 },
 (table) => {
 	return {
@@ -248,7 +259,7 @@ export const idUuidMapping = pgTable("id_uuid_mapping", {
 
 // =================== НОВЫЕ ТАБЛИЦЫ ===================
 
-export const storyTemplates = pgTable("story_templates", {
+export const storyTemplates = aesCore.table("story_templates", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	name: text("name").notNull(),
 	description: text("description"),
@@ -258,7 +269,7 @@ export const storyTemplates = pgTable("story_templates", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
-export const beats = pgTable("beats", {
+export const beats = aesCore.table("beats", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	templateId: uuid("template_id").notNull().references(() => storyTemplates.id, { onDelete: 'cascade' }),
 	order: integer("order").notNull(),
@@ -272,34 +283,81 @@ export const beats = pgTable("beats", {
 	meta: jsonb("meta").default({}),
 });
 
-export const generationProjects = pgTable("generation_projects", {
+export const generationProjects = generationPipeline.table("generation_projects", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	ownerId: uuid("owner_id"), // Ссылку на auth.users добавим позже, если понадобится
 	templateId: uuid("template_id").references(() => storyTemplates.id, { onDelete: 'set null' }),
 	status: appJobStatus("status").default('pending').notNull(),
 	finalVideoUrl: text("final_video_url"),
 	apiCostUsd: numeric("api_cost_usd", { precision: 10, scale: 4 }).default("0").notNull(),
+	channelId: text("channel_id"),
+	errorMessage: text("error_message"),
+	minimaxCost: numeric("minimax_cost"),
+	uploadStatus: text("upload_status"),
+	youtubeVideoId: text("youtube_video_id"),
 	meta: jsonb("meta").default({}),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
 });
 
-export const assets = pgTable("assets", {
+export const assets = generationPipeline.table("assets", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	generationProjectId: uuid("generation_project_id").notNull().references(() => generationProjects.id, { onDelete: 'cascade' }),
 	beatId: uuid("beat_id").references(() => beats.id, { onDelete: 'set null' }),
 	assetType: text("asset_type").notNull(),
 	status: appJobStatus("status").default('pending').notNull(),
-	storageUrl: text("storage_url"),
-	providerJobId: text("provider_job_id"),
+	storageUrl: text("storage_url").notNull(),
+	storageBucket: text("storage_bucket"),
+	storagePath: text("storage_path"),
+	minimaxJobId: text("minimax_job_id"),
 	contentHash: text("content_hash"),
 	apiCostUsd: numeric("api_cost_usd", { precision: 10, scale: 4 }).default("0"),
 	meta: jsonb("meta").default({}),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
 }, (table) => {
     return {
         contentHashIdx: uniqueIndex("content_hash_idx").on(table.contentHash),
     }
+});
+
+// =================== JOB QUEUES ===================
+
+export const ingestJobQueue = jobs.table("ingest_job_queue", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	query: text("query").notNull(),
+	publishedAfter: timestamp("published_after", { withTimezone: true, mode: 'string' }),
+	duration: integer("duration"),
+	error: text("error"),
+	errorMessage: text("error_message"),
+	status: appJobStatus("status").default('pending').notNull(),
+	retryCount: integer("retry_count").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+});
+
+export const analysisJobQueue = jobs.table("analysis_job_queue", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	videoId: uuid("video_id").notNull().references(() => youtubeVideos.id, { onDelete: 'cascade' }),
+	analyzer: text("analyzer").notNull(),
+	status: appJobStatus("status").default('pending').notNull(),
+	retryCount: integer("retry_count").default(0).notNull(),
+	error: text("error"),
+	errorMessage: text("error_message"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+});
+
+export const generationJobQueue = jobs.table("generation_job_queue", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+	provider: text("provider").notNull(),
+	status: appJobStatus("status").default('pending').notNull(),
+	retryCount: integer("retry_count").default(0).notNull(),
+	error: text("error"),
+	errorMessage: text("error_message"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 });

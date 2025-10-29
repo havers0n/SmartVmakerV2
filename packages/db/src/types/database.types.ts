@@ -1,6 +1,6 @@
 /**
  * Auto-generated types from Supabase database
- * Generated at: 2025-10-27T17:31:30.680Z
+ * Generated at: 2025-10-29T18:53:30.666Z
  * 
  * This file is generated directly from the live Supabase database.
  * The database is the single source of truth.
