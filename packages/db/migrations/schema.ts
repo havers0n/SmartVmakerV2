@@ -336,6 +336,23 @@ export const ingestJobQueue = jobs.table("ingest_job_queue", {
 	retryCount: integer("retry_count").default(0).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+
+	// YouTube API параметры поиска
+	maxResults: integer("max_results").default(25),
+	regionCode: text("region_code"),
+	relevanceLanguage: text("relevance_language"),
+	safeSearch: text("safe_search").default('moderate'),
+	orderBy: text("order_by").default('date'),
+	searchType: text("search_type").default('video'),
+	videoDuration: text("video_duration"),
+	videoDefinition: text("video_definition"),
+	videoCaption: text("video_caption"),
+	videoEmbeddable: boolean("video_embeddable"),
+	videoLicense: text("video_license"),
+	eventType: text("event_type"),
+
+	// Поле для отслеживания последней проверки задачи
+	lastCheckedAt: timestamp("last_checked_at", { withTimezone: true, mode: 'string' }),
 });
 
 export const analysisJobQueue = jobs.table("analysis_job_queue", {

@@ -5,30 +5,9 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1761587526164,
-      "tag": "0000_dark_thunderbolts",
+      "when": 1761768224578,
+      "tag": "0000_daily_firedrake",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1761591043789,
-      "tag": "0001_slow_raza",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1761592625642,
-      "tag": "0002_windy_paladin",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1761875000000,
-      "tag": "0003_schema_sync",
-      "breakpoints": false
     }
   ]
 }

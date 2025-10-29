@@ -64,7 +64,8 @@
       "Bash(set NODE_OPTIONS=--max-old-space-size=8192)",
       "Bash(pnpm list:*)",
       "Bash(npx tsc:*)",
-      "Bash(set NODE_TLS_REJECT_UNAUTHORIZED=0)"
+      "Bash(set NODE_TLS_REJECT_UNAUTHORIZED=0)",
+      "Bash(pnpm types:pull:*)"
     ],
     "deny": [],
     "ask": []
