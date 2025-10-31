@@ -10,7 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/shared/components/ui/pagination';
 import { Video as VideoIcon, ExternalLink } from 'lucide-react';
+import { callAction } from '@/shared/api/actions';
+import { useToast } from '@/shared/hooks/use-toast';
 
 interface Video {
   id: string;
@@ -21,12 +32,19 @@ interface Video {
   viewCount?: number | null;
   publishedAt?: string | null;
   createdAt?: string | null;
+  thumbnails?: {
+    default?: { url: string; width: number; height: number };
+    medium?: { url: string; width: number; height: number };
+    high?: { url: string; width: number; height: number };
+  } | null;
+  youtubeId?: string | null;
   // Analysis data
   analysisStatus?: string | null;
   analysisJobId?: string | null;
   analyzer?: string | null;
   analysisId?: string | null;
   analysisUrl?: string | null;
+  isAnalyzed?: boolean;
 }
 
 interface AnalysisResult {
@@ -44,15 +62,23 @@ export default function AnalysisPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState('');
+  const { toast } = useToast();
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 25;
+
+  // Calculate total pages
+  const totalPages = Math.ceil(total / limit);
 
   // Fetch ingested videos
   useEffect(() => {
     const fetchVideos = async () => {
       try {
         setLoading(true);
-        // TODO: Replace with actual API call to /api/videos or similar
-        // For now, fetch from youtube_videos table via backend
-        const response = await fetch('/api/videos');
+        const offset = (page - 1) * limit;
+        const response = await fetch(`/api/videos?limit=${limit}&offset=${offset}`);
 
         if (!response.ok) {
           throw new Error('Failed to load videos');
@@ -60,17 +86,21 @@ export default function AnalysisPage() {
 
         const data = await response.json();
         setVideos(data.videos || []);
+        setTotal(data.total || 0);
+
+        // Clear selection when changing pages to avoid confusion
+        setSelectedVideos(new Set());
       } catch (err) {
-        // For now, show placeholder if API doesn't exist yet
-        console.log('Videos API not yet implemented. Showing placeholder.');
+        console.error('Failed to fetch videos:', err);
         setVideos([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchVideos();
-  }, []);
+  }, [page]);
 
   const handleVideoToggle = (videoId: string) => {
     setSelectedVideos(prev => {
@@ -94,7 +124,11 @@ export default function AnalysisPage() {
 
   const handleSubmitAnalysis = async () => {
     if (selectedVideos.size === 0) {
-      setError('Please select at least one video');
+      toast({
+        title: 'No videos selected',
+        description: 'Please select at least one video to analyze',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -103,27 +137,44 @@ export default function AnalysisPage() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/analysis/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          videoIds: Array.from(selectedVideos),
-          analyzer,
-        }),
+      const result = await callAction<{
+        success: boolean;
+        message: string;
+        data: {
+          totalRequested: number;
+          alreadyAnalyzed: number;
+          newJobsCreated: number;
+        };
+      }>('analysis.startAnalysis', {
+        videoIds: Array.from(selectedVideos),
       });
 
-      const data = await response.json();
+      // Show success toast
+      toast({
+        title: 'Analysis started',
+        description: result.message,
+        variant: 'default',
+      });
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create analysis job');
-      }
-
-      setResult(data);
+      // Clear selection after successful submission
       setSelectedVideos(new Set());
+
+      // Refresh videos list to show updated status
+      const response = await fetch('/api/videos');
+      if (response.ok) {
+        const data = await response.json();
+        setVideos(data.videos || []);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+
+      // Show error toast
+      toast({
+        title: 'Analysis failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -158,9 +209,11 @@ export default function AnalysisPage() {
   }
 
   function getStatusBadge(video: Video) {
-    if (video.analysisUrl) {
-      return <Badge variant="default" className="bg-green-500">Completed</Badge>;
+    // If analysis is completed (has analysisUrl or isAnalyzed is true)
+    if (video.isAnalyzed || video.analysisUrl) {
+      return <Badge variant="default" className="bg-green-500">Analyzed</Badge>;
     }
+    // If there's an active job
     if (video.analysisStatus === 'processing') {
       return <Badge variant="secondary">Processing</Badge>;
     }
@@ -170,7 +223,11 @@ export default function AnalysisPage() {
     if (video.analysisStatus === 'failed') {
       return <Badge variant="destructive">Failed</Badge>;
     }
-    return <Badge variant="outline" className="opacity-50">Not Queued</Badge>;
+    if (video.analysisStatus === 'completed') {
+      return <Badge variant="default" className="bg-green-500">Analyzed</Badge>;
+    }
+    // Not analyzed yet
+    return <Badge variant="outline" className="opacity-50">Not Analyzed</Badge>;
   }
 
   return (
@@ -236,12 +293,12 @@ export default function AnalysisPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[120px]">Thumbnail</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Channel</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Views</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Analyzer</TableHead>
                     <TableHead>Published</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -256,6 +313,19 @@ export default function AnalysisPage() {
                           checked={selectedVideos.has(video.id)}
                           onCheckedChange={() => handleVideoToggle(video.id)}
                         />
+                      </TableCell>
+                      <TableCell>
+                        {video.thumbnails?.default?.url ? (
+                          <img
+                            src={video.thumbnails.default.url}
+                            alt={video.title}
+                            className="w-full h-auto rounded object-cover"
+                          />
+                        ) : (
+                          <div className="w-full aspect-video bg-muted rounded flex items-center justify-center">
+                            <VideoIcon className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <a
@@ -277,15 +347,139 @@ export default function AnalysisPage() {
                       </TableCell>
                       <TableCell>{getStatusBadge(video)}</TableCell>
                       <TableCell>
-                        {video.analyzer && <span className="text-sm text-muted-foreground">{video.analyzer}</span>}
-                      </TableCell>
-                      <TableCell>
                         {video.publishedAt && new Date(video.publishedAt).toLocaleDateString()}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="mt-6">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (page > 1) {
+                              setPage(page - 1);
+                            }
+                          }}
+                          className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+
+                      {/* First page */}
+                      {page > 2 && (
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(1);
+                            }}
+                          >
+                            1
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+
+                      {/* Ellipsis before current page */}
+                      {page > 3 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+
+                      {/* Previous page */}
+                      {page > 1 && (
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(page - 1);
+                            }}
+                          >
+                            {page - 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+
+                      {/* Current page */}
+                      <PaginationItem>
+                        <PaginationLink
+                          href="#"
+                          isActive
+                          onClick={(e) => {
+                            e.preventDefault();
+                          }}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+
+                      {/* Next page */}
+                      {page < totalPages && (
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(page + 1);
+                            }}
+                          >
+                            {page + 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+
+                      {/* Ellipsis after current page */}
+                      {page < totalPages - 2 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+
+                      {/* Last page */}
+                      {page < totalPages - 1 && (
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(totalPages);
+                            }}
+                          >
+                            {totalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (page < totalPages) {
+                              setPage(page + 1);
+                            }
+                          }}
+                          className={page === totalPages ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+
+                  {/* Page info */}
+                  <div className="text-center mt-4 text-sm text-muted-foreground">
+                    Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, total)} of {total} videos
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

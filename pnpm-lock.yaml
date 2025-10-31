@@ -72,6 +72,8 @@ importers:
       '@types/react': ^18.2.0
       '@types/react-dom': ^18.2.0
       '@types/uuid': ^11.0.0
+      '@upstash/ratelimit': ^2.0.6
+      '@upstash/redis': ^1.35.6
       autoprefixer: ^10.4.0
       class-variance-authority: ^0.7.1
       clsx: ^2.1.1
@@ -143,6 +145,8 @@ importers:
       '@supabase/supabase-js': 2.76.1
       '@tanstack/react-query': 5.90.5_react@18.3.1
       '@types/uuid': 11.0.0
+      '@upstash/ratelimit': 2.0.6_@upstash+redis@1.35.6
+      '@upstash/redis': 1.35.6
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       cmdk: 1.1.1_pjaunvshsggv36wxj2eymod3ti
@@ -246,23 +250,6 @@ importers:
       '@scrimspec/db': link:../db
       dotenv: 16.6.1
       drizzle-orm: 0.29.1
-    devDependencies:
-      '@types/node': 20.19.23
-      tsx: 4.20.6
-      typescript: 5.9.3
-
-  workers:
-    specifiers:
-      '@scrimspec/db': workspace:*
-      '@types/node': ^20.19.23
-      dotenv: ^16.4.7
-      googleapis: ^164.1.0
-      tsx: ^4.19.2
-      typescript: ^5.9.3
-    dependencies:
-      '@scrimspec/db': link:../packages/db
-      dotenv: 16.6.1
-      googleapis: 164.1.0
     devDependencies:
       '@types/node': 20.19.23
       tsx: 4.20.6
@@ -2969,6 +2956,28 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
+
+  /@upstash/core-analytics/0.0.10:
+    resolution: {integrity: sha512-7qJHGxpQgQr9/vmeS1PktEwvNAF7TI4iJDi8Pu2CFZ9YUGHZH4fOP5TfYlZ4aVxfopnELiE4BS4FBjyK7V1/xQ==}
+    engines: {node: '>=16.0.0'}
+    dependencies:
+      '@upstash/redis': 1.35.6
+    dev: false
+
+  /@upstash/ratelimit/2.0.6_@upstash+redis@1.35.6:
+    resolution: {integrity: sha512-Uak5qklMfzFN5RXltxY6IXRENu+Hgmo9iEgMPOlUs2etSQas2N+hJfbHw37OUy4vldLRXeD0OzL+YRvO2l5acg==}
+    peerDependencies:
+      '@upstash/redis': ^1.34.3
+    dependencies:
+      '@upstash/core-analytics': 0.0.10
+      '@upstash/redis': 1.35.6
+    dev: false
+
+  /@upstash/redis/1.35.6:
+    resolution: {integrity: sha512-aSEIGJgJ7XUfTYvhQcQbq835re7e/BXjs8Janq6Pvr6LlmTZnyqwT97RziZLO/8AVUL037RLXqqiQC6kCt+5pA==}
+    dependencies:
+      uncrypto: 0.1.3
+    dev: false
 
   /acorn-jsx/5.3.2_acorn@8.15.0:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -6790,6 +6799,10 @@ packages:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
     dev: true
+
+  /uncrypto/0.1.3:
+    resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
+    dev: false
 
   /undici-types/6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}

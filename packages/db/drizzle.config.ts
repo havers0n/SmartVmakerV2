@@ -8,7 +8,7 @@ dotenvConfig({ path: resolve(__dirname, '../../.env') });
 
 export default {
   schema: './migrations/schema.ts', // <-- УКАЗЫВАЕМ ПРАВИЛЬНЫЙ ФАЙЛ
-  out: './migrations',
+  out: './supabase/migrations', // <-- УКАЗЫВАЕМ ПАПКУ SUPABASE
   driver: 'pg',
   dbCredentials: {
     connectionString: process.env.DRIZZLE_DATABASE_URL || process.env.DATABASE_URL || 'postgresql://localhost/scrimspec',

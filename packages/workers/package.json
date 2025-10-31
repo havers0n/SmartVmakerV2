@@ -8,6 +8,7 @@
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "dev:ingest": "cross-env NODE_ENV=development tsx --watch src/ingest-worker.ts",
+    "dev:enrich": "cross-env NODE_ENV=development tsx --watch src/enrichment-worker.ts",
     "test": "echo 'No tests yet' && exit 0",
     "clean": "rm -rf dist"
   },

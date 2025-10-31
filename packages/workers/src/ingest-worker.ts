@@ -4,21 +4,31 @@ import path from 'path';
 // Загружаем переменные из корневого .env файла
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// Убедимся, что NODE_ENV установлен (cross-env должен это сделать, но проверим)
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'development';
+}
+
+console.log('[Ingest Worker] NODE_ENV:', process.env.NODE_ENV);
+
 if (process.env.DRIZZLE_DATABASE_URL) {
   console.log('[Ingest Worker] Using DRIZZLE_DATABASE_URL (Pooler)...');
-  
+
   // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
   if (databaseUrl && databaseUrl.includes('sslmode=')) {
-    databaseUrl = databaseUrl.replace(/\?sslmode=[^&]*&?/, '?').replace(/&sslmode=[^&]*$/, '');
+    databaseUrl = databaseUrl.replace(/\?sslmode=[^&]*&?/, '?').replace(/&sslmode=[^&]*$/, '').replace(/&sslmode=[^&]*/, '');
     databaseUrl = databaseUrl.replace(/\?$/, ''); // Remove trailing ? if no params left
   }
-  
+
+  // Also update DRIZZLE_DATABASE_URL itself to ensure client.ts picks it up without sslmode
+  process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
+
+  console.log('[Ingest Worker] Cleaned database URL (sslmode removed)');
 }
 
-import { getDrizzleClient, schema } from '@scrimspec/db';
-import { sql } from 'drizzle-orm';
+import { getDrizzleClient, schema, sql } from '@scrimspec/db';
 
 interface YouTubeSearchResponse {
   items: Array<{
@@ -47,37 +57,49 @@ interface YouTubeSearchResponse {
 async function processIngestJob() {
   const db = getDrizzleClient();
 
-  // Step 1: Захват задачи с использованием SELECT FOR UPDATE SKIP LOCKED
-  const jobs = await (db as any).execute(
-    sql`
-      SELECT * FROM jobs.ingest_job_queue
-      WHERE status = 'pending'
-      ORDER BY created_at ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    ` as any
-  );
+  // Step 1: Атомарный захват задачи с использованием транзакции и FOR UPDATE SKIP LOCKED
+  // Это гарантирует, что только один воркер возьмет конкретную задачу
+  const job = await db.transaction(async (tx) => {
+    // Используем сырой SQL для FOR UPDATE SKIP LOCKED, так как Drizzle пока не имеет
+    // нативного API для этой конструкции
+    const result = await tx.execute(
+      sql`
+        SELECT * FROM jobs.ingest_job_queue
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      `
+    );
 
-  if (!jobs.rows || jobs.rows.length === 0) {
-    // Нет задач для обработки
-    return null;
-  }
+    if (!result.rows || result.rows.length === 0) {
+      return null;
+    }
 
-  const job = jobs.rows[0] as any;
+    const selectedJob = result.rows[0] as any;
 
-  try {
-    // Step 2: Обновление статуса на 'processing'
-    await db
+    // Немедленно обновляем статус на 'processing' внутри той же транзакции
+    // Это критически важно для предотвращения race condition
+    await tx
       .update(schema.ingestJobQueue)
       .set({
         status: 'processing' as any,
         updatedAt: new Date() as any,
       })
-      .where(sql`${schema.ingestJobQueue.id} = ${job.id}` as any);
+      .where(sql`${schema.ingestJobQueue.id} = ${selectedJob.id}`);
 
+    return selectedJob;
+  });
+
+  if (!job) {
+    // Нет задач для обработки
+    return null;
+  }
+
+  try {
     console.log(`[Ingest Worker] Processing job ${job.id}: query="${job.query}"`);
 
-    // Step 3: Формирование и выполнение запроса к YouTube API
+    // Step 2: Формирование и выполнение запроса к YouTube API
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (!apiKey) {
       throw new Error('YOUTUBE_API_KEY environment variable is not set');
@@ -141,7 +163,7 @@ async function processIngestJob() {
 
     console.log(`[Ingest Worker] Found ${data.items?.length || 0} videos`);
 
-    // Step 4: Сохранение результатов в youtube_videos
+    // Step 3: Сохранение результатов в youtube_videos
     if (data.items && data.items.length > 0) {
       for (const item of data.items) {
         const videoId = item.id.videoId;
@@ -175,21 +197,21 @@ async function processIngestJob() {
       }
     }
 
-    // Step 5: Завершение задачи
+    // Step 4: Завершение задачи
     await db
       .update(schema.ingestJobQueue)
       .set({
         status: 'completed' as any,
         updatedAt: new Date() as any,
       } as any)
-      .where(sql`${schema.ingestJobQueue.id} = ${job.id}` as any);
+      .where(sql`${schema.ingestJobQueue.id} = ${job.id}`);
 
     console.log(`[Ingest Worker] Job ${job.id} completed successfully`);
 
     return job.id;
 
   } catch (error) {
-    // Step 6: Обработка ошибок
+    // Step 5: Обработка ошибок
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     console.error(`[Ingest Worker] Job ${job.id} failed:`, errorMessage);
@@ -202,7 +224,7 @@ async function processIngestJob() {
         errorMessage: errorMessage,
         updatedAt: new Date() as any,
       })
-      .where(sql`${schema.ingestJobQueue.id} = ${job.id}` as any);
+      .where(sql`${schema.ingestJobQueue.id} = ${job.id}`);
 
     return null;
   }

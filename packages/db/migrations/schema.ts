@@ -155,6 +155,8 @@
 		createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 		youtubeId: text("youtube_id"),
+		thumbnails: jsonb("thumbnails"),
+		liveBroadcastContent: text("live_broadcast_content"),
 		id: uuid("id").defaultRandom().primaryKey().notNull(),
 	},
 	(table) => {

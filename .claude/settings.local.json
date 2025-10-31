@@ -65,7 +65,15 @@
       "Bash(pnpm list:*)",
       "Bash(npx tsc:*)",
       "Bash(set NODE_TLS_REJECT_UNAUTHORIZED=0)",
-      "Bash(pnpm types:pull:*)"
+      "Bash(pnpm types:pull:*)",
+      "Bash(timeout /t 3)",
+      "Bash(nul)",
+      "Bash(ping:*)",
+      "Bash(move \"apps\\dashboard\\app\\api\\actions\\handlers\\analysis.ts\" \"apps\\dashboard\\src\\app\\api\\actions\\handlers\\analysis.ts\")",
+      "Bash(mkdir:*)",
+      "Bash(pnpm exec tsx:*)",
+      "Bash(node test-videos-api.mjs:*)",
+      "Bash(pnpm dev:enrich:*)"
     ],
     "deny": [],
     "ask": []

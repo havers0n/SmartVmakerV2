@@ -16,4 +16,7 @@ export * from '../migrations/schema';
 // Export the schema object for convenience
 export { schema } from './client';
 
+// Re-export Drizzle ORM utilities for consistent imports
+export { sql, eq, and, or, gte, lte, gt, lt, ne, asc, desc } from 'drizzle-orm';
+
 

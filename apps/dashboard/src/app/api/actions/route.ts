@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { startSearch } from './handlers/ingest';
+import { startAnalysis } from './handlers/analysis';
 
 /**
  * Action Registry
@@ -7,6 +8,7 @@ import { startSearch } from './handlers/ingest';
  */
 const actionRegistry = {
   'ingest.startSearch': startSearch,
+  'analysis.startAnalysis': startAnalysis,
 } as const;
 
 type ActionName = keyof typeof actionRegistry;
