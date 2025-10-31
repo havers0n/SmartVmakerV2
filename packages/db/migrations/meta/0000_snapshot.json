@@ -1,5 +1,5 @@
 {
-  "id": "b89a2815-feb9-4ab3-83db-dbea546ec6a5",
+  "id": "ca52a387-2764-4e28-8a39-3d39a23f1b3c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
@@ -1874,18 +1874,6 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
-        },
-        "thumbnails": {
-          "name": "thumbnails",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "live_broadcast_content": {
-          "name": "live_broadcast_content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {

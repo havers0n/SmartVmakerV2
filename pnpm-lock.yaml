@@ -10,6 +10,7 @@ importers:
       '@supabase/supabase-js': ^2.76.1
       '@typescript-eslint/eslint-plugin': ^6.14.0
       '@typescript-eslint/parser': ^6.14.0
+      cross-env: ^10.1.0
       eslint: ^8.55.0
       prettier: ^3.1.0
       tsx: ^4.20.6
@@ -20,6 +21,7 @@ importers:
     devDependencies:
       '@typescript-eslint/eslint-plugin': 6.21.0_6bjyp4njf2pou6veal5dpp4r2u
       '@typescript-eslint/parser': 6.21.0_k2rwabtyo525wwqr6566umnmhy
+      cross-env: 10.1.0
       eslint: 8.57.1
       prettier: 3.6.2
       tsx: 4.20.6
@@ -76,6 +78,7 @@ importers:
       cmdk: ^1.1.1
       cross-env: ^10.1.0
       date-fns: ^3.6.0
+      dotenv: ^16.3.1
       drizzle-orm: 0.29.1
       embla-carousel-react: ^8.6.0
       eslint: ^8.55.0
@@ -172,6 +175,7 @@ importers:
       '@types/react-dom': 18.3.7_@types+react@18.3.26
       autoprefixer: 10.4.21_postcss@8.5.6
       cross-env: 10.1.0
+      dotenv: 16.6.1
       eslint: 8.57.1
       eslint-config-next: 14.2.33_k2rwabtyo525wwqr6566umnmhy
       postcss: 8.5.6
@@ -226,6 +230,25 @@ importers:
     dependencies:
       zod: 3.25.76
     devDependencies:
+      typescript: 5.9.3
+
+  packages/workers:
+    specifiers:
+      '@scrimspec/core-domain': workspace:*
+      '@scrimspec/db': workspace:*
+      '@types/node': ^20.10.0
+      dotenv: ^16.3.1
+      drizzle-orm: 0.29.1
+      tsx: ^4.7.0
+      typescript: ^5.3.3
+    dependencies:
+      '@scrimspec/core-domain': link:../core-domain
+      '@scrimspec/db': link:../db
+      dotenv: 16.6.1
+      drizzle-orm: 0.29.1
+    devDependencies:
+      '@types/node': 20.19.23
+      tsx: 4.20.6
       typescript: 5.9.3
 
   workers:
@@ -3628,7 +3651,6 @@ packages:
   /dotenv/16.6.1:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
-    dev: false
 
   /dreamopt/0.8.0:
     resolution: {integrity: sha512-vyJTp8+mC+G+5dfgsY+r3ckxlz+QMX40VjPQsZc5gxVAxLmi64TBoVkP54A/pRAXMXsbu2GMMBrZPxNv23waMg==}
@@ -3661,6 +3683,69 @@ packages:
     transitivePeerDependencies:
       - supports-color
     dev: true
+
+  /drizzle-orm/0.29.1:
+    resolution: {integrity: sha512-yItc4unfHnk8XkDD3/bdC63vdboTY7e7I03lCF1OJYABXSIfQYU9BFTQJXMMovVeb3T1/OJWwfW/70T1XPnuUA==}
+    peerDependencies:
+      '@aws-sdk/client-rds-data': '>=3'
+      '@cloudflare/workers-types': '>=3'
+      '@libsql/client': '*'
+      '@neondatabase/serverless': '>=0.1'
+      '@opentelemetry/api': ^1.4.1
+      '@planetscale/database': '>=1'
+      '@types/better-sqlite3': '*'
+      '@types/pg': '*'
+      '@types/sql.js': '*'
+      '@vercel/postgres': '*'
+      better-sqlite3: '>=7'
+      bun-types: '*'
+      knex: '*'
+      kysely: '*'
+      mysql2: '>=2'
+      pg: '>=8'
+      postgres: '>=3'
+      sql.js: '>=1'
+      sqlite3: '>=5'
+    peerDependenciesMeta:
+      '@aws-sdk/client-rds-data':
+        optional: true
+      '@cloudflare/workers-types':
+        optional: true
+      '@libsql/client':
+        optional: true
+      '@neondatabase/serverless':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@planetscale/database':
+        optional: true
+      '@types/better-sqlite3':
+        optional: true
+      '@types/pg':
+        optional: true
+      '@types/sql.js':
+        optional: true
+      '@vercel/postgres':
+        optional: true
+      better-sqlite3:
+        optional: true
+      bun-types:
+        optional: true
+      knex:
+        optional: true
+      kysely:
+        optional: true
+      mysql2:
+        optional: true
+      pg:
+        optional: true
+      postgres:
+        optional: true
+      sql.js:
+        optional: true
+      sqlite3:
+        optional: true
+    dev: false
 
   /drizzle-orm/0.29.1_@types+pg@8.15.5+pg@8.16.3:
     resolution: {integrity: sha512-yItc4unfHnk8XkDD3/bdC63vdboTY7e7I03lCF1OJYABXSIfQYU9BFTQJXMMovVeb3T1/OJWwfW/70T1XPnuUA==}

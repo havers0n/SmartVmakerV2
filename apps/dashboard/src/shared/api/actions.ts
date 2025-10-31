@@ -65,10 +65,10 @@ export async function callAction<T = unknown>(
 
 /**
  * Специализированная функция для ingest.startSearch
- * 
- * @param query - Поисковый запрос
+ *
+ * @param payload - Параметры поиска YouTube (query + опциональные фильтры)
  * @returns Promise с результатом создания задачи
  */
-export async function startIngestSearch(query: string) {
-  return callAction<{ message: string; jobId: string }>('ingest.startSearch', { query });
+export async function startIngestSearch(payload: unknown) {
+  return callAction<{ message: string; jobId: string }>('ingest.startSearch', payload);
 }

@@ -17,6 +17,23 @@ import logging
 from typing import Optional, List, Tuple
 from datetime import datetime
 import re
+from pathlib import Path
+
+# Load environment variables from root .env file
+try:
+    # Add the project root to the path so we can import the dotenv module
+    project_root = Path(__file__).parent.parent.parent.parent
+    env_path = project_root / '.env'
+    if env_path.exists():
+        # Import dotenv locally to avoid linter issues
+        import importlib
+        dotenv = importlib.import_module('dotenv')
+        dotenv.load_dotenv(dotenv_path=env_path)
+        logging.info(f'Loaded environment variables from {env_path}')
+except ImportError:
+    logging.warning('python-dotenv not available, skipping .env file loading')
+except Exception as e:
+    logging.warning(f'Error loading .env file: {e}')
 
 import psycopg2
 from psycopg2.extras import RealDictCursor

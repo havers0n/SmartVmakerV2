@@ -19,6 +19,22 @@ from datetime import datetime
 from pathlib import Path
 import tempfile
 
+# Load environment variables from root .env file
+try:
+    # Add the project root to the path so we can import the dotenv module
+    project_root = Path(__file__).parent.parent.parent.parent
+    env_path = project_root / '.env'
+    if env_path.exists():
+        # Import dotenv locally to avoid linter issues
+        import importlib
+        dotenv = importlib.import_module('dotenv')
+        dotenv.load_dotenv(dotenv_path=env_path)
+        logging.info(f'Loaded environment variables from {env_path}')
+except ImportError:
+    logging.warning('python-dotenv not available, skipping .env file loading')
+except Exception as e:
+    logging.warning(f'Error loading .env file: {e}')
+
 import psycopg2
  
 # Import storage helper (add parent directory to path)

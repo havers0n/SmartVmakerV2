@@ -31,28 +31,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    
+
     // Get initial session
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user || null);
-      setLoading(false);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+
+        console.log('Auth session loaded:', session ? 'authenticated' : 'not authenticated');
+        setSession(session);
+        setUser(session?.user || null);
+        setLoading(false);
+      } catch (err) {
+        console.error('Exception getting session:', err);
+        setLoading(false);
+      }
     };
 
     getSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session ? 'authenticated' : 'not authenticated');
       setSession(session);
       setUser(session?.user || null);
       setLoading(false);
-      
-      // Redirect logic
-      if (session && isPublicPath) {
-        router.push('/');
-      } else if (!session && !isPublicPath && pathname !== '/') {
+
+      // Redirect logic - only redirect after auth state changes, not on initial load
+      if (event === 'SIGNED_OUT' && !isPublicPath) {
         router.push('/login');
+      } else if (event === 'SIGNED_IN' && isPublicPath) {
+        router.push('/');
       }
     });
 
@@ -117,6 +129,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     loading,
   };
+
+  // Show loading spinner while checking auth, except on public pages
+  if (loading && !isPublicPath) {
+    return (
+      <AuthContext.Provider value={value}>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AuthContext.Provider>
+    );
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
