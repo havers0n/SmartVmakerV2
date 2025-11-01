@@ -10,6 +10,7 @@ if (!process.env.NODE_ENV) {
 }
 
 import { createLogger } from '@aec/logger';
+import { retryFetch } from './utils/retry';
 
 const logger = createLogger({ name: 'ingest-worker' });
 
@@ -156,14 +157,21 @@ async function processIngestJob() {
 
     const searchUrl = `https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`;
 
-    const response = await fetch(searchUrl);
+    // Wrap YouTube API call with retry logic
+    const data: YouTubeSearchResponse = await retryFetch(
+      async () => {
+        const response = await fetch(searchUrl);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`YouTube API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`YouTube API error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
 
-    const data: YouTubeSearchResponse = await response.json();
+        return response.json();
+      },
+      logger,
+      { retries: 3 }
+    );
 
     logger.info({ videoCount: data.items?.length || 0 }, 'Found videos from YouTube API');
 

@@ -10,6 +10,7 @@ if (!process.env.NODE_ENV) {
 }
 
 import { createLogger } from '@aec/logger';
+import { retryFetch } from './utils/retry';
 
 const logger = createLogger({ name: 'enrichment-worker' });
 
@@ -156,16 +157,23 @@ async function processEnrichmentBatch() {
 
     const apiUrl = `https://www.googleapis.com/youtube/v3/videos?${searchParams.toString()}`;
 
-    const response = await fetch(apiUrl);
+    // Wrap YouTube API call with retry logic
+    const data: YouTubeVideosResponse = await retryFetch(
+      async () => {
+        const response = await fetch(apiUrl);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `YouTube API error: ${response.status} ${response.statusText} - ${errorText}`
-      );
-    }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `YouTube API error: ${response.status} ${response.statusText} - ${errorText}`
+          );
+        }
 
-    const data: YouTubeVideosResponse = await response.json();
+        return response.json();
+      },
+      logger,
+      { retries: 3 }
+    );
 
     if (!data.items || data.items.length === 0) {
       logger.warn('YouTube API returned no items');

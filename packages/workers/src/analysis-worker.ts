@@ -10,6 +10,7 @@ if (!process.env.NODE_ENV) {
 }
 
 import { createLogger } from '@aec/logger';
+import { retryFetch } from './utils/retry';
 
 const logger = createLogger({ name: 'analysis-worker' });
 
@@ -86,21 +87,28 @@ async function assertModelExists(): Promise<void> {
   }
 
   const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`;
-  
+
   try {
-    const response = await fetch(modelsUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
+    // Wrap Gemini API call with retry logic
+    const modelsResponse = await retryFetch(
+      async () => {
+        const response = await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch models: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        return response.json();
       },
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch models: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-    
-    const modelsResponse = await response.json();
+      logger,
+      { retries: 3 }
+    );
     const models = modelsResponse.models || [];
     
     const modelExists = models.some((model: any) => model.name && model.name.endsWith(`/${geminiModel}`));
@@ -289,23 +297,29 @@ async function processAnalysisJob() {
 
     logger.debug('Sending request to Gemini API');
 
-    // Step 5: Выполнение запроса к Gemini
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Step 5: Выполнение запроса к Gemini с retry логикой
+    const geminiResponse: GeminiResponse = await retryFetch(
+      async () => {
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `Gemini API error: ${response.status} ${response.statusText} - ${errorText}`
+          );
+        }
+
+        return response.json();
       },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Gemini API error: ${response.status} ${response.statusText} - ${errorText}`
-      );
-    }
-
-    const geminiResponse: GeminiResponse = await response.json();
+      logger,
+      { retries: 3 }
+    );
 
     // Проверяем на ошибки в ответе
     if (geminiResponse.error) {

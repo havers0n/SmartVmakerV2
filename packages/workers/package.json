@@ -17,7 +17,8 @@
     "@aec/logger": "workspace:*",
     "@scrimspec/db": "workspace:*",
     "@scrimspec/core-domain": "workspace:*",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "p-retry": "^6.2.1"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
