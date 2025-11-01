@@ -32,6 +32,7 @@ importers:
   apps/dashboard:
     specifiers:
       '@aec/logger': workspace:*
+      '@google/generative-ai': ^0.24.1
       '@hookform/resolvers': ^5.2.2
       '@project/api-client': workspace:*
       '@radix-ui/react-accordion': ^1.2.4
@@ -112,6 +113,7 @@ importers:
       zod: ^3.22.0
     dependencies:
       '@aec/logger': link:../../packages/logger
+      '@google/generative-ai': 0.24.1
       '@hookform/resolvers': 5.2.2_react-hook-form@7.66.0
       '@project/api-client': link:../../packages/api-client
       '@radix-ui/react-accordion': 1.2.12_pjaunvshsggv36wxj2eymod3ti
@@ -1033,6 +1035,11 @@ packages:
 
   /@floating-ui/utils/0.2.10:
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+    dev: false
+
+  /@google/generative-ai/0.24.1:
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
+    engines: {node: '>=18.0.0'}
     dev: false
 
   /@hookform/resolvers/5.2.2_react-hook-form@7.66.0:

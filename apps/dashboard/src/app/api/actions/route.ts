@@ -17,6 +17,7 @@ import {
   updateCharacter,
   deleteCharacter,
 } from './handlers/characters';
+import { startProject } from './handlers/generation';
 
 /**
  * Action Registry
@@ -35,6 +36,7 @@ const actionRegistry = {
   'characters.getById': getCharacterById,
   'characters.update': updateCharacter,
   'characters.delete': deleteCharacter,
+  'generation.startProject': startProject,
 } as const;
 
 type ActionName = keyof typeof actionRegistry;

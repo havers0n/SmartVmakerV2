@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/shared/components/ui/button";
 import { Card } from "@/shared/components/ui/card";
 import { Label } from "@/shared/components/ui/label";
@@ -11,10 +11,10 @@ import { Textarea } from "@/shared/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Badge } from "@/shared/components/ui/badge";
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
 import { cn } from "@/shared/lib/utils";
-import { makeClient } from "@project/api-client";
+import { listStoryTemplates, startGenerationProject } from "@/shared/api/actions";
 
 // Mock data for now
 const ratios = ["16:9", "9:16", "4:3", "3:4"] as const;
@@ -26,8 +26,6 @@ const languages = [
   { value: "es", label: "Spanish" },
 ];
 
-const api = makeClient();
-
 export default function NewProject() {
   const router = useRouter();
   const { toast } = useToast();
@@ -37,29 +35,45 @@ export default function NewProject() {
   const [lang, setLang] = useState("none");
   const [source, setSource] = useState<"prompt" | "preset" | "trends">("prompt");
   const [prompt, setPrompt] = useState("");
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [selectedTrendId, setSelectedTrendId] = useState<string | null>(null);
+
+  // Load story templates
+  const { data: storyTemplates = [], isLoading: isLoadingTemplates } = useQuery({
+    queryKey: ["storyTemplates"],
+    queryFn: listStoryTemplates,
+  });
+
+  // Load trends
+  const { data: trends = [], isLoading: isLoadingTrends } = useQuery({
+    queryKey: ["trends"],
+    queryFn: async () => {
+      const res = await fetch("/api/analytics/trends");
+      if (!res.ok) throw new Error("Failed to load trends");
+      return res.json();
+    },
+  });
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
-      const project = await api.hwar.createProject({
+      const result = await startGenerationProject({
         title: title || "Untitled Project",
         ratio,
         lang,
         source,
         prompt: source === "prompt" ? prompt : undefined,
+        presetId: source === "preset" ? selectedPresetId : undefined,
+        trendId: source === "trends" ? selectedTrendId : undefined,
       });
-      
-      // If there's a prompt, immediately generate scenarios
-      if (source === "prompt" && prompt) {
-        await api.hwar.generateScenarios(project.id, { prompt });
-      } else if (source === "trends" || source === "preset") {
-        // Generate scenarios for preset/trends
-        await api.hwar.generateScenarios(project.id, {});
-      }
-      
-      return project;
+
+      return result;
     },
-    onSuccess: (project: any) => {
-      router.push(`/hwar/create/${project.id}`);
+    onSuccess: (result: any) => {
+      toast({
+        title: "Success",
+        description: result.message || "Project created successfully",
+      });
+      router.push(`/hwar/create/${result.project.id}`);
     },
     onError: (error: Error) => {
       toast({
@@ -222,37 +236,115 @@ export default function NewProject() {
                 </TabsContent>
 
                 <TabsContent value="preset" className="mt-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    {["Epic Journey", "Quick Win", "Transformation", "Tutorial"].map((preset) => (
-                      <Card key={preset} className="p-4 hover-elevate cursor-pointer" data-testid={`card-preset-${preset.toLowerCase().replace(/\s+/g, '-')}`}>
-                        <h4 className="font-medium mb-1">{preset}</h4>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Pre-configured story template
-                        </p>
-                        <div className="flex gap-1 flex-wrap">
-                          <Badge variant="secondary" className="text-xs">Drama</Badge>
-                          <Badge variant="secondary" className="text-xs">Inspiring</Badge>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                  {isLoadingTemplates ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : storyTemplates.length === 0 ? (
+                    <Card className="p-8 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        No story templates available. Create one in the Library first.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => router.push("/hwar/library/presets")}
+                      >
+                        Go to Library
+                      </Button>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {storyTemplates.map((template: any) => (
+                        <Card
+                          key={template.id}
+                          className={cn(
+                            "p-4 cursor-pointer transition-all",
+                            selectedPresetId === template.id
+                              ? "ring-2 ring-primary bg-primary/5"
+                              : "hover-elevate"
+                          )}
+                          onClick={() => setSelectedPresetId(template.id)}
+                          data-testid={`card-preset-${template.id}`}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-medium">{template.name}</h4>
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          {template.description && (
+                            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                              {template.description}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <div className="flex gap-1 flex-wrap">
+                              {template.tags?.slice(0, 2).map((tag: string) => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {template.targetDurationSeconds}s
+                            </span>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="trends" className="mt-6">
                   <p className="text-sm text-muted-foreground mb-4">
                     Generate scenarios based on successful YouTube video patterns
                   </p>
-                  <Card className="p-4 border-l-4 border-l-primary">
-                    <div className="flex items-start gap-3">
-                      <Sparkles className="w-5 h-5 text-primary mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium mb-1">Latest Trends Available</p>
-                        <p className="text-xs text-muted-foreground">
-                          Using insights from 247 analyzed videos: Hook ≤ 2s, Payoff @ 17s median, emphasis on close-up emotions
-                        </p>
-                      </div>
+                  {isLoadingTrends ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                     </div>
-                  </Card>
+                  ) : trends.length === 0 ? (
+                    <Card className="p-8 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        No trends data available.
+                      </p>
+                    </Card>
+                  ) : (
+                    <div className="space-y-4">
+                      {trends.map((trend: any) => (
+                        <Card
+                          key={trend.id}
+                          className={cn(
+                            "p-4 cursor-pointer transition-all",
+                            selectedTrendId === trend.id
+                              ? "ring-2 ring-primary bg-primary/5 border-l-4 border-l-primary"
+                              : "hover-elevate border-l-4 border-l-transparent"
+                          )}
+                          onClick={() => setSelectedTrendId(trend.id)}
+                          data-testid={`card-trend-${trend.id}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <Sparkles className={cn(
+                              "w-5 h-5 mt-0.5",
+                              selectedTrendId === trend.id ? "text-primary" : "text-muted-foreground"
+                            )} />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium mb-1">{trend.title}</p>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {trend.description}
+                              </p>
+                              <div className="flex gap-2 flex-wrap">
+                                {trend.insights?.map((insight: string, idx: number) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                    {insight}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>
@@ -302,7 +394,12 @@ export default function NewProject() {
           </Button>
           <Button
             onClick={handleNext}
-            disabled={(step === 2 && source === "prompt" && !prompt) || createProjectMutation.isPending}
+            disabled={
+              (step === 2 && source === "prompt" && !prompt) ||
+              (step === 2 && source === "preset" && !selectedPresetId) ||
+              (step === 2 && source === "trends" && !selectedTrendId) ||
+              createProjectMutation.isPending
+            }
             data-testid="button-next"
           >
             {createProjectMutation.isPending ? (

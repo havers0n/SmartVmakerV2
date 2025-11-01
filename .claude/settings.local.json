@@ -81,7 +81,11 @@
       "Bash(pnpm --filter dashboard test:*)",
       "Bash(pnpm --filter @scrimspec/db generate:*)",
       "Bash(pnpm --filter @scrimspec/db list:*)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter dashboard add @google/generative-ai)",
+      "Bash(pnpm --filter dashboard type-check:*)",
+      "Bash(pnpm --filter @scrimspec/db list:tables:*)",
+      "Bash(pnpm --filter @scrimspec/db generate:types:*)"
     ],
     "deny": [],
     "ask": []

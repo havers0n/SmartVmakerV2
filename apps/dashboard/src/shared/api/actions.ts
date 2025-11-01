@@ -90,7 +90,7 @@ export async function getStoryTemplateById(id: string) {
 }
 
 export async function updateStoryTemplate(id: string, payload: unknown) {
-  return callAction('storyTemplates.update', { id, ...payload });
+  return callAction('storyTemplates.update', { id, ...(payload as object) });
 }
 
 export async function deleteStoryTemplate(id: string) {
@@ -114,9 +114,17 @@ export async function getCharacterById(id: string) {
 }
 
 export async function updateCharacter(id: string, payload: unknown) {
-  return callAction('characters.update', { id, ...payload });
+  return callAction('characters.update', { id, ...(payload as object) });
 }
 
 export async function deleteCharacter(id: string) {
   return callAction('characters.delete', { id });
+}
+
+// =============================================================================
+// Generation Actions
+// =============================================================================
+
+export async function startGenerationProject(payload: unknown) {
+  return callAction('generation.startProject', payload);
 }
