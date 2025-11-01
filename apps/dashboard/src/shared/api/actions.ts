@@ -128,3 +128,7 @@ export async function deleteCharacter(id: string) {
 export async function startGenerationProject(payload: unknown) {
   return callAction('generation.startProject', payload);
 }
+
+export async function generateKeyframes(payload: unknown) {
+  return callAction('generation.generateKeyframes', payload);
+}

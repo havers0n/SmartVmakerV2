@@ -10,6 +10,7 @@
     "dev:ingest": "cross-env NODE_ENV=development tsx --watch src/ingest-worker.ts",
     "dev:enrich": "cross-env NODE_ENV=development tsx --watch src/enrichment-worker.ts",
     "dev:analysis": "cross-env NODE_ENV=development tsx --watch src/analysis-worker.ts",
+    "dev:keyframe": "cross-env NODE_ENV=development tsx --watch src/keyframe-worker.ts",
     "test": "echo 'No tests yet' && exit 0",
     "clean": "rm -rf dist"
   },

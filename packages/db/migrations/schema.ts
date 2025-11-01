@@ -395,3 +395,18 @@
 		createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	});
+
+	export const keyframeJobQueue = jobs.table("keyframe_job_queue", {
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		projectId: uuid("project_id").notNull().references(() => generationProjects.id, { onDelete: 'cascade' }),
+		sceneIndex: integer("scene_index").notNull(),
+		frameType: text("frame_type").notNull(), // 'first' | 'last'
+		prompt: text("prompt").notNull(),
+		assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+		status: appJobStatus("status").default('pending').notNull(),
+		retryCount: integer("retry_count").default(0).notNull(),
+		error: text("error"),
+		errorMessage: text("error_message"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	});

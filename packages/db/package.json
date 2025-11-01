@@ -33,7 +33,8 @@
     "clean": "rm -rf dist",
     "introspect": "tsx introspect-database.ts",
     "schema:pull": "drizzle-kit introspect",
-    "types:pull": "tsx scripts/generate-supabase-types.ts"
+    "types:pull": "tsx scripts/generate-supabase-types.ts",
+    "storage:setup": "tsx scripts/setup-storage-buckets.ts"
   },
   "dependencies": {
     "@scrimspec/shared-types": "workspace:*",

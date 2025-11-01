@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from '@/shared/lib/db';
-import { generationProjects, storyTemplates, beats } from '@/shared/lib/schema';
+import { generationProjects, storyTemplates, beats, assets, keyframeJobQueue } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
 import { eq } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -256,5 +256,172 @@ export async function startProject(payload: unknown) {
     },
     scenarios,
     message: `Generated ${scenarios.length} scenario concepts`,
+  };
+}
+
+/**
+ * Validation schema for generation.generateKeyframes action
+ */
+export const generateKeyframesSchema = z.object({
+  projectId: z.string().uuid(),
+  selectedScenarioIndex: z.number().int().min(0),
+});
+
+export type GenerateKeyframesPayload = z.infer<typeof generateKeyframesSchema>;
+
+/**
+ * Handler for generation.generateKeyframes action
+ * Creates keyframe generation jobs for first and last frame of each scene
+ */
+export async function generateKeyframes(payload: unknown) {
+  const validated = generateKeyframesSchema.parse(payload);
+
+  logger.info(
+    { projectId: validated.projectId, scenarioIndex: validated.selectedScenarioIndex },
+    'Starting keyframe generation'
+  );
+
+  // Load project from database
+  const [project] = await db
+    .select()
+    .from(generationProjects)
+    .where(eq(generationProjects.id, validated.projectId));
+
+  if (!project) {
+    throw new Error(`Project with id ${validated.projectId} not found`);
+  }
+
+  // Extract scenarios from project meta
+  const meta = project.meta as any;
+  const scenarios = meta.scenarios || [];
+
+  if (!scenarios[validated.selectedScenarioIndex]) {
+    throw new Error(`Scenario at index ${validated.selectedScenarioIndex} not found`);
+  }
+
+  const selectedScenario = scenarios[validated.selectedScenarioIndex];
+  const scenes = selectedScenario.scenes || [];
+
+  if (scenes.length === 0) {
+    throw new Error('Selected scenario has no scenes');
+  }
+
+  logger.info({ scenesCount: scenes.length }, 'Processing scenes for keyframe generation');
+
+  // Get aspect ratio from project meta for image generation
+  const aspectRatio = meta.ratio || '16:9';
+
+  // Map aspect ratio to Gemini's format
+  const geminiAspectRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
+
+  // Get project characters and style preferences if available
+  const characters = meta.characters || [];
+  const stylePresets = meta.stylePresets || {};
+
+  const jobsCreated: string[] = [];
+
+  // Process each scene
+  for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
+    const scene = scenes[sceneIndex];
+
+    // Create prompts for first and last keyframe
+    const basePrompt = `A photorealistic shot from a ${aspectRatio} video. Scene ${sceneIndex + 1} of ${scenes.length}. Phase: ${scene.phase}. ${scene.description}`;
+
+    const firstFramePrompt = `${basePrompt}. This is the OPENING frame of the scene, showing the initial state.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+
+    const lastFramePrompt = `${basePrompt}. This is the CLOSING frame of the scene, showing the final state or result.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+
+    // Create asset records for both keyframes
+    const [firstAsset] = await db
+      .insert(assets)
+      .values({
+        generationProjectId: validated.projectId,
+        assetType: 'keyframe',
+        status: 'pending',
+        storageUrl: '', // Will be updated by worker
+        meta: {
+          sceneIndex,
+          frameType: 'first',
+          phase: scene.phase,
+          duration: scene.duration,
+          aspectRatio: geminiAspectRatio,
+        },
+      } as any)
+      .returning();
+
+    const [lastAsset] = await db
+      .insert(assets)
+      .values({
+        generationProjectId: validated.projectId,
+        assetType: 'keyframe',
+        status: 'pending',
+        storageUrl: '', // Will be updated by worker
+        meta: {
+          sceneIndex,
+          frameType: 'last',
+          phase: scene.phase,
+          duration: scene.duration,
+          aspectRatio: geminiAspectRatio,
+        },
+      } as any)
+      .returning();
+
+    // Create job queue entries for both keyframes
+    const [firstJob] = await db
+      .insert(keyframeJobQueue)
+      .values({
+        projectId: validated.projectId,
+        sceneIndex,
+        frameType: 'first',
+        prompt: firstFramePrompt,
+        assetId: firstAsset.id,
+        status: 'pending',
+      } as any)
+      .returning();
+
+    const [lastJob] = await db
+      .insert(keyframeJobQueue)
+      .values({
+        projectId: validated.projectId,
+        sceneIndex,
+        frameType: 'last',
+        prompt: lastFramePrompt,
+        assetId: lastAsset.id,
+        status: 'pending',
+      } as any)
+      .returning();
+
+    jobsCreated.push(firstJob.id, lastJob.id);
+
+    logger.info(
+      { sceneIndex, firstAssetId: firstAsset.id, lastAssetId: lastAsset.id },
+      'Created keyframe jobs for scene'
+    );
+  }
+
+  // Update project status to generating_keyframes
+  await db
+    .update(generationProjects)
+    .set({
+      status: 'processing' as any, // We'll update the enum later
+      meta: {
+        ...meta,
+        selectedScenarioIndex: validated.selectedScenarioIndex,
+        keyframeGenerationStartedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date() as any,
+    })
+    .where(eq(generationProjects.id, validated.projectId));
+
+  logger.info(
+    { projectId: validated.projectId, jobsCreated: jobsCreated.length },
+    'Keyframe generation jobs created successfully'
+  );
+
+  return {
+    projectId: validated.projectId,
+    scenesProcessed: scenes.length,
+    jobsCreated: jobsCreated.length,
+    message: `Created ${jobsCreated.length} keyframe generation jobs for ${scenes.length} scenes`,
   };
 }
