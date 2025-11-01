@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'; // 'edge' is the default
+
 import { NextRequest, NextResponse } from 'next/server';
 import { startSearch } from './handlers/ingest';
 import { startAnalysis } from './handlers/analysis';

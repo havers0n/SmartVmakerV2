@@ -73,7 +73,8 @@
       "Bash(mkdir:*)",
       "Bash(pnpm exec tsx:*)",
       "Bash(node test-videos-api.mjs:*)",
-      "Bash(pnpm dev:enrich:*)"
+      "Bash(pnpm dev:enrich:*)",
+      "Bash(pnpm dev:analysis:*)"
     ],
     "deny": [],
     "ask": []

@@ -25,7 +25,7 @@ export default function IngestPage() {
           </div>
 
           {/* Таблица задач */}
-          {/* <IngestJobsTable /> */}
+          <IngestJobsTable />
 
           {/* Информационная секция */}
           <div className="bg-muted/50 rounded-lg p-6">

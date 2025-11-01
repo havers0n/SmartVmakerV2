@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'; // 'edge' is the default
+
 /**
  * GET /api/videos
  * Get all ingested YouTube videos with analysis status

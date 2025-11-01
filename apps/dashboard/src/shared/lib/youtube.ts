@@ -4,7 +4,11 @@
  */
 
 import { google } from 'googleapis';
-import type { NewYoutubeVideos } from '@scrimspec/db';
+import { schema } from '@scrimspec/db';
+import type { InferInsertModel } from 'drizzle-orm';
+
+// Define the type for NewYoutubeVideos using the schema
+type NewYoutubeVideos = InferInsertModel<typeof schema.youtubeVideos>;
 
 // Initialize YouTube API client
 const youtube = google.youtube({
@@ -109,18 +113,18 @@ export async function searchYouTubeVideos(
       url: `https://www.youtube.com/watch?v=${item.id}`,
       title: snippet.title || 'Untitled',
       description: snippet.description || null,
-      published_at: snippet.publishedAt ? new Date(snippet.publishedAt) : null,
-      channel_title: snippet.channelTitle || null,
-      duration_seconds: contentDetails?.duration
+      publishedAt: snippet.publishedAt || null,
+      channelTitle: snippet.channelTitle || null,
+      durationSeconds: contentDetails?.duration
         ? parseISO8601Duration(contentDetails.duration)
         : null,
-      view_count: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : 0,
-      like_count: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : 0,
-      comment_count: statistics?.commentCount
+      viewCount: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : 0,
+      likeCount: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : 0,
+      commentCount: statistics?.commentCount
         ? parseInt(statistics.commentCount, 10)
         : 0,
       tags: (snippet.tags as string[]) || [],
-      youtube_id: item.id!,
+      youtubeId: item.id!,
     };
   });
 
@@ -156,17 +160,17 @@ export async function getYouTubeVideoById(
     url: `https://www.youtube.com/watch?v=${item.id}`,
     title: snippet.title || 'Untitled',
     description: snippet.description || null,
-    published_at: snippet.publishedAt ? new Date(snippet.publishedAt) : null,
-    channel_title: snippet.channelTitle || null,
-    duration_seconds: contentDetails?.duration
+    publishedAt: snippet.publishedAt || null,
+    channelTitle: snippet.channelTitle || null,
+    durationSeconds: contentDetails?.duration
       ? parseISO8601Duration(contentDetails.duration)
       : null,
-    view_count: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : 0,
-    like_count: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : 0,
-    comment_count: statistics?.commentCount
+    viewCount: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : 0,
+    likeCount: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : 0,
+    commentCount: statistics?.commentCount
       ? parseInt(statistics.commentCount, 10)
       : 0,
     tags: (snippet.tags as string[]) || [],
-    youtube_id: item.id!,
+    youtubeId: item.id!,
   };
 }

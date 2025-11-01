@@ -1,6 +1,7 @@
 import { startAnalysisPayloadSchema } from '@scrimspec/core-domain';
-import { getDrizzleClient, schema, sql } from '@scrimspec/db';
+import { getDrizzleClient, schema } from '@scrimspec/db';
 import { ZodError } from 'zod';
+import { inArray } from 'drizzle-orm'; // <-- Added import for inArray
 
 /**
  * Start analysis for selected videos
@@ -20,7 +21,7 @@ export async function startAnalysis(payload: unknown) {
     const existingAnalysis = await db
       .select({ videoId: schema.analysisResults.videoId })
       .from(schema.analysisResults)
-      .where(sql`${schema.analysisResults.videoId} = ANY(${videoIds})`);
+      .where(inArray(schema.analysisResults.videoId, videoIds)); // <-- Fixed: replaced sql`${schema.analysisResults.videoId} = ANY(${videoIds})` with inArray
 
     const existingVideoIds = new Set(
       existingAnalysis.map((result) => result.videoId)

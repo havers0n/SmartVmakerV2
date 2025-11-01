@@ -166,6 +166,7 @@ export default function AnalysisPage() {
         setVideos(data.videos || []);
       }
     } catch (err) {
+      console.error('Failed to start analysis:', err);
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage);
 
