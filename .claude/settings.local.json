@@ -76,7 +76,9 @@
       "Bash(pnpm dev:enrich:*)",
       "Bash(pnpm dev:analysis:*)",
       "Bash(pnpm --filter @scrimspec/workers type-check:*)",
-      "Bash(pnpm --filter @aec/logger type-check)"
+      "Bash(pnpm --filter @aec/logger type-check)",
+      "Bash(pnpm --filter dashboard test)",
+      "Bash(pnpm --filter dashboard test:*)"
     ],
     "deny": [],
     "ask": []
