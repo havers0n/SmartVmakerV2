@@ -282,6 +282,24 @@
 		meta: jsonb("meta").default({}),
 	});
 
+	// ========== ВСТАВЬТЕ ЭТОТ КОД ЗДЕСЬ ==========
+
+	export const characters = aesCore.table("characters", {
+	    id: uuid("id").defaultRandom().primaryKey().notNull(),
+	    // ownerId пока оставляем как uuid, позже можно будет связать с auth.users
+	    ownerId: uuid("owner_id"),
+	    name: text("name").notNull(),
+	    description: text("description"), // например, "Любопытный щенок корги, пушистый, с большими ушами"
+	    // Здесь мы будем хранить "визуальные пресеты" для промптов
+	    // например, { "base_prompt": "cute puppy, corgi, fluffy...", "negative_prompt": "blurry, ugly" }
+	    stylePresets: jsonb("style_presets").default({}),
+	    referenceImageUrls: text("reference_image_urls").array(), // Массив ссылок на референсные изображения
+	    createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	    updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	});
+
+	// ============================================
+
 	export const generationProjects = generationPipeline.table("generation_projects", {
 		id: uuid("id").defaultRandom().primaryKey().notNull(),
 		ownerId: uuid("owner_id"), // Ссылку на auth.users добавим позже, если понадобится

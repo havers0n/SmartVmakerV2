@@ -26,3 +26,4 @@ export const assets = schema.assets;
 // AES Core - use tables mapping for consistency
 export const beats = schema.beats;
 export const storyTemplates = schema.storyTemplates;
+export const characters = schema.characters;

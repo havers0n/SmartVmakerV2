@@ -3,6 +3,20 @@ export const runtime = 'nodejs'; // 'edge' is the default
 import { NextRequest, NextResponse } from 'next/server';
 import { startSearch } from './handlers/ingest';
 import { startAnalysis } from './handlers/analysis';
+import {
+  createStoryTemplate,
+  listStoryTemplates,
+  getStoryTemplateById,
+  updateStoryTemplate,
+  deleteStoryTemplate,
+} from './handlers/story-templates';
+import {
+  createCharacter,
+  listCharacters,
+  getCharacterById,
+  updateCharacter,
+  deleteCharacter,
+} from './handlers/characters';
 
 /**
  * Action Registry
@@ -11,6 +25,16 @@ import { startAnalysis } from './handlers/analysis';
 const actionRegistry = {
   'ingest.startSearch': startSearch,
   'analysis.startAnalysis': startAnalysis,
+  'storyTemplates.create': createStoryTemplate,
+  'storyTemplates.list': listStoryTemplates,
+  'storyTemplates.getById': getStoryTemplateById,
+  'storyTemplates.update': updateStoryTemplate,
+  'storyTemplates.delete': deleteStoryTemplate,
+  'characters.create': createCharacter,
+  'characters.list': listCharacters,
+  'characters.getById': getCharacterById,
+  'characters.update': updateCharacter,
+  'characters.delete': deleteCharacter,
 } as const;
 
 type ActionName = keyof typeof actionRegistry;

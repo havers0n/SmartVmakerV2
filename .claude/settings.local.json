@@ -78,7 +78,10 @@
       "Bash(pnpm --filter @scrimspec/workers type-check:*)",
       "Bash(pnpm --filter @aec/logger type-check)",
       "Bash(pnpm --filter dashboard test)",
-      "Bash(pnpm --filter dashboard test:*)"
+      "Bash(pnpm --filter dashboard test:*)",
+      "Bash(pnpm --filter @scrimspec/db generate:*)",
+      "Bash(pnpm --filter @scrimspec/db list:*)",
+      "Bash(pnpm test:*)"
     ],
     "deny": [],
     "ask": []

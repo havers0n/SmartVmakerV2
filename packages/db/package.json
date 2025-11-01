@@ -28,11 +28,11 @@
     "migrate": "drizzle-kit migrate",
     "migrate:run": "tsx run-migration.ts",
     "studio": "drizzle-kit studio",
-    "generate": "drizzle-kit generate:pg",
-    "push": "drizzle-kit push:pg",
+    "generate": "drizzle-kit generate",
+    "push": "drizzle-kit push",
     "clean": "rm -rf dist",
     "introspect": "tsx introspect-database.ts",
-    "schema:pull": "drizzle-kit introspect:pg",
+    "schema:pull": "drizzle-kit introspect",
     "types:pull": "tsx scripts/generate-supabase-types.ts"
   },
   "dependencies": {

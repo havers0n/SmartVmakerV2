@@ -72,3 +72,51 @@ export async function callAction<T = unknown>(
 export async function startIngestSearch(payload: unknown) {
   return callAction<{ message: string; jobId: string }>('ingest.startSearch', payload);
 }
+
+// =============================================================================
+// Story Templates Actions
+// =============================================================================
+
+export async function createStoryTemplate(payload: unknown) {
+  return callAction('storyTemplates.create', payload);
+}
+
+export async function listStoryTemplates() {
+  return callAction('storyTemplates.list', {});
+}
+
+export async function getStoryTemplateById(id: string) {
+  return callAction('storyTemplates.getById', { id });
+}
+
+export async function updateStoryTemplate(id: string, payload: unknown) {
+  return callAction('storyTemplates.update', { id, ...payload });
+}
+
+export async function deleteStoryTemplate(id: string) {
+  return callAction('storyTemplates.delete', { id });
+}
+
+// =============================================================================
+// Characters Actions
+// =============================================================================
+
+export async function createCharacter(payload: unknown) {
+  return callAction('characters.create', payload);
+}
+
+export async function listCharacters() {
+  return callAction('characters.list', {});
+}
+
+export async function getCharacterById(id: string) {
+  return callAction('characters.getById', { id });
+}
+
+export async function updateCharacter(id: string, payload: unknown) {
+  return callAction('characters.update', { id, ...payload });
+}
+
+export async function deleteCharacter(id: string) {
+  return callAction('characters.delete', { id });
+}
