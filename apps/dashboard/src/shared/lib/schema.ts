@@ -9,6 +9,8 @@ import * as schema from '@scrimspec/db';
 export const ingestJobQueue = schema.ingestJobQueue;
 export const analysisJobQueue = schema.analysisJobQueue;
 export const generationJobQueue = schema.generationJobQueue;
+export const keyframeJobQueue = schema.keyframeJobQueue;
+export const animationJobQueue = schema.animationJobQueue;
 
 // Public tables - use tables mapping to get correct references
 export const youtubeVideos = schema.youtubeVideos;

@@ -410,3 +410,17 @@
 		createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	});
+	export const animationJobQueue = jobs.table("animation_job_queue", {
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		projectId: uuid("project_id").notNull().references(() => generationProjects.id, { onDelete: 'cascade' }),
+		sceneIndex: integer("scene_index").notNull(),
+		assetIdFirstFrame: uuid("asset_id_first_frame").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+		assetIdLastFrame: uuid("asset_id_last_frame").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+		status: appJobStatus("status").default('pending').notNull(),
+		haluTaskId: text("halu_task_id"), // MiniMax task_id
+		retryCount: integer("retry_count").default(0).notNull(),
+		error: text("error"),
+		errorMessage: text("error_message"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	});

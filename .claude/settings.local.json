@@ -88,7 +88,11 @@
       "Bash(pnpm --filter @scrimspec/db generate:types:*)",
       "Bash(pnpm --filter @scrimspec/db list:migrations:*)",
       "Bash(pnpm --filter @scrimspec/db storage:setup:*)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "Bash(\"C:/Projects/scrimspec/packages/db/migrations/schema.ts\")",
+      "Bash(echo:*)",
+      "Bash(schema.ts)",
+      "Bash(\"C:/Projects/scrimspec/apps/dashboard/src/shared/api/actions.ts\")"
     ],
     "deny": [],
     "ask": []

@@ -132,3 +132,7 @@ export async function startGenerationProject(payload: unknown) {
 export async function generateKeyframes(payload: unknown) {
   return callAction('generation.generateKeyframes', payload);
 }
+
+export async function startAnimation(payload: unknown) {
+  return callAction('generation.startAnimation', payload);
+}

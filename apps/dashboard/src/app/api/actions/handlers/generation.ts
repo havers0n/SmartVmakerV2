@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from '@/shared/lib/db';
-import { generationProjects, storyTemplates, beats, assets, keyframeJobQueue } from '@/shared/lib/schema';
+import { generationProjects, storyTemplates, beats, assets, keyframeJobQueue, animationJobQueue } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
 import { eq } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -423,5 +423,165 @@ export async function generateKeyframes(payload: unknown) {
     scenesProcessed: scenes.length,
     jobsCreated: jobsCreated.length,
     message: `Created ${jobsCreated.length} keyframe generation jobs for ${scenes.length} scenes`,
+  };
+}
+
+/**
+ * Validation schema for generation.startAnimation action
+ */
+export const startAnimationSchema = z.object({
+  projectId: z.string().uuid(),
+});
+
+export type StartAnimationPayload = z.infer<typeof startAnimationSchema>;
+
+/**
+ * Handler for generation.startAnimation action
+ * Creates animation generation jobs for each scene's keyframe pair
+ */
+export async function startAnimation(payload: unknown) {
+  const validated = startAnimationSchema.parse(payload);
+
+  logger.info(
+    { projectId: validated.projectId },
+    'Starting animation generation'
+  );
+
+  // Load project from database
+  const [project] = await db
+    .select()
+    .from(generationProjects)
+    .where(eq(generationProjects.id, validated.projectId));
+
+  if (!project) {
+    throw new Error(`Project with id ${validated.projectId} not found`);
+  }
+
+  // Get project metadata
+  const meta = project.meta as any;
+  const selectedScenarioIndex = meta.selectedScenarioIndex;
+
+  if (selectedScenarioIndex === undefined) {
+    throw new Error('No scenario has been selected for this project');
+  }
+
+  const scenarios = meta.scenarios || [];
+  const selectedScenario = scenarios[selectedScenarioIndex];
+
+  if (!selectedScenario) {
+    throw new Error(`Scenario at index ${selectedScenarioIndex} not found`);
+  }
+
+  const scenes = selectedScenario.scenes || [];
+
+  if (scenes.length === 0) {
+    throw new Error('Selected scenario has no scenes');
+  }
+
+  logger.info({ scenesCount: scenes.length }, 'Processing scenes for animation generation');
+
+  // Get all assets for this project grouped by scene
+  const projectAssets = await db
+    .select()
+    .from(assets)
+    .where(eq(assets.generationProjectId, validated.projectId));
+
+  // Group assets by scene index and frame type
+  const assetsByScene = new Map<number, { first: any; last: any }>();
+
+  for (const asset of projectAssets) {
+    const assetMeta = asset.meta as any;
+    const sceneIndex = assetMeta?.sceneIndex;
+    const frameType = assetMeta?.frameType;
+
+    if (sceneIndex === undefined || !frameType) {
+      continue;
+    }
+
+    if (!assetsByScene.has(sceneIndex)) {
+      assetsByScene.set(sceneIndex, { first: null, last: null });
+    }
+
+    const sceneAssets = assetsByScene.get(sceneIndex)!;
+    if (frameType === 'first') {
+      sceneAssets.first = asset;
+    } else if (frameType === 'last') {
+      sceneAssets.last = asset;
+    }
+  }
+
+  // Verify all scenes have both keyframes completed
+  const missingKeyframes: number[] = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const sceneAssets = assetsByScene.get(i);
+    if (!sceneAssets?.first || !sceneAssets?.last) {
+      missingKeyframes.push(i);
+      continue;
+    }
+
+    if (sceneAssets.first.status !== 'completed' || sceneAssets.last.status !== 'completed') {
+      missingKeyframes.push(i);
+    }
+  }
+
+  if (missingKeyframes.length > 0) {
+    throw new Error(
+      `Cannot start animation: keyframes not ready for scenes: ${missingKeyframes.join(', ')}`
+    );
+  }
+
+  // Create animation job queue entries for each scene
+  const jobsCreated: string[] = [];
+
+  for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
+    const sceneAssets = assetsByScene.get(sceneIndex)!;
+
+    const [job] = await db
+      .insert(animationJobQueue)
+      .values({
+        projectId: validated.projectId,
+        sceneIndex,
+        assetIdFirstFrame: sceneAssets.first.id,
+        assetIdLastFrame: sceneAssets.last.id,
+        status: 'pending',
+      } as any)
+      .returning();
+
+    jobsCreated.push(job.id);
+
+    logger.info(
+      {
+        sceneIndex,
+        jobId: job.id,
+        firstFrameAssetId: sceneAssets.first.id,
+        lastFrameAssetId: sceneAssets.last.id,
+      },
+      'Created animation job for scene'
+    );
+  }
+
+  // Update project status to animating
+  await db
+    .update(generationProjects)
+    .set({
+      status: 'processing' as any,
+      meta: {
+        ...meta,
+        animationStartedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date() as any,
+    })
+    .where(eq(generationProjects.id, validated.projectId));
+
+  logger.info(
+    { projectId: validated.projectId, jobsCreated: jobsCreated.length },
+    'Animation jobs created successfully'
+  );
+
+  return {
+    projectId: validated.projectId,
+    scenesProcessed: scenes.length,
+    jobsCreated: jobsCreated.length,
+    message: `Created ${jobsCreated.length} animation jobs for ${scenes.length} scenes`,
   };
 }
