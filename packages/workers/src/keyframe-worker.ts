@@ -33,8 +33,10 @@ if (process.env.DRIZZLE_DATABASE_URL) {
   logger.info('Cleaned database URL (sslmode removed)');
 }
 
-import { getDrizzleClient, schema, sql, getSupabaseClient } from '@scrimspec/db';
+import { getDrizzleClient, schema, sql } from '@scrimspec/db';
 import { eq } from 'drizzle-orm';
+import { uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
+import { Readable } from 'stream';
 
 /**
  * Gemini Image Generation API response interface
@@ -72,42 +74,34 @@ async function assertGeminiConfig(): Promise<void> {
 }
 
 /**
- * Upload image bytes to Supabase Storage
+ * Upload image bytes to Cloudflare R2
+ *
+ * @param imageBytes - Buffer containing image data
+ * @param projectId - Project UUID
+ * @param sceneIndex - Scene index (0-based)
+ * @param frameType - 'first' | 'last'
+ * @returns R2 object key (not a full URL, just the key)
  */
-async function uploadImageToStorage(
+async function uploadImageToR2(
   imageBytes: Buffer,
   projectId: string,
   sceneIndex: number,
   frameType: string
 ): Promise<string> {
-  const supabase = getSupabaseClient();
+  // Generate R2 object key (path)
+  const key = `keyframes/${projectId}/scene-${sceneIndex}-${frameType}-${Date.now()}.png`;
 
-  // Generate file name
-  const fileName = `${projectId}/scene-${sceneIndex}-${frameType}-${Date.now()}.png`;
-  const bucketName = 'keyframes'; // You may need to create this bucket in Supabase
+  logger.info({ key, bucket: R2_BUCKET, sizeBytes: imageBytes.length }, 'Uploading image to R2');
 
-  logger.info({ fileName, bucket: bucketName }, 'Uploading image to storage');
+  // Convert Buffer to Readable stream
+  const stream = Readable.from(imageBytes);
 
-  // Upload to Supabase Storage
-  const { data, error } = await supabase.storage
-    .from(bucketName)
-    .upload(fileName, imageBytes, {
-      contentType: 'image/png',
-      upsert: false,
-    });
+  // Upload to R2 using multipart upload
+  await uploadLargeStream(key, stream, 'image/png');
 
-  if (error) {
-    throw new Error(`Failed to upload image to storage: ${error.message}`);
-  }
+  logger.info({ key }, 'Image uploaded successfully to R2');
 
-  // Get public URL
-  const { data: publicUrlData } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
-
-  logger.info({ publicUrl: publicUrlData.publicUrl }, 'Image uploaded successfully');
-
-  return publicUrlData.publicUrl;
+  return key;
 }
 
 /**
@@ -256,25 +250,26 @@ async function processKeyframeJob() {
 
     logger.info({ imageSizeBytes: imageBuffer.length }, 'Image decoded successfully');
 
-    // Step 4: Upload to Supabase Storage
-    const storageUrl = await uploadImageToStorage(
+    // Step 4: Upload to Cloudflare R2
+    const r2Key = await uploadImageToR2(
       imageBuffer,
       job.project_id,
       job.scene_index,
       job.frame_type
     );
 
-    // Step 5: Update asset record with storage URL
+    // Step 5: Update asset record with R2 key
+    // Note: We store the key, not a full URL. The UI will request presigned URLs as needed.
     await db
       .update(schema.assets)
       .set({
-        storageUrl,
+        storageUrl: r2Key, // This field now stores the R2 key instead of a URL
         status: 'completed' as any,
         updatedAt: new Date() as any,
       })
       .where(eq(schema.assets.id, job.asset_id));
 
-    logger.debug({ assetId: job.asset_id, storageUrl }, 'Updated asset with storage URL');
+    logger.debug({ assetId: job.asset_id, r2Key }, 'Updated asset with R2 key');
 
     // Step 6: Update job status to 'completed'
     await db

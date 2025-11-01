@@ -10,6 +10,7 @@ import { ArrowLeft, Sparkles, Loader2, Image as ImageIcon, Check } from "lucide-
 import { useToast } from "@/shared/hooks/use-toast";
 import { cn } from "@/shared/lib/utils";
 import { generateKeyframes } from "@/shared/api/actions";
+import { R2Image } from "@/shared/components/ui/r2-image";
 
 interface Scene {
   phase: string;
@@ -310,8 +311,8 @@ export default function ProjectDetailPage() {
                           }}
                         >
                           {firstFrame?.status === 'completed' && firstFrame.storageUrl ? (
-                            <img
-                              src={firstFrame.storageUrl}
+                            <R2Image
+                              r2Key={firstFrame.storageUrl}
                               alt={`Scene ${sceneIndex + 1} - Opening`}
                               className="w-full h-full object-cover"
                             />
@@ -339,8 +340,8 @@ export default function ProjectDetailPage() {
                           }}
                         >
                           {lastFrame?.status === 'completed' && lastFrame.storageUrl ? (
-                            <img
-                              src={lastFrame.storageUrl}
+                            <R2Image
+                              r2Key={lastFrame.storageUrl}
                               alt={`Scene ${sceneIndex + 1} - Closing`}
                               className="w-full h-full object-cover"
                             />

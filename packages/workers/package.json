@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aec/logger": "workspace:*",
+    "@aec/storage-client": "workspace:*",
     "@scrimspec/db": "workspace:*",
     "@scrimspec/core-domain": "workspace:*",
     "dotenv": "^16.3.1",

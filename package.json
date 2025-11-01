@@ -40,6 +40,23 @@
     "overrides": {}
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.76.1"
-  }
+    "@aws-sdk/client-s3": "^3.922.0",
+    "@supabase/supabase-js": "^2.76.1",
+    "dotenv": "^16.6.1"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/havers0n/SmartVmakerV2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/havers0n/SmartVmakerV2/issues"
+  },
+  "homepage": "https://github.com/havers0n/SmartVmakerV2#readme"
 }
