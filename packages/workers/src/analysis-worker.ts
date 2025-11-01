@@ -9,10 +9,14 @@ if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
 
-console.log('[Analysis Worker] NODE_ENV:', process.env.NODE_ENV);
+import { createLogger } from '@aec/logger';
+
+const logger = createLogger({ name: 'analysis-worker' });
+
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
-  console.log('[Analysis Worker] Using DRIZZLE_DATABASE_URL (Pooler)...');
+  logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
 
   // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
@@ -25,7 +29,7 @@ if (process.env.DRIZZLE_DATABASE_URL) {
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
 
-  console.log('[Analysis Worker] Cleaned database URL (sslmode removed)');
+  logger.info('Cleaned database URL (sslmode removed)');
 }
 
 import { getDrizzleClient, schema, sql } from '@scrimspec/db';
@@ -104,8 +108,8 @@ async function assertModelExists(): Promise<void> {
     if (!modelExists) {
       throw new Error(`Configured GEMINI_MODEL '${geminiModel}' is not available in the list of accessible models`);
     }
-    
-    console.log(`[Analysis Worker] Verified Gemini model '${geminiModel}' is accessible`);
+
+    logger.info({ model: geminiModel }, 'Verified Gemini model is accessible');
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Model validation failed: ${error.message}`);
@@ -185,7 +189,7 @@ async function processAnalysisJob() {
   }
 
   try {
-    console.log(`[Analysis Worker] Processing job ${job.id} for video ${job.video_id}`);
+    logger.info({ jobId: job.id, videoId: job.video_id }, 'Processing job');
 
     // Step 2: Двойная проверка - проверяем, не был ли уже проанализирован этот видео
     const existingAnalysis = await db
@@ -195,7 +199,7 @@ async function processAnalysisJob() {
       .limit(1);
 
     if (existingAnalysis.length > 0) {
-      console.log(`[Analysis Worker] Video ${job.video_id} already analyzed. Skipping.`);
+      logger.info({ videoId: job.video_id }, 'Video already analyzed, skipping');
 
       // Помечаем задачу как завершенную (дубликат)
       await db
@@ -225,7 +229,7 @@ async function processAnalysisJob() {
     }
 
     const video = videoData[0];
-    console.log(`[Analysis Worker] Analyzing video: "${video.title}"`);
+    logger.info({ title: video.title, youtubeId: video.youtubeId }, 'Analyzing video');
 
     // Step 4: Формирование запроса к Gemini
     const prompt = `Analyze this YouTube Shorts video and output ONLY JSON with keys: hook_text, emotion_tags (5 strings), beats (array of {time_s:number, desc, emotion}), payoff, moral. JSON only, no extra text. Video: ${video.url}`;
@@ -283,7 +287,7 @@ async function processAnalysisJob() {
       },
     };
 
-    console.log(`[Analysis Worker] Sending request to Gemini API...`);
+    logger.debug('Sending request to Gemini API');
 
     // Step 5: Выполнение запроса к Gemini
     const response = await fetch(geminiUrl, {
@@ -316,7 +320,7 @@ async function processAnalysisJob() {
       throw new Error('Gemini API returned empty response');
     }
 
-    console.log(`[Analysis Worker] Received response from Gemini API`);
+    logger.debug('Received response from Gemini API');
 
     // Step 6: Парсинг ответа - теперь Gemini должен возвращать чистый JSON
     let analysisResult: AnalysisResult;
@@ -325,12 +329,12 @@ async function processAnalysisJob() {
       analysisResult = JSON.parse(responseText);
     } catch (parseError) {
       // Только если прямой парсинг не удался, используем страховочный extractJsonFromText
-      console.warn('[Analysis Worker] Direct JSON parsing failed, trying fallback extraction method...');
+      logger.warn('Direct JSON parsing failed, trying fallback extraction method');
       const jsonText = extractJsonFromText(responseText);
       try {
         analysisResult = JSON.parse(jsonText);
       } catch (fallbackError) {
-        console.error('[Analysis Worker] Failed to parse JSON with fallback method:', jsonText);
+        logger.error({ jsonText }, 'Failed to parse JSON with fallback method');
         throw new Error(`Failed to parse Gemini response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
       }
     }
@@ -340,10 +344,11 @@ async function processAnalysisJob() {
       throw new Error('Invalid analysis result structure: missing required fields');
     }
 
-    console.log(`[Analysis Worker] Successfully parsed analysis result`);
-    console.log(`[Analysis Worker] Hook: ${analysisResult.hook_text.substring(0, 50)}...`);
-    console.log(`[Analysis Worker] Emotions: ${analysisResult.emotion_tags.join(', ')}`);
-    console.log(`[Analysis Worker] Beats: ${analysisResult.beats?.length || 0}`);
+    logger.info({
+      hookPreview: analysisResult.hook_text.substring(0, 50),
+      emotions: analysisResult.emotion_tags.join(', '),
+      beatsCount: analysisResult.beats?.length || 0
+    }, 'Successfully parsed analysis result');
 
     // Step 7: Сохранение результата в базу данных
     await db.insert(schema.analysisResults).values({
@@ -356,7 +361,7 @@ async function processAnalysisJob() {
       updatedAt: new Date() as any,
     } as any);
 
-    console.log(`[Analysis Worker] Saved analysis result to database`);
+    logger.debug('Saved analysis result to database');
 
     // Step 8: Обновление статуса задачи на 'completed'
     await db
@@ -367,7 +372,7 @@ async function processAnalysisJob() {
       })
       .where(sql`${schema.analysisJobQueue.id} = ${job.id}`);
 
-    console.log(`[Analysis Worker] Job ${job.id} completed successfully`);
+    logger.info({ jobId: job.id }, 'Job completed successfully');
 
     return job.id;
 
@@ -375,7 +380,7 @@ async function processAnalysisJob() {
     // Step 9: Обработка ошибок
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    console.error(`[Analysis Worker] Job ${job.id} failed:`, errorMessage);
+    logger.error({ err: error, jobId: job.id }, 'Job failed');
 
     // Обновляем статус задачи на 'failed' с сообщением об ошибке
     await db
@@ -396,23 +401,18 @@ async function processAnalysisJob() {
  * Основной цикл воркера
  */
 async function main() {
-  console.log('[Analysis Worker] Starting...');
-  console.log('[Analysis Worker] Gemini API Key:', process.env.GEMINI_API_KEY ? '✓ Set' : '✗ Not set');
-  console.log('[Analysis Worker] Database URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Not set');
-  console.log('');
-  console.log('[Analysis Worker] This worker analyzes videos using Gemini AI');
-  console.log('  - Fetches analysis jobs from jobs.analysis_job_queue');
-  console.log('  - Checks for duplicate analysis');
-  console.log('  - Calls Gemini API for video analysis');
-  console.log('  - Saves results to analysis_results table');
-  console.log('');
+  logger.info('Starting worker');
+  logger.info({
+    geminiApiKey: !!process.env.GEMINI_API_KEY,
+    databaseUrl: !!process.env.DATABASE_URL
+  }, 'Environment configuration');
+  logger.info('Worker analyzes videos using Gemini AI, checks for duplicates, and saves results to analysis_results table');
 
   // Fail-fast model validation
   try {
     await assertModelExists();
   } catch (error) {
-    console.error('[Analysis Worker] Failed to validate Gemini model configuration:');
-    console.error(error instanceof Error ? error.message : String(error));
+    logger.fatal({ err: error }, 'Failed to validate Gemini model configuration');
     process.exit(1);
   }
 
@@ -422,14 +422,14 @@ async function main() {
 
       if (!jobId) {
         // Нет задач, ждем 30 секунд
-        console.log('[Analysis Worker] No pending jobs. Waiting 30 seconds...');
+        logger.debug('No pending jobs, waiting 30 seconds');
         await new Promise(resolve => setTimeout(resolve, 30000));
       } else {
         // Задача обработана, небольшая пауза перед следующей
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     } catch (error) {
-      console.error('[Analysis Worker] Unexpected error in main loop:', error);
+      logger.error({ err: error }, 'Unexpected error in main loop');
       // В случае критической ошибки, ждем перед повтором
       await new Promise(resolve => setTimeout(resolve, 10000));
     }
@@ -438,17 +438,17 @@ async function main() {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[Analysis Worker] Received SIGINT, shutting down gracefully...');
+  logger.info('Received SIGINT, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[Analysis Worker] Received SIGTERM, shutting down gracefully...');
+  logger.info('Received SIGTERM, shutting down gracefully');
   process.exit(0);
 });
 
 // Start the worker
 main().catch((error) => {
-  console.error('[Analysis Worker] Fatal error:', error);
+  logger.fatal({ err: error }, 'Fatal error');
   process.exit(1);
 });

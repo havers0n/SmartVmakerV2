@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { db } from '@/shared/lib/db';
 import { ingestJobQueue } from '@/shared/lib/schema';
+import { createLogger } from '@aec/logger';
+
+const logger = createLogger({ name: 'api-ingest' });
 
 /**
  * Validation schema for ingest.startSearch action
@@ -34,6 +37,8 @@ export async function startSearch(payload: unknown) {
   // Validate payload with Zod
   const validated = startSearchPayloadSchema.parse(payload);
 
+  logger.info({ query: validated.query, maxResults: validated.maxResults }, 'Creating ingest job');
+
   // Insert into ingestJobQueue with all YouTube API parameters
   const [job] = await db.insert(ingestJobQueue).values({
     query: validated.query,
@@ -55,6 +60,8 @@ export async function startSearch(payload: unknown) {
     status: 'pending',
     retryCount: 0,
   }).returning();
+
+  logger.info({ jobId: job.id, status: job.status }, 'Ingest job created successfully');
 
   return {
     message: `Ingest job created: will search for "${validated.query}"`,

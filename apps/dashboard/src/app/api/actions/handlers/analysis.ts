@@ -1,7 +1,10 @@
 import { startAnalysisPayloadSchema } from '@scrimspec/core-domain';
 import { getDrizzleClient, schema } from '@scrimspec/db';
 import { ZodError } from 'zod';
-import { inArray } from 'drizzle-orm'; // <-- Added import for inArray
+import { inArray } from 'drizzle-orm';
+import { createLogger } from '@aec/logger';
+
+const logger = createLogger({ name: 'api-analysis' });
 
 /**
  * Start analysis for selected videos
@@ -14,6 +17,8 @@ export async function startAnalysis(payload: unknown) {
     // Step 1: Validate payload
     const validatedPayload = startAnalysisPayloadSchema.parse(payload);
     const { videoIds } = validatedPayload;
+
+    logger.info({ videoCount: videoIds.length }, 'Starting analysis for videos');
 
     const db = getDrizzleClient();
 
@@ -32,6 +37,7 @@ export async function startAnalysis(payload: unknown) {
 
     // Step 4: If all videos already analyzed, return early
     if (idsToAnalyze.length === 0) {
+      logger.info({ totalRequested: videoIds.length }, 'All videos already analyzed');
       return {
         success: true,
         message: 'All selected videos have already been analyzed',
@@ -55,6 +61,11 @@ export async function startAnalysis(payload: unknown) {
 
     // Step 6: Return success message
     const alreadyAnalyzedCount = videoIds.length - idsToAnalyze.length;
+
+    logger.info({
+      newJobsCreated: idsToAnalyze.length,
+      alreadyAnalyzed: alreadyAnalyzedCount
+    }, 'Analysis jobs created');
 
     return {
       success: true,
@@ -84,7 +95,7 @@ export async function startAnalysis(payload: unknown) {
 
     // Handle other errors
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[Analysis Action] Error:', errorMessage);
+    logger.error({ err: error }, 'Failed to start analysis');
 
     return {
       success: false,

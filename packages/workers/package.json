@@ -14,6 +14,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aec/logger": "workspace:*",
     "@scrimspec/db": "workspace:*",
     "@scrimspec/core-domain": "workspace:*",
     "dotenv": "^16.3.1"

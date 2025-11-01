@@ -9,10 +9,14 @@ if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
 
-console.log('[Enrichment Worker] NODE_ENV:', process.env.NODE_ENV);
+import { createLogger } from '@aec/logger';
+
+const logger = createLogger({ name: 'enrichment-worker' });
+
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
-  console.log('[Enrichment Worker] Using DRIZZLE_DATABASE_URL (Pooler)...');
+  logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
 
   // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
@@ -25,7 +29,7 @@ if (process.env.DRIZZLE_DATABASE_URL) {
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
 
-  console.log('[Enrichment Worker] Cleaned database URL (sslmode removed)');
+  logger.info('Cleaned database URL (sslmode removed)');
 }
 
 import { getDrizzleClient, schema } from '@scrimspec/db';
@@ -83,7 +87,7 @@ function parseISODuration(duration: string): number {
   const matches = duration.match(regex);
 
   if (!matches) {
-    console.warn(`[Enrichment Worker] Invalid ISO 8601 duration format: ${duration}`);
+    logger.warn({ duration }, 'Invalid ISO 8601 duration format');
     return 0;
   }
 
@@ -120,11 +124,11 @@ async function processEnrichmentBatch() {
       .limit(50); // YouTube API поддерживает до 50 ID в одном запросе
 
     if (videosToEnrich.length === 0) {
-      console.log('[Enrichment Worker] No videos to enrich. Waiting...');
+      logger.debug('No videos to enrich, waiting');
       return null;
     }
 
-    console.log(`[Enrichment Worker] Found ${videosToEnrich.length} videos to enrich`);
+    logger.info({ videoCount: videosToEnrich.length }, 'Found videos to enrich');
 
     // Step 2: Собрать YouTube IDs для batch-запроса
     const videoIds = videosToEnrich
@@ -132,11 +136,11 @@ async function processEnrichmentBatch() {
       .filter((id): id is string => id !== null && id !== undefined);
 
     if (videoIds.length === 0) {
-      console.log('[Enrichment Worker] No valid YouTube IDs found');
+      logger.warn('No valid YouTube IDs found');
       return null;
     }
 
-    console.log(`[Enrichment Worker] Fetching data for ${videoIds.length} video IDs from YouTube API...`);
+    logger.info({ idCount: videoIds.length }, 'Fetching data from YouTube API');
 
     // Step 3: Запрос к YouTube API videos.list
     const apiKey = process.env.YOUTUBE_API_KEY;
@@ -164,11 +168,11 @@ async function processEnrichmentBatch() {
     const data: YouTubeVideosResponse = await response.json();
 
     if (!data.items || data.items.length === 0) {
-      console.log('[Enrichment Worker] YouTube API returned no items');
+      logger.warn('YouTube API returned no items');
       return null;
     }
 
-    console.log(`[Enrichment Worker] Received data for ${data.items.length} videos from YouTube API`);
+    logger.info({ itemCount: data.items.length }, 'Received data from YouTube API');
 
     // Step 4: Обновить записи в базе данных
     let successCount = 0;
@@ -200,29 +204,30 @@ async function processEnrichmentBatch() {
         // Найти соответствующее видео для логирования
         const video = videosToEnrich.find(v => v.youtubeId === youtubeId);
         if (video) {
-          console.log(
-            `[Enrichment Worker] ✓ Enriched: "${video.title}" ` +
-            `(views: ${statistics.viewCount || 0}, duration: ${durationSeconds}s)`
-          );
+          logger.debug({
+            title: video.title,
+            views: statistics.viewCount || 0,
+            durationSeconds
+          }, 'Video enriched');
         }
       } catch (error) {
         errorCount++;
-        console.error(
-          `[Enrichment Worker] Failed to update video ${videoItem.id}:`,
-          error instanceof Error ? error.message : String(error)
-        );
+        logger.error({
+          err: error,
+          videoId: videoItem.id
+        }, 'Failed to update video');
       }
     }
 
-    console.log(
-      `[Enrichment Worker] Batch completed: ${successCount} successful, ${errorCount} errors`
-    );
+    logger.info({
+      successCount,
+      errorCount
+    }, 'Batch completed');
 
     return successCount;
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[Enrichment Worker] Batch processing failed:', errorMessage);
+    logger.error({ err: error }, 'Batch processing failed');
     return null;
   }
 }
@@ -231,15 +236,12 @@ async function processEnrichmentBatch() {
  * Основной цикл воркера
  */
 async function main() {
-  console.log('[Enrichment Worker] Starting...');
-  console.log('[Enrichment Worker] YouTube API Key:', process.env.YOUTUBE_API_KEY ? '✓ Set' : '✗ Not set');
-  console.log('[Enrichment Worker] Database URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Not set');
-  console.log('');
-  console.log('[Enrichment Worker] This worker enriches videos with:');
-  console.log('  - View count, like count, comment count');
-  console.log('  - Precise duration in seconds');
-  console.log('  - Processing up to 50 videos per batch');
-  console.log('');
+  logger.info('Starting worker');
+  logger.info({
+    youtubeApiKey: !!process.env.YOUTUBE_API_KEY,
+    databaseUrl: !!process.env.DATABASE_URL
+  }, 'Environment configuration');
+  logger.info('Worker enriches videos with view count, like count, comment count, and duration (up to 50 videos per batch)');
 
   while (true) {
     try {
@@ -253,7 +255,7 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     } catch (error) {
-      console.error('[Enrichment Worker] Unexpected error in main loop:', error);
+      logger.error({ err: error }, 'Unexpected error in main loop');
       // В случае критической ошибки, ждем перед повтором
       await new Promise(resolve => setTimeout(resolve, 10000));
     }
@@ -262,17 +264,17 @@ async function main() {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[Enrichment Worker] Received SIGINT, shutting down gracefully...');
+  logger.info('Received SIGINT, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[Enrichment Worker] Received SIGTERM, shutting down gracefully...');
+  logger.info('Received SIGTERM, shutting down gracefully');
   process.exit(0);
 });
 
 // Start the worker
 main().catch((error) => {
-  console.error('[Enrichment Worker] Fatal error:', error);
+  logger.fatal({ err: error }, 'Fatal error');
   process.exit(1);
 });

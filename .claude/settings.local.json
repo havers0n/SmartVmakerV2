@@ -74,7 +74,9 @@
       "Bash(pnpm exec tsx:*)",
       "Bash(node test-videos-api.mjs:*)",
       "Bash(pnpm dev:enrich:*)",
-      "Bash(pnpm dev:analysis:*)"
+      "Bash(pnpm dev:analysis:*)",
+      "Bash(pnpm --filter @scrimspec/workers type-check:*)",
+      "Bash(pnpm --filter @aec/logger type-check)"
     ],
     "deny": [],
     "ask": []

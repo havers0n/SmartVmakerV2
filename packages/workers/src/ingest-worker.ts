@@ -9,10 +9,14 @@ if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
 
-console.log('[Ingest Worker] NODE_ENV:', process.env.NODE_ENV);
+import { createLogger } from '@aec/logger';
+
+const logger = createLogger({ name: 'ingest-worker' });
+
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
-  console.log('[Ingest Worker] Using DRIZZLE_DATABASE_URL (Pooler)...');
+  logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
 
   // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
@@ -25,7 +29,7 @@ if (process.env.DRIZZLE_DATABASE_URL) {
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
 
-  console.log('[Ingest Worker] Cleaned database URL (sslmode removed)');
+  logger.info('Cleaned database URL (sslmode removed)');
 }
 
 import { getDrizzleClient, schema, sql } from '@scrimspec/db';
@@ -97,7 +101,7 @@ async function processIngestJob() {
   }
 
   try {
-    console.log(`[Ingest Worker] Processing job ${job.id}: query="${job.query}"`);
+    logger.info({ jobId: job.id, query: job.query }, 'Processing job');
 
     // Step 2: Формирование и выполнение запроса к YouTube API
     const apiKey = process.env.YOUTUBE_API_KEY;
@@ -161,7 +165,7 @@ async function processIngestJob() {
 
     const data: YouTubeSearchResponse = await response.json();
 
-    console.log(`[Ingest Worker] Found ${data.items?.length || 0} videos`);
+    logger.info({ videoCount: data.items?.length || 0 }, 'Found videos from YouTube API');
 
     // Step 3: Сохранение результатов в youtube_videos
     if (data.items && data.items.length > 0) {
@@ -206,7 +210,7 @@ async function processIngestJob() {
       } as any)
       .where(sql`${schema.ingestJobQueue.id} = ${job.id}`);
 
-    console.log(`[Ingest Worker] Job ${job.id} completed successfully`);
+    logger.info({ jobId: job.id }, 'Job completed successfully');
 
     return job.id;
 
@@ -214,7 +218,7 @@ async function processIngestJob() {
     // Step 5: Обработка ошибок
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    console.error(`[Ingest Worker] Job ${job.id} failed:`, errorMessage);
+    logger.error({ err: error, jobId: job.id }, 'Job failed');
 
     await db
       .update(schema.ingestJobQueue)
@@ -231,9 +235,11 @@ async function processIngestJob() {
 }
 
 async function main() {
-  console.log('[Ingest Worker] Starting...');
-  console.log('[Ingest Worker] YouTube API Key:', process.env.YOUTUBE_API_KEY ? '✓ Set' : '✗ Not set');
-  console.log('[Ingest Worker] Database URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Not set');
+  logger.info('Starting worker');
+  logger.info({
+    youtubeApiKey: !!process.env.YOUTUBE_API_KEY,
+    databaseUrl: !!process.env.DATABASE_URL
+  }, 'Environment configuration');
 
   while (true) {
     try {
@@ -247,7 +253,7 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      console.error('[Ingest Worker] Unexpected error in main loop:', error);
+      logger.error({ err: error }, 'Unexpected error in main loop');
       // В случае критической ошибки, ждем перед повтором
       await new Promise(resolve => setTimeout(resolve, 5000));
     }
@@ -256,17 +262,17 @@ async function main() {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[Ingest Worker] Received SIGINT, shutting down gracefully...');
+  logger.info('Received SIGINT, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[Ingest Worker] Received SIGTERM, shutting down gracefully...');
+  logger.info('Received SIGTERM, shutting down gracefully');
   process.exit(0);
 });
 
 // Start the worker
 main().catch((error) => {
-  console.error('[Ingest Worker] Fatal error:', error);
+  logger.fatal({ err: error }, 'Fatal error');
   process.exit(1);
 });
