@@ -1,0 +1,56 @@
+graph TB
+    %% Main Navigation
+    Home["/"]
+    Ingest["/ingest"]
+    Analysis["/analysis"]
+    Generation["/generation"]
+    HWAR["/hwar"]
+
+    %% Home connections
+    Home --> Ingest
+    Home --> Analysis
+    Home --> Generation
+    Home --> HWAR
+
+    %% Analysis connections
+    Analysis --> Ingest
+
+    %% HWAR Section
+    HWAR --> HWARCreate["/hwar/create"]
+    HWAR --> HWARFactory["/hwar/factory"]
+    HWAR --> HWARLibrary["/hwar/library"]
+    HWAR --> HWARDev["/hwar/dev"]
+
+    %% HWAR Create Flow
+    HWARCreate --> CreateNew["/hwar/create/new"]
+    HWARCreate --> ProjectDetail["/hwar/create/[id]"]
+    CreateNew --> ProjectDetail
+
+    %% HWAR Factory Subsections
+    HWARFactory --> FactoryHarvests["/hwar/factory/harvests"]
+    HWARFactory --> FactoryAnalysis["/hwar/factory/analysis"]
+    HWARFactory --> FactoryQueues["/hwar/factory/queues"]
+    HWARFactory --> FactoryWorkers["/hwar/factory/workers"]
+    HWARFactory --> FactoryBatches["/hwar/factory/batches"]
+    HWARFactory --> FactoryAnalytics["/hwar/factory/analytics"]
+    HWARFactory --> FactorySettings["/hwar/factory/settings"]
+
+    %% HWAR Library Subsections
+    HWARLibrary --> LibraryPresets["/hwar/library/presets"]
+    HWARLibrary --> LibraryCharacters["/hwar/library/characters"]
+    HWARLibrary --> LibraryDatasets["/hwar/library/datasets"]
+    HWARLibrary --> LibraryTemplates["/hwar/library/templates"]
+
+    %% Cross-section link
+    CreateNew -.-> LibraryPresets
+
+    %% Styling
+    classDef mainSection fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef hwarSection fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef factorySection fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef librarySection fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class Home,Ingest,Analysis,Generation mainSection
+    class HWAR,HWARCreate,CreateNew,ProjectDetail hwarSection
+    class HWARFactory,FactoryHarvests,FactoryAnalysis,FactoryQueues,FactoryWorkers,FactoryBatches,FactoryAnalytics,FactorySettings factorySection
+    class HWARLibrary,LibraryPresets,LibraryCharacters,LibraryDatasets,LibraryTemplates librarySection

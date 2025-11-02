@@ -1,0 +1,569 @@
+{
+  "screens": [
+    {
+      "id": "Home",
+      "route": "/",
+      "title": "Scrimspec Dashboard",
+      "widgets": ["WelcomeCard", "IngestCard", "AnalyzeCard", "SystemOverviewCards"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["/ingest", "/analysis"],
+      "incoming": []
+    },
+    {
+      "id": "Ingest",
+      "route": "/ingest",
+      "title": "Ingest",
+      "widgets": ["StartIngestForm", "IngestJobsTable"],
+      "forms": [
+        {
+          "name": "StartIngestForm",
+          "file": "apps/dashboard/src/features/ingest/StartIngestForm.tsx",
+          "fields": [
+            {
+              "name": "query",
+              "label": "Поисковый запрос",
+              "type": "text",
+              "required": true,
+              "validation": "z.string().min(3)"
+            },
+            {
+              "name": "order",
+              "label": "Сортировка",
+              "type": "select",
+              "options": ["date", "rating", "relevance", "viewCount"],
+              "required": false,
+              "validation": "z.enum(['date', 'rating', 'relevance', 'viewCount']).optional()"
+            },
+            {
+              "name": "videoDuration",
+              "label": "Длительность",
+              "type": "select",
+              "options": ["any", "short", "medium", "long"],
+              "required": false,
+              "validation": "z.enum(['any', 'short', 'medium', 'long']).optional()"
+            },
+            {
+              "name": "maxResults",
+              "label": "Макс. результатов",
+              "type": "number",
+              "required": false,
+              "validation": "z.number().min(1).max(50).optional()"
+            },
+            {
+              "name": "publishedAfter",
+              "label": "Опубликовано после",
+              "type": "date",
+              "required": false,
+              "validation": "z.string().optional()"
+            },
+            {
+              "name": "safeSearch",
+              "label": "Безопасный поиск",
+              "type": "select",
+              "options": ["none", "moderate", "strict"],
+              "required": false,
+              "validation": "z.enum(['none', 'moderate', 'strict']).optional()"
+            },
+            {
+              "name": "videoDefinition",
+              "label": "Качество",
+              "type": "select",
+              "options": ["any", "high", "standard"],
+              "required": false,
+              "validation": "z.enum(['any', 'high', 'standard']).optional()"
+            }
+          ],
+          "submitAction": {
+            "name": "startIngestSearch",
+            "file": "apps/dashboard/src/shared/api/actions.ts",
+            "kind": "action",
+            "endpoint": "/api/actions",
+            "actionName": "ingest.startSearch"
+          },
+          "onSuccessNav": null
+        }
+      ],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/"]
+    },
+    {
+      "id": "Analysis",
+      "route": "/analysis",
+      "title": "Analyze Videos",
+      "widgets": ["VideoTable", "AnalyzerSelector", "PaginationComponent"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": ["/ingest"],
+      "incoming": ["/"]
+    },
+    {
+      "id": "Generation",
+      "route": "/generation",
+      "title": "Generation & Asset Creation",
+      "widgets": ["CreateShortForm", "GenerationStatusTable", "ShortsTable", "AssetsTable"],
+      "forms": [
+        {
+          "name": "CreateShortForm",
+          "file": "apps/dashboard/src/app/generation/page.tsx",
+          "fields": [
+            {
+              "name": "templateId",
+              "label": "Template ID",
+              "type": "text",
+              "required": true,
+              "validation": "required"
+            },
+            {
+              "name": "provider",
+              "label": "Provider",
+              "type": "select",
+              "options": ["minimax", "hailuo"],
+              "required": true,
+              "validation": "required"
+            }
+          ],
+          "submitAction": {
+            "name": "createShort",
+            "file": "apps/dashboard/src/app/generation/page.tsx",
+            "kind": "fetch",
+            "endpoint": "/api/generation/shorts",
+            "method": "POST"
+          },
+          "onSuccessNav": null
+        }
+      ],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/"]
+    },
+    {
+      "id": "HWAR_Overview",
+      "route": "/hwar",
+      "title": "Video Generation Factory",
+      "widgets": ["CreateCard", "FactoryCard", "LibraryCard"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["/hwar/create", "/hwar/factory", "/hwar/library"],
+      "incoming": ["/"]
+    },
+    {
+      "id": "HWAR_Create_Index",
+      "route": "/hwar/create",
+      "title": "Projects",
+      "widgets": ["ProjectsGrid", "NewProjectButton"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": false,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": ["/hwar/create/new", "/hwar/create/[project_id]"],
+      "incoming": ["/hwar", "/hwar/create/new", "/hwar/create/[project_id]"]
+    },
+    {
+      "id": "HWAR_Create_New_Step1",
+      "route": "/hwar/create/new",
+      "step": 1,
+      "title": "New Project - Step 1: Project Details",
+      "widgets": ["ProjectDetailsForm", "ProgressIndicator"],
+      "forms": [
+        {
+          "name": "ProjectDetailsForm",
+          "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+          "fields": [
+            {
+              "name": "title",
+              "label": "Project Title",
+              "type": "text",
+              "required": false,
+              "validation": "none"
+            },
+            {
+              "name": "ratio",
+              "label": "Aspect Ratio",
+              "type": "button-group",
+              "options": ["16:9", "9:16", "4:3", "3:4"],
+              "required": true,
+              "validation": "required"
+            },
+            {
+              "name": "lang",
+              "label": "Language",
+              "type": "select",
+              "options": ["none", "ru", "en", "he", "es"],
+              "required": true,
+              "validation": "required"
+            }
+          ],
+          "submitAction": null,
+          "onSuccessNav": "step-2"
+        }
+      ],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["step-2"],
+      "incoming": ["/hwar/create"]
+    },
+    {
+      "id": "HWAR_Create_New_Step2",
+      "route": "/hwar/create/new",
+      "step": 2,
+      "title": "New Project - Step 2: Content Source",
+      "widgets": ["ContentSourceTabs", "PromptTab", "PresetsTab", "TrendsTab"],
+      "forms": [
+        {
+          "name": "PromptForm",
+          "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+          "fields": [
+            {
+              "name": "prompt",
+              "label": "Describe your video",
+              "type": "textarea",
+              "required": true,
+              "validation": "required when source=prompt"
+            }
+          ],
+          "submitAction": null,
+          "onSuccessNav": "step-3"
+        },
+        {
+          "name": "PresetSelection",
+          "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+          "fields": [
+            {
+              "name": "selectedPresetId",
+              "label": "Story Template",
+              "type": "card-selection",
+              "required": true,
+              "validation": "required when source=preset"
+            }
+          ],
+          "submitAction": {
+            "name": "listStoryTemplates",
+            "file": "apps/dashboard/src/shared/api/actions.ts",
+            "kind": "action",
+            "endpoint": "/api/actions",
+            "actionName": "storyTemplates.list"
+          },
+          "onSuccessNav": "step-3"
+        },
+        {
+          "name": "TrendSelection",
+          "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+          "fields": [
+            {
+              "name": "selectedTrendId",
+              "label": "Trend",
+              "type": "card-selection",
+              "required": true,
+              "validation": "required when source=trends"
+            }
+          ],
+          "submitAction": {
+            "name": "fetchTrends",
+            "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+            "kind": "fetch",
+            "endpoint": "/api/analytics/trends",
+            "method": "GET"
+          },
+          "onSuccessNav": "step-3"
+        }
+      ],
+      "states": {
+        "loading": true,
+        "error": false,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": ["step-3", "/hwar/library/presets"],
+      "incoming": ["step-1"]
+    },
+    {
+      "id": "HWAR_Create_New_Step3",
+      "route": "/hwar/create/new",
+      "step": 3,
+      "title": "New Project - Step 3: Review & Generate",
+      "widgets": ["ReviewSummary", "CreateProjectButton"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "submitAction": {
+        "name": "startGenerationProject",
+        "file": "apps/dashboard/src/shared/api/actions.ts",
+        "kind": "action",
+        "endpoint": "/api/actions",
+        "actionName": "generation.startProject"
+      },
+      "outgoing": ["/hwar/create/[project_id]"],
+      "incoming": ["step-2"]
+    },
+    {
+      "id": "HWAR_Create_ProjectDetail",
+      "route": "/hwar/create/[project_id]",
+      "title": "Project Detail",
+      "widgets": ["ProjectHeader", "ScenarioGrid", "KeyframePreview"],
+      "forms": [
+        {
+          "name": "ScenarioSelection",
+          "file": "apps/dashboard/src/app/hwar/create/[project_id]/page.tsx",
+          "fields": [
+            {
+              "name": "selectedScenarioIndex",
+              "label": "Select a Scenario",
+              "type": "card-selection",
+              "required": true,
+              "validation": "required"
+            }
+          ],
+          "submitAction": {
+            "name": "generateKeyframes",
+            "file": "apps/dashboard/src/shared/api/actions.ts",
+            "kind": "action",
+            "endpoint": "/api/actions",
+            "actionName": "generation.generateKeyframes"
+          },
+          "onSuccessNav": null
+        }
+      ],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["/hwar/create"],
+      "incoming": ["/hwar/create", "/hwar/create/new"]
+    },
+    {
+      "id": "HWAR_Factory_Index",
+      "route": "/hwar/factory",
+      "title": "Factory Dashboard",
+      "widgets": ["FactorySidebar"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["/hwar/factory/harvests", "/hwar/factory/analysis", "/hwar/factory/queues", "/hwar/factory/workers", "/hwar/factory/batches", "/hwar/factory/analytics", "/hwar/factory/settings"],
+      "incoming": ["/hwar"]
+    },
+    {
+      "id": "HWAR_Factory_Harvests",
+      "route": "/hwar/factory/harvests",
+      "title": "Harvests",
+      "widgets": ["FactorySidebar", "HarvestsTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Analysis",
+      "route": "/hwar/factory/analysis",
+      "title": "Analysis Queue",
+      "widgets": ["FactorySidebar", "AnalysisQueueTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Queues",
+      "route": "/hwar/factory/queues",
+      "title": "Queues",
+      "widgets": ["FactorySidebar", "QueuesTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Workers",
+      "route": "/hwar/factory/workers",
+      "title": "Workers",
+      "widgets": ["FactorySidebar", "WorkersTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Batches",
+      "route": "/hwar/factory/batches",
+      "title": "Batches",
+      "widgets": ["FactorySidebar", "BatchesTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Analytics",
+      "route": "/hwar/factory/analytics",
+      "title": "Analytics",
+      "widgets": ["FactorySidebar", "AnalyticsCharts"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Factory_Settings",
+      "route": "/hwar/factory/settings",
+      "title": "Settings",
+      "widgets": ["FactorySidebar", "SettingsForm"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/factory"]
+    },
+    {
+      "id": "HWAR_Library_Index",
+      "route": "/hwar/library",
+      "title": "Library Dashboard",
+      "widgets": ["LibrarySidebar"],
+      "forms": [],
+      "states": {
+        "loading": false,
+        "error": false,
+        "empty": false
+      },
+      "modals": [],
+      "outgoing": ["/hwar/library/presets", "/hwar/library/characters", "/hwar/library/datasets", "/hwar/library/templates"],
+      "incoming": ["/hwar"]
+    },
+    {
+      "id": "HWAR_Library_Presets",
+      "route": "/hwar/library/presets",
+      "title": "Story Presets",
+      "widgets": ["LibrarySidebar", "PresetsTable", "CreatePresetButton"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/library", "/hwar/create/new"]
+    },
+    {
+      "id": "HWAR_Library_Characters",
+      "route": "/hwar/library/characters",
+      "title": "Characters",
+      "widgets": ["LibrarySidebar", "CharactersTable", "CreateCharacterButton"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/library"]
+    },
+    {
+      "id": "HWAR_Library_Datasets",
+      "route": "/hwar/library/datasets",
+      "title": "Datasets",
+      "widgets": ["LibrarySidebar", "DatasetsTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/library"]
+    },
+    {
+      "id": "HWAR_Library_Templates",
+      "route": "/hwar/library/templates",
+      "title": "Templates",
+      "widgets": ["LibrarySidebar", "TemplatesTable"],
+      "forms": [],
+      "states": {
+        "loading": true,
+        "error": true,
+        "empty": true
+      },
+      "modals": [],
+      "outgoing": [],
+      "incoming": ["/hwar/library"]
+    }
+  ]
+}
