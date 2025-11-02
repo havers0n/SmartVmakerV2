@@ -17,7 +17,7 @@ Thank you for your interest in contributing to Scrimspec! This guide will help y
 ### Prerequisites
 
 - **Node.js** 20.x or higher
-- **pnpm** 8.x or higher
+- **pnpm** 7.33.7 or higher
 - **PostgreSQL** (for local development)
 
 ### Installation

@@ -21,7 +21,7 @@ scrimspec/
 ### Требования
 
 - Node.js 18+
-- pnpm 8+
+- pnpm 7.33.7
 - PostgreSQL / Supabase (опционально)
 
 ### Установка

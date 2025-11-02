@@ -4,7 +4,7 @@
   "description": "Scrimspec - Video Analysis & Generation System based on Emotional Architecture (AES)",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@8.0.0",
+  "packageManager": "pnpm@7.33.7",
   "workspaces": [
     "apps/*",
     "packages/*"
