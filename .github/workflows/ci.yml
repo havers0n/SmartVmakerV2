@@ -78,6 +78,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: pnpm build:packages
+
       - name: Run ESLint
         run: pnpm lint
         continue-on-error: false
@@ -115,6 +118,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm build:packages
 
       - name: Run TypeScript type-check
         run: pnpm type-check
@@ -165,7 +171,7 @@ jobs:
           test -d packages/shared-types/dist && echo "✅ shared-types built"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
