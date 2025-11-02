@@ -44,3 +44,66 @@ export async function listProjects() {
     throw error;
   }
 }
+
+/**
+ * Get detailed information for a specific generation project by ID
+ * Returns full project details including all metadata
+ */
+export async function getProjectById(payload: { id: string }) {
+  logger.info('Getting project by ID', { projectId: payload.id });
+
+  try {
+    // Use raw SQL to avoid typing issues with Drizzle ORM
+    const result = await db.execute(sql`
+      SELECT 
+        id, 
+        owner_id as "ownerId",
+        template_id as "templateId",
+        status, 
+        final_video_url as "finalVideoUrl",
+        api_cost_usd as "apiCostUsd",
+        channel_id as "channelId",
+        error_message as "errorMessage",
+        minimax_cost as "minimaxCost",
+        upload_status as "uploadStatus",
+        youtube_video_id as "youtubeVideoId",
+        meta,
+        created_at as "createdAt",
+        updated_at as "updatedAt",
+        deleted_at as "deletedAt"
+      FROM generation_pipeline.generation_projects
+      WHERE id = ${payload.id}
+    `);
+
+    const project = result.rows[0];
+
+    if (!project) {
+      logger.warn('Project not found', { projectId: payload.id });
+      throw new Error(`Project with ID ${payload.id} not found`);
+    }
+
+    logger.info('Project retrieved successfully', { projectId: payload.id });
+
+    // Return the full project details
+    return {
+      id: project.id,
+      ownerId: project.ownerId,
+      templateId: project.templateId,
+      status: project.status,
+      finalVideoUrl: project.finalVideoUrl,
+      apiCostUsd: project.apiCostUsd,
+      channelId: project.channelId,
+      errorMessage: project.errorMessage,
+      minimaxCost: project.minimaxCost,
+      uploadStatus: project.uploadStatus,
+      youtubeVideoId: project.youtubeVideoId,
+      meta: project.meta,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      deletedAt: project.deletedAt,
+    };
+  } catch (error) {
+    logger.error('Failed to get project by ID', { error, projectId: payload.id });
+    throw error;
+  }
+}

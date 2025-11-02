@@ -144,3 +144,7 @@ export async function startAnimation(payload: unknown) {
 export async function listProjects() {
   return callAction('projects.list', {});
 }
+
+export async function getProjectById(id: string) {
+  return callAction('projects.getById', { id });
+}
