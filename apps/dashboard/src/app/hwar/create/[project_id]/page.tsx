@@ -56,9 +56,25 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const projectId = params.project_id as string;
+
+  // Получаем projectId, он может быть строкой, массивом или undefined
+  const projectIdParam = params.project_id;
+  // Убеждаемся, что у нас есть одна строка
+  const projectId = Array.isArray(projectIdParam) ? projectIdParam[0] : projectIdParam;
 
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<number | null>(null);
+
+  // --- ВОТ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
+  // Если у нас еще нет projectId, мы не можем ничего делать дальше.
+  // Показываем заглушку и ждем следующего рендера.
+  if (!projectId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  // --------------------------------
 
   // Fetch project data
   const { data: project, isLoading, refetch } = useQuery<Project>({
@@ -68,6 +84,8 @@ export default function ProjectDetailPage() {
       if (!res.ok) throw new Error("Failed to load project");
       return res.json();
     },
+    // Теперь useQuery не будет запускаться с undefined в queryKey
+    enabled: !!projectId, // Явно указываем, что запрос можно делать только когда есть projectId
     refetchInterval: (data) => {
       // Refetch every 5 seconds if project is processing
       return data?.status === 'processing' ? 5000 : false;
@@ -82,9 +100,15 @@ export default function ProjectDetailPage() {
       if (!res.ok) return [];
       return res.json();
     },
-    refetchInterval: (data) => {
-      // Keep refetching if there are pending assets
-      const hasPending = data?.some(a => a.status === 'pending' || a.status === 'processing');
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // --- ВОТ ИСПРАВЛЕНИЕ ---
+      // Убеждаемся, что data - это массив, прежде чем вызывать .some()
+      if (!Array.isArray(data)) {
+        return false;
+      }
+      // -----------------------
+      const hasPending = data.some(a => a.status === 'pending' || a.status === 'processing');
       return hasPending ? 3000 : false;
     },
     enabled: !!project?.meta?.keyframeGenerationStartedAt,

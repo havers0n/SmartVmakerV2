@@ -64,8 +64,11 @@ export function createLogger(options: LoggerOptions): pino.Logger {
     timestamp: pino.stdTimeFunctions.isoTime,
   };
 
-  // In development, use pretty printing
-  if (isDevelopment) {
+  // In development with a TTY (terminal), use pretty printing
+  // In Next.js server-side or non-TTY environments, use JSON even in dev
+  const usePretty = isDevelopment && process.stdout.isTTY;
+
+  if (usePretty) {
     return pino(
       config,
       pino.transport({
@@ -81,7 +84,7 @@ export function createLogger(options: LoggerOptions): pino.Logger {
     );
   }
 
-  // In production, use JSON format
+  // In production or non-TTY environments, use JSON format
   return pino(config);
 }
 
