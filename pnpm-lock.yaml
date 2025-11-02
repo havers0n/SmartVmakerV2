@@ -22,12 +22,12 @@ importers:
     dependencies:
       '@aws-sdk/client-s3': 3.922.0
       '@supabase/supabase-js': 2.78.0
-      dotenv: 16.6.1
     devDependencies:
       '@typescript-eslint/eslint-plugin': 6.21.0_6bjyp4njf2pou6veal5dpp4r2u
       '@typescript-eslint/parser': 6.21.0_k2rwabtyo525wwqr6566umnmhy
       concurrently: 9.2.1
       cross-env: 10.1.0
+      dotenv: 16.6.1
       drizzle-kit: 0.31.6
       drizzle-orm: 0.44.7
       eslint: 8.57.1
@@ -73,6 +73,7 @@ importers:
       '@radix-ui/react-tooltip': ^1.2.0
       '@scrimspec/core-domain': workspace:*
       '@scrimspec/db': workspace:*
+      '@scrimspec/halu-client': workspace:^0.1.0
       '@scrimspec/shared-types': workspace:*
       '@supabase/auth-helpers-nextjs': ^0.10.0
       '@supabase/ssr': ^0.7.0
@@ -103,6 +104,7 @@ importers:
       lucide-react: ^0.453.0
       next: ^14.0.0
       next-themes: ^0.4.6
+      openai: ^6.7.0
       pg: ^8.11.0
       postcss: ^8.4.0
       prettier: ^3.1.0
@@ -155,6 +157,7 @@ importers:
       '@radix-ui/react-tooltip': 1.2.8_pjaunvshsggv36wxj2eymod3ti
       '@scrimspec/core-domain': link:../../packages/core-domain
       '@scrimspec/db': link:../../packages/db
+      '@scrimspec/halu-client': link:../../packages/halu-client
       '@scrimspec/shared-types': link:../../packages/shared-types
       '@supabase/auth-helpers-nextjs': 0.10.0_6lf2jm6ecg5r52pzf4xycjwytu
       '@supabase/ssr': 0.7.0_6lf2jm6ecg5r52pzf4xycjwytu
@@ -174,6 +177,7 @@ importers:
       lucide-react: 0.453.0_react@18.3.1
       next: 14.2.33_nnrd3gsncyragczmpvfhocinkq
       next-themes: 0.4.6_nnrd3gsncyragczmpvfhocinkq
+      openai: 6.7.0_zod@3.25.76
       pg: 8.16.3
       react: 18.3.1
       react-day-picker: 8.10.1_hfty7ymruxwkehkosfmyiuvqkm
@@ -243,7 +247,10 @@ importers:
   packages/halu-client:
     specifiers:
       '@types/node': ^20.10.0
+      openai: ^6.7.0
       typescript: ^5.3.3
+    dependencies:
+      openai: 6.7.0
     devDependencies:
       '@types/node': 20.19.24
       typescript: 5.9.3
@@ -7352,6 +7359,34 @@ packages:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
     dependencies:
       wrappy: 1.0.2
+
+  /openai/6.7.0:
+    resolution: {integrity: sha512-mgSQXa3O/UXTbA8qFzoa7aydbXBJR5dbLQXCRapAOtoNT+v69sLdKMZzgiakpqhclRnhPggPAXoniVGn2kMY2A==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+    dev: false
+
+  /openai/6.7.0_zod@3.25.76:
+    resolution: {integrity: sha512-mgSQXa3O/UXTbA8qFzoa7aydbXBJR5dbLQXCRapAOtoNT+v69sLdKMZzgiakpqhclRnhPggPAXoniVGn2kMY2A==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+    dependencies:
+      zod: 3.25.76
+    dev: false
 
   /optionator/0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}

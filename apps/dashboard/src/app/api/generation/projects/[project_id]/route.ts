@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
-import { generationProjects } from '@/shared/lib/schema';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 export const runtime = 'nodejs';
 
@@ -23,11 +22,14 @@ export async function GET(
       );
     }
 
-    const [project] = await db
-      .select()
-      .from(generationProjects)
-      .where(eq(generationProjects.id, projectId))
-      .limit(1);
+    // Use raw SQL to avoid typing issues with Drizzle ORM
+    const result = await db.execute(sql`
+      SELECT *
+      FROM generation_pipeline.generation_projects
+      WHERE id = ${projectId}
+    `);
+
+    const project = result.rows[0];
 
     if (!project) {
       return NextResponse.json(

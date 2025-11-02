@@ -181,27 +181,27 @@ async function processKeyframeJob() {
     const assetMeta = asset.meta as any;
     const aspectRatio = assetMeta?.aspectRatio || '16:9';
 
+    // Enhance prompt with aspect ratio and quality requirements
+    // Note: For REST API, we include these details directly in the prompt text
+    // since generationConfig parameters like imageGenerationConfig are not supported
+    const enhancedPrompt = `${job.prompt}
+
+Aspect ratio: ${aspectRatio}
+Style requirements: High quality, sharp, professional, well-composed.
+Avoid: blurry images, low quality, distorted proportions, ugly artifacts, watermarks, text overlays, logos.`;
+
     // Prepare request body for Gemini Image Generation
+    // According to Gemini REST API docs, the simplest format works best for image generation
     const requestBody = {
       contents: [
         {
           parts: [
             {
-              text: job.prompt,
+              text: enhancedPrompt,
             },
           ],
         },
       ],
-      generationConfig: {
-        temperature: 0.8,
-        responseMimeType: "image/png",
-        responseModalities: ["IMAGE"],
-        // Gemini specific image generation parameters
-        imageGenerationConfig: {
-          aspectRatio: aspectRatio,
-          negativePrompt: "blurry, low quality, distorted, ugly, watermark, text, logo",
-        },
-      },
     };
 
     logger.debug({ prompt: job.prompt, aspectRatio }, 'Sending request to Gemini Image API');

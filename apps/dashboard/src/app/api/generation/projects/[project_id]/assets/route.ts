@@ -1,16 +1,41 @@
 // apps/dashboard/src/app/api/generation/projects/[project_id]/assets/route.ts
 import { NextResponse } from 'next/server';
+import { db } from '@/shared/lib/db';
+import { sql } from 'drizzle-orm';
+
+export const runtime = 'nodejs';
 
 export async function GET(
   req: Request,
   { params }: { params: { project_id: string } }
 ) {
-  const { project_id } = params;
+  try {
+    const { project_id } = params;
 
-  // TODO: Implement actual logic to fetch assets from the database
-  // For now, we return an empty array to prevent client-side errors.
+    if (!project_id) {
+      return NextResponse.json(
+        { error: 'Project ID is required' },
+        { status: 400 }
+      );
+    }
 
-  console.log(`[API STUB] Requested assets for project: ${project_id}`);
+    // Use raw SQL to fetch assets for the project, ordered by createdAt
+    const result = await db.execute(sql`
+      SELECT *
+      FROM generation_pipeline.assets
+      WHERE generation_project_id = ${project_id}
+      ORDER BY created_at ASC
+    `);
 
-  return NextResponse.json([]); // <--- Возвращаем пустой массив
+    const assets = result.rows;
+
+    return NextResponse.json(assets);
+  } catch (error) {
+    console.error('Failed to fetch project assets:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json(
+      { error: message },
+      { status: 500 }
+    );
+  }
 }

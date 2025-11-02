@@ -77,6 +77,18 @@ export async function middleware(req: NextRequest) {
     // Only truly public endpoints (health checks, webhooks, etc.)
     // All other endpoints require authentication
     const publicApiPaths = ['/api/health'];
+    
+    // In development, also allow access to generation API endpoints for testing
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    if (isDevelopment && req.nextUrl.pathname.startsWith('/api/generation')) {
+      const response = NextResponse.next();
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      response.headers.set('X-Frame-Options', 'DENY');
+      response.headers.set('X-XSS-Protection', '1; mode=block');
+      response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      return response;
+    }
+    
     const isPublicApiPath = publicApiPaths.some(path => req.nextUrl.pathname.startsWith(path));
     
     if (isPublicApiPath) {
