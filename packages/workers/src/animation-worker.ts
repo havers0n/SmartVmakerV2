@@ -11,6 +11,7 @@ if (!process.env.NODE_ENV) {
 
 import { createLogger } from '@aec/logger';
 import { retryFetch } from './utils/retry';
+import { loadModelConfig, deepGet, isOkValue, mergeRequest } from './lib/model-config';
 
 const logger = createLogger({ name: 'animation-worker' });
 
@@ -34,22 +35,100 @@ if (process.env.DRIZZLE_DATABASE_URL) {
 }
 
 import { getDrizzleClient, schema, sql } from '@scrimspec/db';
-import { eq } from 'drizzle-orm';
-import { createHaluClient, HaluApiError, MinimaxErrorCode } from '@scrimspec/halu-client';
-import { getPresignedDownloadUrl, uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
+import { eq, and } from 'drizzle-orm';
+import { HaluApiError, MinimaxErrorCode } from '@scrimspec/halu-client';
+import { createDownloadUrl, uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
 import { Readable } from 'stream';
 
 /**
- * Asserts that the HALU API key is configured
+ * Asserts that the required API keys are configured based on enabled models
  */
-async function assertHaluConfig(): Promise<void> {
-  const haluApiKey = process.env.MINIMAX_API_KEY;
+async function assertApiConfig(): Promise<void> {
+  const db = getDrizzleClient();
 
-  if (!haluApiKey) {
-    throw new Error('MINIMAX_API_KEY environment variable is not set');
+  // Check which providers are used by enabled video generation models
+  const enabledModels = await db
+    .select({
+      model: schema.aiModels,
+      provider: schema.aiProviders,
+    })
+    .from(schema.aiModels)
+    .leftJoin(schema.aiProviders, eq(schema.aiModels.providerId, schema.aiProviders.id))
+    .where(and(eq(schema.aiModels.isEnabled, true), eq(schema.aiModels.type, 'text-to-video')));
+
+  const requiredEnvVars: string[] = [];
+
+  for (const { provider } of enabledModels) {
+    if (provider && provider.apiKeyEnvVarName && !requiredEnvVars.includes(provider.apiKeyEnvVarName)) {
+      requiredEnvVars.push(provider.apiKeyEnvVarName);
+    }
   }
 
-  logger.info('HALU API key configured');
+  // Check that all required environment variables are set
+  const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+  if (missingEnvVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  }
+
+  logger.info({ requiredEnvVars }, 'API configuration validated');
+}
+
+/**
+ * Make authenticated API request based on provider authentication type
+ */
+async function makeAuthenticatedRequest(
+  url: string,
+  apiKey: string,
+  authType: string,
+  payload: any
+): Promise<Record<string, any>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Apply authentication based on type
+  switch (authType) {
+    case 'bearer_token':
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      break;
+    case 'api_key_header':
+      headers['X-API-Key'] = apiKey;
+      break;
+    case 'query_param':
+      // Add API key to URL query params
+      const urlObj = new URL(url);
+      urlObj.searchParams.set('key', apiKey);
+      url = urlObj.toString();
+      break;
+    default:
+      throw new Error(`Unsupported authentication type: ${authType}`);
+  }
+
+  logger.debug({ url, authType }, 'Making authenticated API request');
+
+  const response = await retryFetch(
+    async () => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(
+          `API error: ${res.status} ${res.statusText} - ${errorText}`
+        );
+      }
+
+      return res.json();
+    },
+    logger,
+    { retries: 3 }
+  );
+
+  return response;
 }
 
 /**
@@ -129,13 +208,12 @@ async function processAnimationJob() {
         jobId: job.id,
         projectId: job.project_id,
         sceneIndex: job.scene_index,
-        firstFrameAssetId: job.asset_id_first_frame,
-        lastFrameAssetId: job.asset_id_last_frame,
+        modelId: job.model_id,
       },
       'Processing animation job'
     );
 
-    // Step 2: Fetch both keyframe assets
+    // Step 2: Load keyframe assets
     const [firstFrameAsset] = await db
       .select()
       .from(schema.assets)
@@ -162,53 +240,138 @@ async function processAnimationJob() {
     }
 
     // Step 3: Get presigned download URLs for both keyframes from R2
-    const firstFrameUrl = await getPresignedDownloadUrl(
+    const firstFrameUrl = await createDownloadUrl(
       firstFrameAsset.storageUrl,
       3600 // 1 hour
     );
 
-    const lastFrameUrl = await getPresignedDownloadUrl(
+    const lastFrameUrl = await createDownloadUrl(
       lastFrameAsset.storageUrl,
       3600 // 1 hour
     );
 
     logger.info({ firstFrameUrl, lastFrameUrl }, 'Generated presigned URLs for keyframes');
 
-    // Step 4: Create HALU client and submit video generation task
-    const haluClient = createHaluClient({
-      apiKey: process.env.MINIMAX_API_KEY!,
-    });
+    // Step 4: Load model configuration
+    let modelId = job.model_id;
+
+    // If no model specified, use default text-to-video model
+    if (!modelId) {
+      const [defaultModel] = await db
+        .select()
+        .from(schema.aiModels)
+        .where(
+          and(
+            eq(schema.aiModels.type, 'text-to-video'),
+            eq(schema.aiModels.isDefault, true),
+            eq(schema.aiModels.isEnabled, true)
+          )
+        )
+        .limit(1);
+
+      if (defaultModel) {
+        modelId = defaultModel.id;
+        logger.info({ modelId }, 'Using default text-to-video model');
+      } else {
+        throw new Error('No default text-to-video model found');
+      }
+    }
+
+    const cfg = await loadModelConfig(modelId);
+    const apiKey = process.env[cfg.apiKeyEnvVarName];
+    if (!apiKey) {
+      throw new Error(`Missing API key in env: ${cfg.apiKeyEnvVarName} for provider ${cfg.providerId}`);
+    }
 
     // Get webhook URL from environment
     const webhookUrl = process.env.HALU_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhooks/halu`;
 
-    // Submit First & Last Frame video generation task
-    const taskResponse = await haluClient.createFirstLastFrameTask({
-      model: 'MiniMax-Hailuo-02',
+    // Step 5: Build request payload with defaults
+    const rawPayload: Record<string, any> = {
+      model: cfg.modelId,
       first_frame_image: firstFrameUrl,
       last_frame_image: lastFrameUrl,
-      prompt: 'Smooth transition between frames. [Static shot]', // Simple default, can be enhanced
-      duration: 6, // 6 seconds
-      resolution: '768P',
-      prompt_optimizer: false, // Use exact prompt
+      prompt: job.scene_description || 'Smooth transition between frames',
       callback_url: webhookUrl,
-    });
+    };
 
-    logger.info({ taskId: taskResponse.task_id, haluTaskId: taskResponse.task_id }, 'HALU task created successfully');
+    // Merge with request defaults from DB configuration
+    const payload = mergeRequest(rawPayload, cfg.requestDefaults);
 
-    // Step 5: Save HALU task_id to job record
-    await db
-      .update(schema.animationJobQueue)
-      .set({
-        haluTaskId: taskResponse.task_id,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
+    logger.debug({ payload }, 'Request payload prepared');
 
-    logger.info({ jobId: job.id, haluTaskId: taskResponse.task_id }, 'Animation job submitted to HALU');
+    // Step 6: Make authenticated API request
+    const apiUrl = cfg.apiBaseUrl || 'https://api.minimax.io/v1';
+    const videoResponse = await makeAuthenticatedRequest(
+      apiUrl,
+      apiKey,
+      cfg.authenticationType,
+      payload
+    );
 
-    // Note: The job remains in 'processing' status
-    // The webhook will update it to 'completed' when HALU finishes
+    // Step 7: Adapt response using response adapter
+    const adapter = cfg.responseAdapter ?? {};
+
+    // Check if response is OK
+    const okVal = deepGet(videoResponse, adapter.okPath);
+    if (!isOkValue(okVal, adapter.okValues)) {
+      const errMsg = deepGet(videoResponse, adapter.errorPath) ?? 'Unknown provider error';
+      throw new Error(`Model ${cfg.modelId} error: ${String(errMsg)}`);
+    }
+
+    logger.debug('API response validated as successful');
+
+    // Extract data based on data paths
+    const dataPaths = adapter.dataPaths ?? {};
+    const url = deepGet(videoResponse, dataPaths.url);
+    const taskId = deepGet(videoResponse, dataPaths.task_id);
+
+    // Scenario 1: Provider returned video URL immediately (synchronous)
+    if (typeof url === 'string' && url.length > 0) {
+      logger.info({ videoUrl: url }, 'Received synchronous video URL');
+
+      // Download and upload to R2
+      const videoBytes = await fetch(url).then(res => res.arrayBuffer()).then(ab => Buffer.from(ab));
+      const r2Key = await uploadVideoToR2(videoBytes, job.project_id, job.scene_index);
+
+      // Update job to completed
+      await db
+        .update(schema.animationJobQueue)
+        .set({
+          status: 'completed' as any,
+          updatedAt: new Date() as any,
+        })
+        .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
+
+      logger.info({ jobId: job.id, r2Key }, 'Animation job completed synchronously');
+      return job.id;
+    }
+
+    // Scenario 2: Provider returned task_id for asynchronous processing
+    if (typeof taskId === 'string' && taskId.length > 0) {
+      logger.info({ taskId }, 'Received asynchronous task_id');
+
+      // Save task_id to job record - webhook will complete it later
+      await db
+        .update(schema.animationJobQueue)
+        .set({
+          haluTaskId: taskId,
+          updatedAt: new Date() as any,
+        })
+        .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
+
+      logger.info({ jobId: job.id, taskId }, 'Animation job submitted for async processing');
+
+      // Job remains in 'processing' status
+      // Webhook will update it to 'completed' when provider finishes
+      return job.id;
+    }
+
+    // No url or task_id found
+    throw new Error(
+      `Model ${cfg.modelId} responded OK but no url/task_id found at paths: ` +
+      `url='${dataPaths.url}', task_id='${dataPaths.task_id}'`
+    );
 
     return job.id;
 
@@ -258,17 +421,16 @@ async function processAnimationJob() {
 async function main() {
   logger.info('Starting animation worker');
   logger.info({
-    minimaxApiKey: !!process.env.MINIMAX_API_KEY,
     databaseUrl: !!process.env.DATABASE_URL,
     webhookUrl: process.env.HALU_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/halu`,
   }, 'Environment configuration');
-  logger.info('Worker animates keyframe pairs using HALU (MiniMax) First & Last Frame API');
+  logger.info('Worker animates keyframe pairs using configured AI video generation providers');
 
   // Fail-fast config validation
   try {
-    await assertHaluConfig();
+    await assertApiConfig();
   } catch (error) {
-    logger.fatal({ err: error }, 'Failed to validate HALU configuration');
+    logger.fatal({ err: error }, 'Failed to validate API configuration');
     process.exit(1);
   }
 
