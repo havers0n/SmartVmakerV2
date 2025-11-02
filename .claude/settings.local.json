@@ -92,7 +92,13 @@
       "Bash(\"C:/Projects/scrimspec/packages/db/migrations/schema.ts\")",
       "Bash(echo:*)",
       "Bash(schema.ts)",
-      "Bash(\"C:/Projects/scrimspec/apps/dashboard/src/shared/api/actions.ts\")"
+      "Bash(\"C:/Projects/scrimspec/apps/dashboard/src/shared/api/actions.ts\")",
+      "Bash(for pkg in packages/*/package.json)",
+      "Bash(do echo \"=== $pkg ===\")",
+      "Bash(done)",
+      "Bash(where next)",
+      "Bash(where:*)",
+      "Bash(npx pm2:*)"
     ],
     "deny": [],
     "ask": []

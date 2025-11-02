@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test": "echo 'No tests yet' && exit 0"

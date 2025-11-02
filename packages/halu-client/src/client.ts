@@ -74,7 +74,7 @@ export class HaluClient {
       clearTimeout(timeoutId);
 
       // Parse response
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Check for API errors
       if (!response.ok) {
