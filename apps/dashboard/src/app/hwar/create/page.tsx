@@ -7,34 +7,25 @@ import { Card } from "@/shared/components/ui/card";
 import { Plus, FolderOpen } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { StatusBadge } from "@/shared/components/ui/status-badge";
-// TODO: Import the correct Project type
-// import type { Project } from "@shared/schema";
+import { listProjects } from "@/shared/api/actions";
 
-// Mock data for now
+// Project type based on the actual data structure returned by the API
 type Project = {
   id: string;
   title: string;
   createdAt: string;
   status: string;
-  ratio: string;
-  lang: string;
-  source: string;
-  costUsd?: number;
 };
-
-// const api = makeClient(); // Commented out since it's not used
 
 export default function CreateIndex() {
   const router = useRouter();
 
-  const { data: projects = [], isLoading } = useQuery<Project[]>({
+  const { data: projects = [], isLoading } = useQuery<Project[], Error>({
     queryKey: ["projects"],
     queryFn: async () => {
       try {
-        // TODO: Replace with actual API call
-        // const data = await api.hwar.listProjects();
-        // return data;
-        return [];
+        const data = await listProjects();
+        return data as Project[];
       } catch (error) {
         console.error("Failed to fetch projects:", error);
         return [];
@@ -92,19 +83,12 @@ export default function CreateIndex() {
                   <StatusBadge status={project.status} />
                 </div>
                 <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>{project.ratio}</span>
+                  <span>N/A</span>
                   <span>•</span>
-                  <span className="capitalize">{project.lang === "none" ? "No audio" : project.lang}</span>
+                  <span className="capitalize">N/A</span>
                   <span>•</span>
-                  <span className="capitalize">{project.source}</span>
+                  <span className="capitalize">N/A</span>
                 </div>
-                {project.costUsd && project.costUsd > 0 && (
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="text-xs text-muted-foreground">
-                      Cost: <span className="font-mono font-medium text-foreground">${project.costUsd.toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
               </Card>
             ))}
           </div>

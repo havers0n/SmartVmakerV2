@@ -136,3 +136,11 @@ export async function generateKeyframes(payload: unknown) {
 export async function startAnimation(payload: unknown) {
   return callAction('generation.startAnimation', payload);
 }
+
+// =============================================================================
+// Projects Actions
+// =============================================================================
+
+export async function listProjects() {
+  return callAction('projects.list', {});
+}

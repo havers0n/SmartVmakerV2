@@ -18,6 +18,7 @@ import {
   deleteCharacter,
 } from './handlers/characters';
 import { startProject, generateKeyframes } from './handlers/generation';
+import { listProjects } from './handlers/projects';
 
 /**
  * Action Registry
@@ -38,6 +39,7 @@ const actionRegistry = {
   'characters.delete': deleteCharacter,
   'generation.startProject': startProject,
   'generation.generateKeyframes': generateKeyframes,
+  'projects.list': listProjects,
 } as const;
 
 type ActionName = keyof typeof actionRegistry;
