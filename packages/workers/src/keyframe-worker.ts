@@ -1,5 +1,16 @@
+/**
+ * KEYFRAME WORKER - BILLING PROTECTION EDITION
+ * 
+ * This worker implements the "Idempotent State Machine" pattern.
+ * Main goal: Never pay for generating the same keyframe twice.
+ * 
+ * Flow:
+ * 1. Lock Job -> 2. Check Existing External ID -> 3. Recover OR Submit -> 4. Download/Upload
+ */
+
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'crypto';
 
 // Load environment variables from root .env file
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -15,7 +26,7 @@ import { loadModelConfig, deepGet, isOkValue, mergeRequest } from './lib/model-c
 
 const logger = createLogger({ name: 'keyframe-worker' });
 
-logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized (Safe Mode)');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
   logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
@@ -39,17 +50,46 @@ import { eq, and } from 'drizzle-orm';
 import { uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
 import { Readable } from 'stream';
 
+// ============================================================================
+// CONFIGURATION & SETUP
+// ============================================================================
+
 /**
  * Generic API response type
  */
 type ApiResponse = Record<string, any>;
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Generates a deterministic key for idempotency.
+ * Same Project + Same Scene + Same Frame Type = Same Key.
+ */
+function generateIdempotencyKey(projectId: string, sceneIndex: number, frameType: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(`${projectId}:${sceneIndex}:${frameType}`)
+    .digest('hex');
+}
+
+/**
+ * Updates the fine-grained stage of the job for observability
+ */
+async function updateJobStage(id: string, stage: string) {
+  const db = getDrizzleClient();
+  await db.update(schema.keyframeJobQueue)
+    .set({ stage: stage as any, updatedAt: new Date() as any })
+    .where(eq(schema.keyframeJobQueue.id, id));
+}
 
 /**
  * Asserts that the required API keys are configured based on enabled models
  */
 async function assertApiConfig(): Promise<void> {
   const db = getDrizzleClient();
-  
+
   // Check which providers are used by enabled models
   const enabledModels = await db
     .select({
@@ -61,7 +101,7 @@ async function assertApiConfig(): Promise<void> {
     .where(eq(schema.aiModels.isEnabled, true));
 
   const requiredEnvVars: string[] = [];
-  
+
   for (const { provider } of enabledModels) {
     if (provider && provider.apiKeyEnvVarName && !requiredEnvVars.includes(provider.apiKeyEnvVarName)) {
       requiredEnvVars.push(provider.apiKeyEnvVarName);
@@ -70,7 +110,7 @@ async function assertApiConfig(): Promise<void> {
 
   // Check that all required environment variables are set
   const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-  
+
   if (missingEnvVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
   }
@@ -166,10 +206,19 @@ async function makeAuthenticatedRequest(
   return response;
 }
 
+// ============================================================================
+// CORE LOGIC
+// ============================================================================
+
 /**
  * Generate image using the specified model with dynamic configuration
+ * Returns both the image buffer and the external task ID (if applicable)
  */
-async function generateImageWithModel(modelId: string, prompt: string, aspectRatio: string): Promise<Buffer> {
+async function generateImageWithModel(
+  modelId: string,
+  prompt: string,
+  aspectRatio: string
+): Promise<{ imageBuffer: Buffer; externalId?: string }> {
   // Load model configuration from database
   const cfg = await loadModelConfig(modelId);
 
@@ -214,8 +263,11 @@ async function generateImageWithModel(modelId: string, prompt: string, aspectRat
 
   logger.debug('API response validated as successful');
 
-  // Extract image data based on data paths
+  // Extract external ID if present (for async providers like Google Gemini)
   const dataPaths = adapter.dataPaths ?? {};
+  const externalId = deepGet(imageResponse, dataPaths.task_id);
+
+  // Extract image data based on data paths
   const b64 = deepGet(imageResponse, dataPaths.image_base64);
   const url = deepGet(imageResponse, dataPaths.url);
 
@@ -242,18 +294,20 @@ async function generateImageWithModel(modelId: string, prompt: string, aspectRat
     );
   }
 
-  return imageBuffer;
+  return { imageBuffer, externalId: externalId ? String(externalId) : undefined };
 }
 
 /**
- * Process a single keyframe generation job
+ * Main Processor - Idempotent State Machine
  */
-async function processKeyframeJob() {
+export async function processKeyframeJob() {
   const db = getDrizzleClient();
 
-  // Step 1: Atomic job capture using transaction and FOR UPDATE SKIP LOCKED
+  // --------------------------------------------------------------------------
+  // PHASE 1: ATOMIC ACQUISITION (WITH IDEMPOTENCY)
+  // --------------------------------------------------------------------------
   const job = await db.transaction(async (tx) => {
-    // Use raw SQL for FOR UPDATE SKIP LOCKED
+    // Raw SQL required for SKIP LOCKED
     const result = await tx.execute(
       sql`
         SELECT * FROM jobs.keyframe_job_queue
@@ -264,40 +318,73 @@ async function processKeyframeJob() {
       `
     );
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
-    }
-
+    if (!result.rows || result.rows.length === 0) return null;
     const selectedJob = result.rows[0] as any;
 
-    // Immediately update status to 'processing' within the same transaction
+    // Generate idempotency key if not present
+    const idemKey = selectedJob.idempotency_key || generateIdempotencyKey(
+      selectedJob.project_id,
+      selectedJob.scene_index,
+      selectedJob.frame_type
+    );
+
+    // Immediately transition to processing and lock the idempotency key
     await tx
       .update(schema.keyframeJobQueue)
       .set({
         status: 'processing' as any,
+        stage: 'checking_dupes' as any, // Initial stage
         updatedAt: new Date() as any,
+        idempotencyKey: idemKey
       })
       .where(sql`${schema.keyframeJobQueue.id} = ${selectedJob.id}`);
 
-    return selectedJob;
+    // Return normalized job object
+    return {
+      ...selectedJob,
+      idempotencyKey: idemKey,
+      retry_count: selectedJob.retry_count,
+      project_id: selectedJob.project_id,
+      scene_index: selectedJob.scene_index,
+      frame_type: selectedJob.frame_type,
+      external_id: selectedJob.external_id,
+      model_id: selectedJob.model_id
+    };
   });
 
-  if (!job) {
-    // No jobs to process
-    return null;
-  }
+  if (!job) return null;
+
+  logger.info(
+    {
+      jobId: job.id,
+      scene: `${job.project_id}:${job.scene_index}:${job.frame_type}`
+    },
+    'Job locked. Starting safety checks.'
+  );
 
   try {
-    logger.info(
-      {
-        jobId: job.id,
-        projectId: job.project_id,
-        sceneIndex: job.scene_index,
-        frameType: job.frame_type,
-        modelId: job.model_id
-      },
-      'Processing keyframe job'
-    );
+    // ------------------------------------------------------------------------
+    // PHASE 2: THE WALLET GUARDIAN (Check Existing)
+    // ------------------------------------------------------------------------
+
+    const existingTaskId = job.external_id;
+
+    if (existingTaskId) {
+      logger.warn(
+        { jobId: job.id, existingTaskId },
+        'RECOVERY MODE: Job already has external ID. Skipping submission.'
+      );
+      await updateJobStage(job.id, 'waiting_external');
+
+      // For synchronous providers, we might already have the result
+      // For async providers, we'd need to poll here
+      // Since most image generation is synchronous, we'll treat this as an error state
+      throw new Error('Job has external_id but is in pending state - inconsistent state detected');
+    }
+
+    // ------------------------------------------------------------------------
+    // PHASE 3: LOAD CONFIGURATION
+    // ------------------------------------------------------------------------
 
     // Get aspect ratio from asset meta
     const [asset] = await db
@@ -315,7 +402,7 @@ async function processKeyframeJob() {
 
     // Determine which model to use
     let modelId = job.model_id;
-    
+
     // If no model specified, use default text-to-image model
     if (!modelId) {
       const [defaultModel] = await db
@@ -329,7 +416,7 @@ async function processKeyframeJob() {
           )
         )
         .limit(1);
-      
+
       if (defaultModel) {
         modelId = defaultModel.id;
         logger.info({ modelId }, 'Using default text-to-image model');
@@ -338,8 +425,36 @@ async function processKeyframeJob() {
       }
     }
 
+    // ------------------------------------------------------------------------
+    // PHASE 4: SUBMISSION (If safe)
+    // ------------------------------------------------------------------------
+    await updateJobStage(job.id, 'submitting');
+
+    logger.info({ jobId: job.id }, 'Submitting new task to Provider...');
+
     // Generate image using the specified model
-    const imageBuffer = await generateImageWithModel(modelId, job.prompt, aspectRatio);
+    const { imageBuffer, externalId } = await generateImageWithModel(modelId, job.prompt, aspectRatio);
+
+    // ------------------------------------------------------------------------
+    // PHASE 5: COMMIT TRANSACTION (The Point of No Return)
+    // ------------------------------------------------------------------------
+    // If the provider returned an external ID, save it immediately
+    if (externalId) {
+      await db.update(schema.keyframeJobQueue).set({
+        externalId: externalId,
+        stage: 'waiting_external',
+        updatedAt: new Date() as any
+      }).where(eq(schema.keyframeJobQueue.id, job.id));
+
+      logger.info({ jobId: job.id, externalId }, 'Task submitted & ID saved.');
+    } else {
+      // Synchronous response - we already have the image
+      await updateJobStage(job.id, 'uploading');
+    }
+
+    // ------------------------------------------------------------------------
+    // PHASE 6: UPLOAD RESULT
+    // ------------------------------------------------------------------------
 
     // Upload to Cloudflare R2
     const r2Key = await uploadImageToR2(
@@ -366,39 +481,64 @@ async function processKeyframeJob() {
       .update(schema.keyframeJobQueue)
       .set({
         status: 'completed' as any,
+        stage: 'completed' as any,
         updatedAt: new Date() as any,
       })
       .where(sql`${schema.keyframeJobQueue.id} = ${job.id}`);
 
-    logger.info({ jobId: job.id }, 'Keyframe job completed successfully');
+    logger.info({ jobId: job.id, r2Key }, 'Job fully completed and saved');
 
     return job.id;
 
   } catch (error) {
-    // Step 7: Handle errors
+    // ------------------------------------------------------------------------
+    // ERROR HANDLING
+    // ------------------------------------------------------------------------
     const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error({ jobId: job.id, err: error }, 'Job Execution Failed');
 
-    logger.error({ err: error, jobId: job.id }, 'Keyframe job failed');
+    // Determine if retryable
+    let isRetryable = false;
 
-    // Update job status to 'failed' with error message
-    await db
-      .update(schema.keyframeJobQueue)
-      .set({
-        status: 'failed' as any,
+    // Retry network errors or rate limits
+    if (errorMessage.includes('fetch') ||
+      errorMessage.includes('network') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('429') ||
+      errorMessage.includes('rate limit')) {
+      isRetryable = true;
+    }
+
+    if (isRetryable && (job.retry_count || 0) < 3) {
+      await db.update(schema.keyframeJobQueue).set({
+        status: 'pending' as any, // Return to queue
+        retryCount: (job.retry_count || 0) + 1,
         error: errorMessage,
         errorMessage: errorMessage,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.keyframeJobQueue.id} = ${job.id}`);
+        updatedAt: new Date() as any
+      }).where(eq(schema.keyframeJobQueue.id, job.id));
 
-    // Also update the asset status
-    await db
-      .update(schema.assets)
-      .set({
+      logger.warn({ jobId: job.id, retry: (job.retry_count || 0) + 1 }, 'Job scheduled for retry');
+    } else {
+      await db.update(schema.keyframeJobQueue).set({
         status: 'failed' as any,
-        updatedAt: new Date() as any,
-      })
-      .where(eq(schema.assets.id, job.asset_id));
+        stage: 'failed' as any,
+        error: errorMessage,
+        errorMessage: errorMessage,
+        updatedAt: new Date() as any
+      }).where(eq(schema.keyframeJobQueue.id, job.id));
+
+      // Also update the asset status
+      await db
+        .update(schema.assets)
+        .set({
+          status: 'failed' as any,
+          updatedAt: new Date() as any,
+        })
+        .where(eq(schema.assets.id, job.asset_id));
+
+      logger.error({ jobId: job.id }, 'Job permanently failed');
+    }
 
     return null;
   }
@@ -408,13 +548,12 @@ async function processKeyframeJob() {
  * Main worker loop
  */
 async function main() {
-  logger.info('Starting keyframe worker');
+  logger.info('Starting Keyframe Worker (Secure Mode)...');
   logger.info({
     geminiApiKey: !!process.env.GEMINI_API_KEY,
     minimaxApiKey: !!process.env.MINIMAX_API_KEY,
     databaseUrl: !!process.env.DATABASE_URL
   }, 'Environment configuration');
-  logger.info('Worker generates keyframes using multiple AI providers and uploads to Cloudflare R2');
 
   // Fail-fast config validation
   try {
@@ -429,34 +568,27 @@ async function main() {
       const jobId = await processKeyframeJob();
 
       if (!jobId) {
-        // No jobs, wait 30 seconds
-        logger.debug('No pending jobs, waiting 30 seconds');
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        // Exponential backoff logic could go here, simple sleep for now
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 sec wait if empty
       } else {
-        // Job processed, small pause before next
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Job done, small cooldown
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      logger.error({ err: error }, 'Unexpected error in main loop');
-      // In case of critical error, wait before retry
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      logger.fatal({ err: error }, 'CRITICAL WORKER CRASH. Restarting loop in 30s...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
     }
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT, shutting down gracefully');
-  process.exit(0);
-});
+// Signal handlers
+process.on('SIGINT', () => { logger.info('SIGINT received'); process.exit(0); });
+process.on('SIGTERM', () => { logger.info('SIGTERM received'); process.exit(0); });
 
-process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM, shutting down gracefully');
-  process.exit(0);
-});
-
-// Start the worker
-main().catch((error) => {
-  logger.fatal({ err: error }, 'Fatal error');
-  process.exit(1);
-});
+// Start the worker (skip in test mode)
+if (process.env.NODE_ENV !== 'test') {
+  main().catch(e => {
+    logger.fatal({ err: e }, 'Fatal startup error');
+    process.exit(1);
+  });
+}

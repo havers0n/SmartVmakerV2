@@ -423,6 +423,15 @@ export const ingestJobQueue = jobs.table("ingest_job_queue", {
 
 	// Поле для отслеживания последней проверки задачи
 	lastCheckedAt: timestamp("last_checked_at", { withTimezone: true, mode: 'string' }),
+
+	// === НОВЫЕ ПОЛЯ БЕЗОПАСНОСТИ ===
+	stage: text("stage").default('init').notNull(),
+	externalId: text("external_id"),
+	idempotencyKey: text("idempotency_key"),
+}, (table) => {
+	return {
+		uidxIngestQuery: uniqueIndex("uidx_ingest_query").on(table.query),
+	}
 });
 
 export const analysisJobQueue = jobs.table("analysis_job_queue", {
@@ -435,6 +444,15 @@ export const analysisJobQueue = jobs.table("analysis_job_queue", {
 	errorMessage: text("error_message"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+
+	// === НОВЫЕ ПОЛЯ БЕЗОПАСНОСТИ ===
+	stage: text("stage").default('init').notNull(),
+	externalId: text("external_id"),
+	idempotencyKey: text("idempotency_key"),
+}, (table) => {
+	return {
+		uidxAnalysisVideo: uniqueIndex("uidx_analysis_video").on(table.videoId, table.analyzer),
+	}
 });
 
 export const generationJobQueue = jobs.table("generation_job_queue", {
@@ -447,6 +465,15 @@ export const generationJobQueue = jobs.table("generation_job_queue", {
 	errorMessage: text("error_message"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+
+	// === НОВЫЕ ПОЛЯ БЕЗОПАСНОСТИ ===
+	stage: text("stage").default('init').notNull(),
+	externalId: text("external_id"),
+	idempotencyKey: text("idempotency_key"),
+}, (table) => {
+	return {
+		uidxGenerationAssetProvider: uniqueIndex("uidx_generation_asset_provider").on(table.assetId, table.provider),
+	}
 });
 
 export const keyframeJobQueue = jobs.table("keyframe_job_queue", {
@@ -463,6 +490,15 @@ export const keyframeJobQueue = jobs.table("keyframe_job_queue", {
 	errorMessage: text("error_message"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+
+	// === НОВЫЕ ПОЛЯ БЕЗОПАСНОСТИ ===
+	stage: text("stage").default('init').notNull(),
+	externalId: text("external_id"),
+	idempotencyKey: text("idempotency_key"),
+}, (table) => {
+	return {
+		uidxKeyframeProjectScene: uniqueIndex("uidx_keyframe_project_scene").on(table.projectId, table.sceneIndex, table.frameType),
+	}
 });
 export const animationJobQueue = jobs.table("animation_job_queue", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
