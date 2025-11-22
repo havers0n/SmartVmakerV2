@@ -178,7 +178,7 @@ async function handleActiveTask(job: any, taskId: string, client: any, db: any) 
 /**
  * Main Processor
  */
-async function processAnimationJob() {
+export async function processAnimationJob() {
   const db = getDrizzleClient();
 
   // --------------------------------------------------------------------------
@@ -412,7 +412,9 @@ async function main() {
 process.on('SIGINT', () => { logger.info('SIGINT received'); process.exit(0); });
 process.on('SIGTERM', () => { logger.info('SIGTERM received'); process.exit(0); });
 
-main().catch(e => {
-  logger.fatal({ err: e }, 'Fatal startup error');
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== 'test') {
+  main().catch(e => {
+    logger.fatal({ err: e }, 'Fatal startup error');
+    process.exit(1);
+  });
+}
