@@ -1,0 +1,229 @@
+{
+  "workspaces": [
+    {
+      "name": "dashboard",
+      "path": "apps/dashboard",
+      "type": "next-app",
+      "router": "app",
+      "description": "Main Next.js dashboard application for YouTube ingestion and analysis UI",
+      "deps": [
+        "@aec/logger",
+        "@aec/storage-client",
+        "@project/api-client",
+        "@scrimspec/core-domain",
+        "@scrimspec/db",
+        "@scrimspec/halu-client",
+        "@scrimspec/shared-types"
+      ],
+      "externalDeps": {
+        "framework": "next@^14.0.0",
+        "ui": [
+          "react@^18.2.0",
+          "react-dom@^18.2.0",
+          "@radix-ui/*",
+          "framer-motion@^11.13.1",
+          "lucide-react@^0.453.0"
+        ],
+        "validation": "zod@^3.22.0",
+        "ai": [
+          "@google/generative-ai@^0.24.1",
+          "openai@^6.7.0"
+        ],
+        "database": "pg@^8.11.0",
+        "auth": [
+          "@supabase/auth-helpers-nextjs@^0.10.0",
+          "@supabase/ssr@^0.7.0",
+          "@supabase/supabase-js@^2.76.1"
+        ],
+        "stateManagement": "@tanstack/react-query@^5.0.0",
+        "rateLimit": [
+          "@upstash/ratelimit@^2.0.6",
+          "@upstash/redis@^1.35.6"
+        ]
+      }
+    }
+  ],
+  "packages": [
+    {
+      "name": "@scrimspec/db",
+      "path": "packages/db",
+      "type": "library",
+      "description": "Database layer with Drizzle ORM for Scrimspec",
+      "exports": [
+        "index",
+        "schema",
+        "queries"
+      ],
+      "deps": [
+        "@scrimspec/shared-types"
+      ],
+      "externalDeps": {
+        "database": "pg@^8.11.0",
+        "supabase": "@supabase/supabase-js@^2.38.4"
+      },
+      "scripts": {
+        "migrate": "drizzle-kit migrate",
+        "migrate:run": "tsx run-migration.ts",
+        "studio": "drizzle-kit studio",
+        "generate": "drizzle-kit generate",
+        "push": "drizzle-kit push",
+        "introspect": "tsx introspect-database.ts",
+        "types:pull": "tsx scripts/generate-supabase-types.ts",
+        "storage:setup": "tsx scripts/setup-storage-buckets.ts",
+        "seed": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 tsx src/seed.ts"
+      }
+    },
+    {
+      "name": "@scrimspec/workers",
+      "path": "packages/workers",
+      "type": "library",
+      "description": "Background workers for Scrimspec (ingest, analysis, keyframe, animation, enrichment)",
+      "exports": [
+        "index"
+      ],
+      "deps": [
+        "@aec/logger",
+        "@aec/storage-client",
+        "@scrimspec/core-domain",
+        "@scrimspec/db",
+        "@scrimspec/halu-client"
+      ],
+      "externalDeps": {
+        "retry": "p-retry@^6.2.1"
+      },
+      "workers": [
+        "ingest-worker",
+        "enrichment-worker",
+        "analysis-worker",
+        "keyframe-worker",
+        "animation-worker"
+      ],
+      "scripts": {
+        "dev:ingest": "cross-env NODE_ENV=development tsx --watch src/ingest-worker.ts",
+        "dev:enrich": "cross-env NODE_ENV=development tsx --watch src/enrichment-worker.ts",
+        "dev:analysis": "cross-env NODE_ENV=development tsx --watch src/analysis-worker.ts",
+        "dev:keyframe": "cross-env NODE_ENV=development tsx --watch src/keyframe-worker.ts",
+        "dev:animation": "cross-env NODE_ENV=development tsx --watch src/animation-worker.ts"
+      }
+    },
+    {
+      "name": "@scrimspec/halu-client",
+      "path": "packages/halu-client",
+      "type": "library",
+      "description": "MiniMax HALU API client for video generation & text generation with function calling",
+      "exports": [
+        "index"
+      ],
+      "deps": [],
+      "externalDeps": {
+        "ai": "openai@^6.7.0"
+      }
+    },
+    {
+      "name": "@scrimspec/core-domain",
+      "path": "packages/core-domain",
+      "type": "library",
+      "description": "Core domain schemas and validation for Scrimspec",
+      "exports": [
+        "index",
+        "schemas/ingest"
+      ],
+      "deps": [],
+      "externalDeps": {
+        "validation": "zod@^3.22.0"
+      }
+    },
+    {
+      "name": "@scrimspec/shared-types",
+      "path": "packages/shared-types",
+      "type": "library",
+      "description": "Shared TypeScript types and interfaces for Scrimspec",
+      "exports": [
+        "index",
+        "hwar"
+      ],
+      "deps": [],
+      "externalDeps": {
+        "validation": "zod@^3.22.0"
+      }
+    },
+    {
+      "name": "@aec/storage-client",
+      "path": "packages/storage-client",
+      "type": "library",
+      "description": "R2 Storage client for Scrimspec (Cloudflare R2 / AWS S3)",
+      "exports": [
+        "index"
+      ],
+      "deps": [],
+      "externalDeps": {
+        "storage": [
+          "@aws-sdk/client-s3@^3.504.0",
+          "@aws-sdk/lib-storage@^3.504.0",
+          "@aws-sdk/s3-request-presigner@^3.504.0"
+        ]
+      }
+    },
+    {
+      "name": "@aec/logger",
+      "path": "packages/logger",
+      "type": "library",
+      "description": "Pino-based logger for Scrimspec",
+      "exports": [
+        "index"
+      ],
+      "deps": [],
+      "externalDeps": {
+        "logging": [
+          "pino@^8.21.0",
+          "pino-pretty@^11.0.0"
+        ]
+      }
+    },
+    {
+      "name": "@project/api-client",
+      "path": "packages/api-client",
+      "type": "library",
+      "description": "API client (source-only package)",
+      "exports": [
+        "index"
+      ],
+      "deps": [],
+      "externalDeps": {},
+      "note": "Source-only package, no build step"
+    }
+  ],
+  "configs": {
+    "build": "turbo.json",
+    "deps": "pnpm-workspace.yaml",
+    "packageManager": "pnpm@7.33.7"
+  },
+  "monorepoManager": "Turborepo + pnpm workspaces",
+  "dependencyGraph": {
+    "dashboard": [
+      "@aec/logger",
+      "@aec/storage-client",
+      "@project/api-client",
+      "@scrimspec/core-domain",
+      "@scrimspec/db",
+      "@scrimspec/halu-client",
+      "@scrimspec/shared-types"
+    ],
+    "@scrimspec/workers": [
+      "@aec/logger",
+      "@aec/storage-client",
+      "@scrimspec/core-domain",
+      "@scrimspec/db",
+      "@scrimspec/halu-client"
+    ],
+    "@scrimspec/db": [
+      "@scrimspec/shared-types"
+    ],
+    "@scrimspec/halu-client": [],
+    "@scrimspec/core-domain": [],
+    "@scrimspec/shared-types": [],
+    "@aec/storage-client": [],
+    "@aec/logger": [],
+    "@project/api-client": []
+  }
+}

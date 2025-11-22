@@ -22,6 +22,34 @@
       "when": 1762077175613,
       "tag": "0002_great_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762094723980,
+      "tag": "0003_dear_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762102495392,
+      "tag": "0004_overconfident_sunspot",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762121399833,
+      "tag": "0005_bent_psylocke",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763804444375,
+      "tag": "0006_jittery_photon",
+      "breakpoints": true
     }
   ]
 }

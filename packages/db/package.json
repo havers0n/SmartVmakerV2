@@ -2,24 +2,25 @@
   "name": "@scrimspec/db",
   "version": "0.1.0",
   "description": "Database layer with Drizzle ORM for Scrimspec",
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "default": "./dist/src/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./schema": {
-      "types": "./dist/src/schema/index.d.ts",
-      "default": "./dist/src/schema/index.js"
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
     },
     "./queries": {
-      "types": "./dist/src/queries/index.d.ts",
-      "default": "./dist/src/queries/index.js"
+      "types": "./dist/queries/index.d.ts",
+      "default": "./dist/queries/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "type-check": "tsc --noEmit",
     "test": "echo 'No tests yet' && exit 0",
     "lint": "echo 'No linting configured' && exit 0",
@@ -30,22 +31,25 @@
     "studio": "drizzle-kit studio",
     "generate": "drizzle-kit generate",
     "push": "drizzle-kit push",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "introspect": "tsx introspect-database.ts",
     "schema:pull": "drizzle-kit introspect",
     "types:pull": "tsx scripts/generate-supabase-types.ts",
-    "storage:setup": "tsx scripts/setup-storage-buckets.ts"
+    "storage:setup": "tsx scripts/setup-storage-buckets.ts",
+    "seed": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 tsx src/seed.ts"
   },
   "dependencies": {
     "@scrimspec/shared-types": "workspace:*",
     "@supabase/supabase-js": "^2.38.4",
-    "pg": "^8.11.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
     "@types/pg": "^8.11.3",
+    "cross-env": "^10.1.0",
+    "supabase": "^1.200.3",
+    "tsup": "^8.5.0",
     "tsx": "^4.7.0",
-    "supabase": "^1.200.3"
+    "typescript": "^5.3.3"
   }
 }

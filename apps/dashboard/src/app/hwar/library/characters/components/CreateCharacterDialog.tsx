@@ -27,7 +27,6 @@ import {
 } from "@/shared/components/ui/form";
 import { useToast } from "@/shared/hooks/use-toast";
 import { createCharacter } from "@/shared/api/actions";
-import { Plus, X } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),

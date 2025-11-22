@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@aec/logger';
 import { db } from '@/shared/lib/db';
 import { animationJobQueue, assets, generationProjects } from '@/shared/lib/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { HaluClient } from '@scrimspec/halu-client';
 import { uploadLargeStream } from '@aec/storage-client';
 import { Readable } from 'stream';

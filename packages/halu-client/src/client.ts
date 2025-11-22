@@ -12,6 +12,9 @@ import {
   RetrieveFileResponse,
   SubjectReferenceVideoRequest,
   FirstLastFrameVideoRequest,
+  TextToImageRequest,
+  ImageToImageRequest,
+  ImageGenerationResponse,
   HaluApiError,
   MinimaxErrorCode,
 } from './types';
@@ -171,6 +174,59 @@ export class HaluClient {
     payload: FirstLastFrameVideoRequest
   ): Promise<CreateVideoTaskResponse> {
     return this.request<CreateVideoTaskResponse>('/video_generation', 'POST', payload);
+  }
+
+  /**
+   * Generate image from text description (Text-to-Image)
+   *
+   * @param payload - Request payload for text-to-image generation
+   * @returns Image generation response with image data
+   *
+   * @example
+   * ```ts
+   * const response = await client.generateImage({
+   *   model: 'image-01',
+   *   prompt: 'A beautiful sunset over the ocean',
+   *   aspect_ratio: '16:9',
+   *   response_format: 'base64'
+   * });
+   * 
+   * // Save base64 image to file
+   * const imageData = response.data[0].image_base64;
+   * const imageBuffer = Buffer.from(imageData, 'base64');
+   * fs.writeFileSync('image.png', imageBuffer);
+   * ```
+   */
+  async generateImage(
+    payload: TextToImageRequest
+  ): Promise<ImageGenerationResponse> {
+    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
+  }
+
+  /**
+   * Generate image from source image and text modification (Image-to-Image)
+   *
+   * @param payload - Request payload for image-to-image generation
+   * @returns Image generation response with image data
+   *
+   * @example
+   * ```ts
+   * const response = await client.modifyImage({
+   *   model: 'image-01',
+   *   prompt: 'Make the sky more blue and add clouds',
+   *   image: 'https://example.com/source-image.jpg',
+   *   aspect_ratio: '16:9',
+   *   response_format: 'url'
+   * });
+   * 
+   * // Get image URL
+   * const imageUrl = response.data[0].url;
+   * ```
+   */
+  async modifyImage(
+    payload: ImageToImageRequest
+  ): Promise<ImageGenerationResponse> {
+    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
   }
 
   /**

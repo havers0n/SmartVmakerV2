@@ -1,0 +1,357 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "file": "apps/dashboard/src/app/page.tsx",
+      "name": "Home",
+      "type": "page",
+      "description": "Main dashboard landing page with quick start cards for Ingest and Analysis"
+    },
+    {
+      "path": "/login",
+      "file": "apps/dashboard/src/app/login/page.tsx",
+      "name": "Login",
+      "type": "auth",
+      "description": "User authentication page"
+    },
+    {
+      "path": "/signup",
+      "file": "apps/dashboard/src/app/signup/page.tsx",
+      "name": "Sign Up",
+      "type": "auth",
+      "description": "User registration page"
+    },
+    {
+      "path": "/ingest",
+      "file": "apps/dashboard/src/app/ingest/page.tsx",
+      "name": "Ingest",
+      "type": "feature",
+      "description": "YouTube video ingestion - search and download videos"
+    },
+    {
+      "path": "/analysis",
+      "file": "apps/dashboard/src/app/analysis/page.tsx",
+      "name": "Analysis",
+      "type": "feature",
+      "description": "Video analysis using Gemini AI - emotional architecture analysis"
+    },
+    {
+      "path": "/generation",
+      "file": "apps/dashboard/src/app/generation/page.tsx",
+      "name": "Generation",
+      "type": "feature",
+      "description": "Video generation page (legacy/alternative entry point)"
+    },
+    {
+      "path": "/hwar",
+      "file": "apps/dashboard/src/app/hwar/page.tsx",
+      "name": "HWAR Hub",
+      "type": "hub",
+      "description": "Main HWAR (Video Generation Factory) hub with 3 main sections",
+      "subsections": [
+        "Create - New video project generation",
+        "Factory - Production pipeline orchestration",
+        "Library - Asset and template management"
+      ]
+    },
+    {
+      "path": "/hwar/create",
+      "file": "apps/dashboard/src/app/hwar/create/page.tsx",
+      "name": "HWAR Create - Projects List",
+      "type": "list",
+      "description": "List of all generation projects with status badges",
+      "actions": [
+        "View existing projects",
+        "Navigate to project details",
+        "Create new project"
+      ]
+    },
+    {
+      "path": "/hwar/create/new",
+      "file": "apps/dashboard/src/app/hwar/create/new/page.tsx",
+      "name": "HWAR Create - New Project",
+      "type": "form-wizard",
+      "description": "3-step wizard for creating new video generation project",
+      "steps": [
+        "Step 1: Project Details (title, aspect ratio, language, AI models)",
+        "Step 2: Content Source (prompt/preset/trends)",
+        "Step 3: Review & Generate"
+      ],
+      "integrations": [
+        "MiniMax-M2 API for scenario generation with function calling",
+        "Story templates from library",
+        "YouTube trends data",
+        "AI models selection (text-to-text, text-to-image)"
+      ]
+    },
+    {
+      "path": "/hwar/create/[project_id]",
+      "file": "apps/dashboard/src/app/hwar/create/[project_id]/page.tsx",
+      "name": "HWAR Create - Project Detail",
+      "type": "detail",
+      "description": "Project detail page with scenario selection and keyframe generation",
+      "features": [
+        "Scenario selection (multiple AI-generated concepts)",
+        "AES scoring visualization",
+        "Keyframe generation trigger",
+        "Real-time status polling",
+        "Keyframe preview (first/last frames per scene)"
+      ],
+      "polling": {
+        "project": "5 seconds when status=processing",
+        "assets": "3 seconds when any asset is pending/processing"
+      }
+    },
+    {
+      "path": "/hwar/factory",
+      "file": "apps/dashboard/src/app/hwar/factory/page.tsx",
+      "name": "HWAR Factory - Dashboard",
+      "type": "dashboard",
+      "description": "Production pipeline orchestration dashboard"
+    },
+    {
+      "path": "/hwar/factory/harvests",
+      "file": "apps/dashboard/src/app/hwar/factory/harvests/page.tsx",
+      "name": "HWAR Factory - Harvests",
+      "type": "management",
+      "description": "Manage video harvests from YouTube"
+    },
+    {
+      "path": "/hwar/factory/analysis",
+      "file": "apps/dashboard/src/app/hwar/factory/analysis/page.tsx",
+      "name": "HWAR Factory - Analysis",
+      "type": "management",
+      "description": "Analysis queue management"
+    },
+    {
+      "path": "/hwar/factory/queues",
+      "file": "apps/dashboard/src/app/hwar/factory/queues/page.tsx",
+      "name": "HWAR Factory - Queues",
+      "type": "management",
+      "description": "Job queue monitoring and management"
+    },
+    {
+      "path": "/hwar/factory/workers",
+      "file": "apps/dashboard/src/app/hwar/factory/workers/page.tsx",
+      "name": "HWAR Factory - Workers",
+      "type": "management",
+      "description": "Worker status and health monitoring"
+    },
+    {
+      "path": "/hwar/factory/batches",
+      "file": "apps/dashboard/src/app/hwar/factory/batches/page.tsx",
+      "name": "HWAR Factory - Batches",
+      "type": "management",
+      "description": "Batch job management"
+    },
+    {
+      "path": "/hwar/factory/analytics",
+      "file": "apps/dashboard/src/app/hwar/factory/analytics/page.tsx",
+      "name": "HWAR Factory - Analytics",
+      "type": "analytics",
+      "description": "Cost tracking and performance analytics"
+    },
+    {
+      "path": "/hwar/factory/settings",
+      "file": "apps/dashboard/src/app/hwar/factory/settings/page.tsx",
+      "name": "HWAR Factory - Settings",
+      "type": "settings",
+      "description": "Factory configuration and settings"
+    },
+    {
+      "path": "/hwar/library",
+      "file": "apps/dashboard/src/app/hwar/library/page.tsx",
+      "name": "HWAR Library - Hub",
+      "type": "hub",
+      "description": "Asset library hub with navigation to presets, characters, templates, datasets"
+    },
+    {
+      "path": "/hwar/library/presets",
+      "file": "apps/dashboard/src/app/hwar/library/presets/page.tsx",
+      "name": "HWAR Library - Story Presets",
+      "type": "management",
+      "description": "Manage story templates/presets with beats, emotions, timing"
+    },
+    {
+      "path": "/hwar/library/characters",
+      "file": "apps/dashboard/src/app/hwar/library/characters/page.tsx",
+      "name": "HWAR Library - Characters",
+      "type": "management",
+      "description": "Manage character library with visual descriptions and reference images"
+    },
+    {
+      "path": "/hwar/library/templates",
+      "file": "apps/dashboard/src/app/hwar/library/templates/page.tsx",
+      "name": "HWAR Library - Templates",
+      "type": "management",
+      "description": "Video templates management"
+    },
+    {
+      "path": "/hwar/library/datasets",
+      "file": "apps/dashboard/src/app/hwar/library/datasets/page.tsx",
+      "name": "HWAR Library - Datasets",
+      "type": "management",
+      "description": "Training datasets management"
+    },
+    {
+      "path": "/hwar/dev",
+      "file": "apps/dashboard/src/app/hwar/dev/page.tsx",
+      "name": "HWAR Dev",
+      "type": "dev",
+      "description": "Development/debug page for HWAR system"
+    }
+  ],
+  "apiRoutes": [
+    {
+      "path": "/api/actions",
+      "file": "apps/dashboard/src/app/api/actions/route.ts",
+      "method": "POST",
+      "type": "action-runner",
+      "description": "Universal action runner endpoint - routes actions to handlers"
+    },
+    {
+      "path": "/api/videos",
+      "file": "apps/dashboard/src/app/api/videos/route.ts",
+      "method": "GET",
+      "type": "data",
+      "description": "Fetch ingested videos list"
+    },
+    {
+      "path": "/api/health/db",
+      "file": "apps/dashboard/src/app/api/health/db/route.ts",
+      "method": "GET",
+      "type": "health",
+      "description": "Database health check"
+    },
+    {
+      "path": "/api/r2/upload-url",
+      "file": "apps/dashboard/src/app/api/r2/upload-url/route.ts",
+      "method": "GET",
+      "type": "storage",
+      "description": "Generate presigned URL for R2 upload"
+    },
+    {
+      "path": "/api/r2/download-url",
+      "file": "apps/dashboard/src/app/api/r2/download-url/route.ts",
+      "method": "GET",
+      "type": "storage",
+      "description": "Generate presigned URL for R2 download"
+    },
+    {
+      "path": "/api/analytics/trends",
+      "file": "apps/dashboard/src/app/api/analytics/trends/route.ts",
+      "method": "GET",
+      "type": "analytics",
+      "description": "Fetch YouTube video trends for scenario generation"
+    },
+    {
+      "path": "/api/generation/projects/[project_id]",
+      "file": "apps/dashboard/src/app/api/generation/projects/[project_id]/route.ts",
+      "method": "GET",
+      "type": "data",
+      "description": "Fetch single generation project by ID"
+    },
+    {
+      "path": "/api/generation/projects/[project_id]/assets",
+      "file": "apps/dashboard/src/app/api/generation/projects/[project_id]/assets/route.ts",
+      "method": "GET",
+      "type": "data",
+      "description": "Fetch all assets (keyframes/videos) for a project"
+    },
+    {
+      "path": "/api/webhooks/halu",
+      "file": "apps/dashboard/src/app/api/webhooks/halu/route.ts",
+      "method": "POST",
+      "type": "webhook",
+      "description": "Webhook endpoint for MiniMax HALU API callbacks"
+    }
+  ],
+  "actions": [
+    {
+      "name": "ingest.startSearch",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/ingest.ts",
+      "description": "Start YouTube video search and ingestion job"
+    },
+    {
+      "name": "analysis.startAnalysis",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/analysis.ts",
+      "description": "Start video analysis job using Gemini AI"
+    },
+    {
+      "name": "generation.startProject",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "description": "Create new generation project with AI scenario generation",
+      "integration": "MiniMax-M2 with function calling"
+    },
+    {
+      "name": "generation.generateKeyframes",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "description": "Generate keyframes (first/last frames) for selected scenario"
+    },
+    {
+      "name": "generation.startAnimation",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "description": "Start animation generation jobs for keyframe pairs"
+    },
+    {
+      "name": "projects.list",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/projects.ts",
+      "description": "List all generation projects"
+    },
+    {
+      "name": "storyTemplates.create",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "description": "Create new story template with beats"
+    },
+    {
+      "name": "storyTemplates.list",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "description": "List all story templates"
+    },
+    {
+      "name": "storyTemplates.getById",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "description": "Get story template by ID with beats"
+    },
+    {
+      "name": "storyTemplates.update",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "description": "Update story template"
+    },
+    {
+      "name": "storyTemplates.delete",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "description": "Delete story template"
+    },
+    {
+      "name": "characters.create",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "description": "Create new character"
+    },
+    {
+      "name": "characters.list",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "description": "List all characters"
+    },
+    {
+      "name": "characters.getById",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "description": "Get character by ID"
+    },
+    {
+      "name": "characters.update",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "description": "Update character"
+    },
+    {
+      "name": "characters.delete",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "description": "Delete character"
+    },
+    {
+      "name": "models.list",
+      "handler": "apps/dashboard/src/app/api/actions/handlers/models.ts",
+      "description": "List available AI models by type"
+    }
+  ]
+}

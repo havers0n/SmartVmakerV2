@@ -1,7 +1,6 @@
 import { db } from '@/shared/lib/db';
-import { generationProjects } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
-import { desc, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 const logger = createLogger({ name: 'api-projects' });
 

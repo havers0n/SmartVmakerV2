@@ -19,6 +19,7 @@ import {
 } from './handlers/characters';
 import { startProject, generateKeyframes } from './handlers/generation';
 import { listProjects } from './handlers/projects';
+import { listModels } from './handlers/models';
 
 /**
  * Action Registry
@@ -40,6 +41,7 @@ const actionRegistry = {
   'generation.startProject': startProject,
   'generation.generateKeyframes': generateKeyframes,
   'projects.list': listProjects,
+  'models.list': listModels,
 } as const;
 
 type ActionName = keyof typeof actionRegistry;

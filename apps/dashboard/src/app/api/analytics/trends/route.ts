@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * GET /api/analytics/trends
@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * Returns YouTube trend insights based on analyzed videos.
  * Currently returns static data - will be connected to analytics in the future.
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // Static trend data for now
     // In the future, this will query the analytics.analysis_results table

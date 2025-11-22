@@ -10,11 +10,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --parallel",
-    "build": "turbo run build",
-    "build:packages": "pnpm --filter \"./packages/*\" build --parallel",
-    "dev:packages": "pnpm --filter \"./packages/*\" dev --parallel",
-    "dev:all": "concurrently --names \"dashboard,ingest,analysis,keyframe,animation\" -c \"bgBlue.bold,bgMagenta.bold,bgCyan.bold,bgGreen.bold,bgYellow.bold\" \"pnpm --filter dashboard dev\" \"pnpm --filter workers dev:ingest\" \"pnpm --filter workers dev:analysis\" \"pnpm --filter workers dev:keyframe\" \"pnpm --filter workers dev:animation\"",
+    "build": "turbo build",
+    "build:packages": "turbo build --filter=./packages/*",
+    "dev": "turbo dev --parallel",
+    "dev:packages": "turbo dev --filter=./packages/* --parallel",
+    "clean": "turbo clean",
+    "dev:all": "dotenv -e ./.env -- concurrently --names \"dashboard,ingest,analysis,keyframe,animation\" -c \"bgBlue.bold,bgMagenta.bold,bgCyan.bold,bgGreen.bold,bgYellow.bold\" \"pnpm --filter dashboard dev\" \"pnpm --filter workers dev:ingest\" \"pnpm --filter workers dev:analysis\" \"pnpm --filter workers dev:keyframe\" \"pnpm --filter workers dev:animation\"",
     "start:all": "pm2 start ecosystem.config.cjs",
     "stop:all": "pm2 stop all && pm2 delete all",
     "restart:all": "pm2 restart all",
@@ -24,7 +25,6 @@
     "format:check": "turbo run format:check",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules",
     "types:pull": "pnpm --filter db run types:pull"
   },
   "devDependencies": {
@@ -33,11 +33,13 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "dotenv": "^16.6.1",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.6",
     "drizzle-orm": "0.44.7",
     "eslint": "^8.55.0",
     "pm2": "^6.0.13",
     "prettier": "^3.1.0",
+    "rimraf": "^5.0.0",
     "tsx": "^4.20.6",
     "turbo": "^2.0.0",
     "typescript": "^5.3.3"

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Card } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
-import { Badge } from "@/shared/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { Users2, Plus, Edit, Trash2 } from "lucide-react";

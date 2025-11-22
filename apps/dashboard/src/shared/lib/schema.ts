@@ -29,3 +29,7 @@ export const assets = schema.assets;
 export const beats = schema.beats;
 export const storyTemplates = schema.storyTemplates;
 export const characters = schema.characters;
+
+// AI Providers & Models - use tables mapping for consistency
+export const aiProviders = schema.aiProviders;
+export const aiModels = schema.aiModels;

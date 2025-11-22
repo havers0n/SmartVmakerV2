@@ -5,8 +5,8 @@ module.exports = {
   apps: [
     {
       name: "dashboard",
-      script: "npm",
-      args: "run dev",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev",
       cwd: path.resolve(__dirname, 'apps/dashboard'),
       log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
       env: {
@@ -15,8 +15,8 @@ module.exports = {
     },
     {
       name: "worker:ingest",
-      script: "npm",
-      args: "run dev:ingest",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev:ingest",
       cwd: path.resolve(__dirname, 'packages/workers'),
       log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
       env: {
@@ -25,8 +25,8 @@ module.exports = {
     },
     {
       name: "worker:analysis",
-      script: "npm",
-      args: "run dev:analysis",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev:analysis",
       cwd: path.resolve(__dirname, 'packages/workers'),
       log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
       env: {
@@ -35,8 +35,8 @@ module.exports = {
     },
     {
       name: "worker:keyframe",
-      script: "npm",
-      args: "run dev:keyframe",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev:keyframe",
       cwd: path.resolve(__dirname, 'packages/workers'),
       log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
       env: {
@@ -45,8 +45,8 @@ module.exports = {
     },
     {
       name: "worker:animation",
-      script: "npm",
-      args: "run dev:animation",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev:animation",
       cwd: path.resolve(__dirname, 'packages/workers'),
       log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
       env: {

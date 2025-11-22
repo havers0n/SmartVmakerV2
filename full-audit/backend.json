@@ -1,0 +1,422 @@
+{
+  "routeHandlers": [
+    {
+      "route": "/api/actions",
+      "file": "apps/dashboard/src/app/api/actions/route.ts",
+      "method": "POST",
+      "type": "action-runner",
+      "description": "Universal action dispatcher that routes action requests to specific handlers",
+      "actionRegistry": {
+        "ingest.startSearch": "handlers/ingest.ts::startSearch",
+        "analysis.startAnalysis": "handlers/analysis.ts::startAnalysis",
+        "generation.startProject": "handlers/generation.ts::startProject",
+        "generation.generateKeyframes": "handlers/generation.ts::generateKeyframes",
+        "generation.startAnimation": "handlers/generation.ts::startAnimation",
+        "projects.list": "handlers/projects.ts::listProjects",
+        "storyTemplates.*": "handlers/story-templates.ts",
+        "characters.*": "handlers/characters.ts",
+        "models.list": "handlers/models.ts::listModels"
+      },
+      "validation": "Validates action name and payload structure",
+      "errorHandling": "Returns structured error responses with status codes"
+    },
+    {
+      "route": "/api/generation/projects/:project_id",
+      "file": "apps/dashboard/src/app/api/generation/projects/[project_id]/route.ts",
+      "method": "GET",
+      "dbInteraction": "SELECT * FROM generation_pipeline.generation_projects WHERE id = $1",
+      "description": "Fetch single generation project by ID",
+      "usedBy": [
+        "Project detail page for polling project status",
+        "Scenario selection flow"
+      ]
+    },
+    {
+      "route": "/api/generation/projects/:project_id/assets",
+      "file": "apps/dashboard/src/app/api/generation/projects/[project_id]/assets/route.ts",
+      "method": "GET",
+      "dbInteraction": "SELECT * FROM generation_pipeline.assets WHERE generation_project_id = $1",
+      "description": "Fetch all assets (keyframes, videos) for a project",
+      "usedBy": [
+        "Project detail page for keyframe preview",
+        "Asset status polling"
+      ]
+    },
+    {
+      "route": "/api/analytics/trends",
+      "file": "apps/dashboard/src/app/api/analytics/trends/route.ts",
+      "method": "GET",
+      "description": "Fetch YouTube video trends for scenario generation",
+      "usedBy": ["New project wizard (Step 2: Trends tab)"]
+    },
+    {
+      "route": "/api/webhooks/halu",
+      "file": "apps/dashboard/src/app/api/webhooks/halu/route.ts",
+      "method": "POST",
+      "description": "Webhook endpoint for MiniMax HALU API callbacks",
+      "usedBy": ["Animation worker for async video generation status updates"]
+    },
+    {
+      "route": "/api/r2/upload-url",
+      "file": "apps/dashboard/src/app/api/r2/upload-url/route.ts",
+      "method": "GET",
+      "description": "Generate presigned URL for R2 upload",
+      "externalService": "Cloudflare R2 / AWS S3"
+    },
+    {
+      "route": "/api/r2/download-url",
+      "file": "apps/dashboard/src/app/api/r2/download-url/route.ts",
+      "method": "GET",
+      "description": "Generate presigned URL for R2 download",
+      "externalService": "Cloudflare R2 / AWS S3"
+    },
+    {
+      "route": "/api/health/db",
+      "file": "apps/dashboard/src/app/api/health/db/route.ts",
+      "method": "GET",
+      "description": "Database health check endpoint",
+      "dbInteraction": "Simple query to test database connectivity"
+    },
+    {
+      "route": "/api/videos",
+      "file": "apps/dashboard/src/app/api/videos/route.ts",
+      "method": "GET",
+      "description": "Fetch list of ingested videos",
+      "usedBy": ["Ingest page, Analysis page"]
+    }
+  ],
+  "actionHandlers": [
+    {
+      "action": "generation.startProject",
+      "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "function": "startProject",
+      "validation": "startProjectSchema (Zod)",
+      "workflow": [
+        "1. Validate payload (title, ratio, lang, source, prompt/presetId/trendId, textModelId, imageModelId)",
+        "2. Resolve AI models (use provided IDs or fetch defaults from ai_models table)",
+        "3. Fetch preset data if source=preset (from story_templates + beats tables)",
+        "4. Fetch trend data if source=trends (from /api/analytics/trends)",
+        "5. Call MiniMax-M2 API with function calling for scenario generation",
+        "6. Insert project into generation_projects table with scenarios in meta field",
+        "7. Return project ID and generated scenarios"
+      ],
+      "externalAPIs": [
+        {
+          "name": "MiniMax-M2",
+          "envVar": "MINIMAX_API_KEY",
+          "purpose": "AI scenario generation with function calling",
+          "tools": [
+            "get_story_preset_details",
+            "get_character_details",
+            "generate_video_scenarios"
+          ]
+        }
+      ],
+      "dbTables": [
+        "generation_pipeline.generation_projects (INSERT)",
+        "library.story_templates (SELECT)",
+        "library.beats (SELECT)",
+        "library.ai_models (SELECT)"
+      ],
+      "fallback": "Returns mock scenarios if MINIMAX_API_KEY not set or API fails"
+    },
+    {
+      "action": "generation.generateKeyframes",
+      "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "function": "generateKeyframes",
+      "validation": "generateKeyframesSchema (Zod)",
+      "workflow": [
+        "1. Validate payload (projectId, selectedScenarioIndex)",
+        "2. Load project from database",
+        "3. Extract selected scenario and scenes from project.meta",
+        "4. For each scene:",
+        "   - Create 2 asset records (first frame, last frame)",
+        "   - Create 2 keyframe_job_queue entries with prompts and modelId",
+        "5. Update project status to 'processing'",
+        "6. Update project.meta with selectedScenarioIndex and keyframeGenerationStartedAt",
+        "7. Return job count"
+      ],
+      "dbTables": [
+        "generation_pipeline.generation_projects (SELECT, UPDATE)",
+        "generation_pipeline.assets (INSERT)",
+        "jobs.keyframe_job_queue (INSERT)"
+      ],
+      "workerTrigger": "Keyframe worker polls keyframe_job_queue for pending jobs"
+    },
+    {
+      "action": "generation.startAnimation",
+      "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+      "function": "startAnimation",
+      "validation": "startAnimationSchema (Zod)",
+      "workflow": [
+        "1. Validate payload (projectId)",
+        "2. Load project and verify all keyframes are completed",
+        "3. Group assets by scene (first/last pairs)",
+        "4. For each scene:",
+        "   - Create animation_job_queue entry with asset IDs and scene description",
+        "   - Include camera commands in scene description if available",
+        "5. Update project status to 'processing'",
+        "6. Update project.meta with animationStartedAt",
+        "7. Return job count"
+      ],
+      "dbTables": [
+        "generation_pipeline.generation_projects (SELECT, UPDATE)",
+        "generation_pipeline.assets (SELECT)",
+        "jobs.animation_job_queue (INSERT)"
+      ],
+      "workerTrigger": "Animation worker polls animation_job_queue for pending jobs",
+      "prerequisite": "All keyframes must have status='completed'"
+    },
+    {
+      "action": "storyTemplates.create",
+      "file": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "dbTables": ["library.story_templates (INSERT)", "library.beats (INSERT)"],
+      "description": "Create new story template with beats"
+    },
+    {
+      "action": "storyTemplates.list",
+      "file": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "dbTables": ["library.story_templates (SELECT)"],
+      "description": "List all story templates"
+    },
+    {
+      "action": "storyTemplates.getById",
+      "file": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+      "dbTables": ["library.story_templates (SELECT)", "library.beats (SELECT)"],
+      "description": "Get story template by ID with all beats"
+    },
+    {
+      "action": "characters.create",
+      "file": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "dbTables": ["library.characters (INSERT)"],
+      "description": "Create new character"
+    },
+    {
+      "action": "characters.list",
+      "file": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+      "dbTables": ["library.characters (SELECT)"],
+      "description": "List all characters"
+    },
+    {
+      "action": "projects.list",
+      "file": "apps/dashboard/src/app/api/actions/handlers/projects.ts",
+      "dbTables": ["generation_pipeline.generation_projects (SELECT)"],
+      "description": "List all generation projects"
+    },
+    {
+      "action": "models.list",
+      "file": "apps/dashboard/src/app/api/actions/handlers/models.ts",
+      "dbTables": ["library.ai_models (SELECT)", "library.ai_providers (SELECT)"],
+      "description": "List AI models by type (text-to-text, text-to-image, etc.)"
+    }
+  ],
+  "orm": {
+    "type": "drizzle-orm",
+    "schema": "packages/db/migrations/schema.ts",
+    "migrations": "packages/db/migrations/",
+    "database": "PostgreSQL (Supabase)",
+    "connectionString": "DRIZZLE_DATABASE_URL (Pooler)",
+    "schemas": [
+      "generation_pipeline (generation_projects, assets)",
+      "library (story_templates, beats, characters, ai_models, ai_providers)",
+      "jobs (keyframe_job_queue, animation_job_queue, ingest_job_queue, analysis_job_queue)"
+    ]
+  },
+  "externalServices": [
+    {
+      "name": "MiniMax-M2 (HALU)",
+      "usage": "AI scenario generation with function calling, Video generation (image-to-video)",
+      "file": "packages/halu-client/src/client.ts",
+      "envVar": "MINIMAX_API_KEY",
+      "usedBy": [
+        "generation.startProject handler",
+        "animation-worker"
+      ],
+      "endpoints": [
+        "POST https://api.minimax.chat/v1/text/chatcompletion_v2 (text generation with tools)",
+        "POST /video_generation (video generation from images)"
+      ]
+    },
+    {
+      "name": "Google Gemini",
+      "usage": "Image generation (text-to-image), Video analysis (multimodal)",
+      "envVar": "GEMINI_API_KEY",
+      "usedBy": [
+        "keyframe-worker",
+        "analysis-worker"
+      ],
+      "models": [
+        "gemini-2.5-flash-image (image generation)",
+        "gemini-1.5-pro (video analysis)"
+      ]
+    },
+    {
+      "name": "Cloudflare R2 / AWS S3",
+      "usage": "Media storage for keyframes and videos",
+      "file": "packages/storage-client/src/index.ts",
+      "envVars": [
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_BUCKET"
+      ],
+      "operations": [
+        "uploadLargeStream (multipart upload)",
+        "createDownloadUrl (presigned URL generation)"
+      ]
+    },
+    {
+      "name": "YouTube Data API",
+      "usage": "Video search and metadata extraction",
+      "envVar": "YOUTUBE_API_KEY",
+      "usedBy": ["ingest-worker"]
+    },
+    {
+      "name": "Supabase",
+      "usage": "PostgreSQL database, Authentication",
+      "envVars": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "usedBy": ["All backend and workers"]
+    }
+  ],
+  "databaseSchemas": [
+    {
+      "schema": "generation_pipeline",
+      "tables": [
+        {
+          "name": "generation_projects",
+          "columns": [
+            "id (uuid, PK)",
+            "owner_id (uuid, FK)",
+            "template_id (uuid, FK to story_templates)",
+            "status (enum: pending, processing, completed, failed)",
+            "meta (jsonb: scenarios, title, ratio, lang, source, etc.)",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        {
+          "name": "assets",
+          "columns": [
+            "id (uuid, PK)",
+            "generation_project_id (uuid, FK)",
+            "asset_type (enum: keyframe, video)",
+            "status (enum: pending, processing, completed, failed)",
+            "storage_url (text: R2 key)",
+            "meta (jsonb: sceneIndex, frameType, phase, etc.)",
+            "created_at",
+            "updated_at"
+          ]
+        }
+      ]
+    },
+    {
+      "schema": "library",
+      "tables": [
+        {
+          "name": "story_templates",
+          "columns": [
+            "id (uuid, PK)",
+            "name (text)",
+            "description (text)",
+            "tags (text[])",
+            "target_duration_seconds (integer)",
+            "owner_id (uuid, FK)",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        {
+          "name": "beats",
+          "columns": [
+            "id (uuid, PK)",
+            "template_id (uuid, FK to story_templates)",
+            "order (integer)",
+            "phase (enum: HOOK, BUILD, PAYOFF, RESOLUTION)",
+            "duration_seconds (numeric)",
+            "description (text)",
+            "action_prompt (text)",
+            "emotion (enum)",
+            "contrast (enum)",
+            "intended_impact (text)",
+            "meta (jsonb)"
+          ]
+        },
+        {
+          "name": "characters",
+          "columns": [
+            "id (uuid, PK)",
+            "name (text)",
+            "description (text)",
+            "style_presets (jsonb)",
+            "reference_image_urls (text[])",
+            "owner_id (uuid, FK)",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        {
+          "name": "ai_models",
+          "columns": [
+            "id (uuid, PK)",
+            "provider_id (uuid, FK to ai_providers)",
+            "name (text)",
+            "type (enum: text-to-text, text-to-image, image-to-video, etc.)",
+            "is_enabled (boolean)",
+            "is_default (boolean)",
+            "config (jsonb)"
+          ]
+        },
+        {
+          "name": "ai_providers",
+          "columns": [
+            "id (uuid, PK)",
+            "name (text)",
+            "api_key_env_var_name (text)",
+            "base_url (text)"
+          ]
+        }
+      ]
+    },
+    {
+      "schema": "jobs",
+      "tables": [
+        {
+          "name": "keyframe_job_queue",
+          "columns": [
+            "id (uuid, PK)",
+            "project_id (uuid, FK)",
+            "scene_index (integer)",
+            "frame_type (enum: first, last)",
+            "prompt (text)",
+            "asset_id (uuid, FK to assets)",
+            "model_id (uuid, FK to ai_models)",
+            "status (enum: pending, processing, completed, failed)",
+            "error (text)",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        {
+          "name": "animation_job_queue",
+          "columns": [
+            "id (uuid, PK)",
+            "project_id (uuid, FK)",
+            "scene_index (integer)",
+            "asset_id_first_frame (uuid, FK to assets)",
+            "asset_id_last_frame (uuid, FK to assets)",
+            "scene_description (text)",
+            "status (enum: pending, processing, completed, failed)",
+            "halu_task_id (text)",
+            "error (text)",
+            "created_at",
+            "updated_at"
+          ]
+        }
+      ]
+    }
+  ]
+}

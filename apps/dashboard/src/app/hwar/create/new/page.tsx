@@ -14,7 +14,8 @@ import { Badge } from "@/shared/components/ui/badge";
 import { ArrowLeft, ArrowRight, Sparkles, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
 import { cn } from "@/shared/lib/utils";
-import { listStoryTemplates, startGenerationProject } from "@/shared/api/actions";
+import { listStoryTemplates, startGenerationProject, StoryTemplate } from "@/shared/api/actions";
+import { ModelSelector } from "@/shared/components/ai/ModelSelector";
 
 // Mock data for now
 const ratios = ["16:9", "9:16", "4:3", "3:4"] as const;
@@ -37,9 +38,11 @@ export default function NewProject() {
   const [prompt, setPrompt] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [selectedTrendId, setSelectedTrendId] = useState<string | null>(null);
+  const [textModel, setTextModel] = useState<string | null>(null);
+  const [imageModel, setImageModel] = useState<string | null>(null);
 
   // Load story templates
-  const { data: storyTemplates = [], isLoading: isLoadingTemplates } = useQuery({
+  const { data: storyTemplates = [], isLoading: isLoadingTemplates } = useQuery<StoryTemplate[]>({
     queryKey: ["storyTemplates"],
     queryFn: listStoryTemplates,
   });
@@ -64,6 +67,8 @@ export default function NewProject() {
         prompt: source === "prompt" ? prompt : undefined,
         presetId: source === "preset" ? selectedPresetId : undefined,
         trendId: source === "trends" ? selectedTrendId : undefined,
+        textModelId: textModel,
+        imageModelId: imageModel,
       });
 
       return result;
@@ -190,6 +195,29 @@ export default function NewProject() {
                   </Select>
                 </div>
 
+                {/* AI Model Selectors */}
+                <div>
+                  <ModelSelector
+                    type="text-to-text"
+                    label="Text Generation Model"
+                    placeholder="Select a text model..."
+                    value={textModel}
+                    onChange={setTextModel}
+                    testId="select-text-model"
+                  />
+                </div>
+
+                <div>
+                  <ModelSelector
+                    type="text-to-image"
+                    label="Image Generation Model"
+                    placeholder="Select an image model..."
+                    value={imageModel}
+                    onChange={setImageModel}
+                    testId="select-image-model"
+                  />
+                </div>
+
                 {/* Ratio preview */}
                 <div className="flex justify-center">
                   <div className="border-2 border-dashed border-border rounded-lg p-4">
@@ -255,7 +283,7 @@ export default function NewProject() {
                     </Card>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
-                      {storyTemplates.map((template: any) => (
+                      {storyTemplates.map((template: StoryTemplate) => (
                         <Card
                           key={template.id}
                           className={cn(

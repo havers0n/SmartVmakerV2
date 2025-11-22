@@ -1,0 +1,355 @@
+{
+  "screens": [
+    {
+      "id": "home",
+      "route": "/",
+      "name": "Home Dashboard",
+      "type": "dashboard",
+      "components": [
+        "Header with user info and sign out button",
+        "Welcome section",
+        "Quick start cards (Ingest Videos, Analyze Videos)",
+        "System overview cards (YouTube API, Emotional Architecture, Video Generation, Job Processing)"
+      ],
+      "features": ["Protected route with authentication"],
+      "navigation": [
+        { "to": "/ingest", "label": "Ingest Videos" },
+        { "to": "/analysis", "label": "Analyze Videos" }
+      ]
+    },
+    {
+      "id": "hwar-hub",
+      "route": "/hwar",
+      "name": "Video Generation Factory Hub",
+      "type": "hub",
+      "components": [
+        "Page header with title and description",
+        "Three main navigation cards (Create, Factory, Library)"
+      ],
+      "features": [
+        "Card-based navigation",
+        "Icon-driven UI (Video, Factory, Library icons)",
+        "Hover elevate effects"
+      ],
+      "navigation": [
+        { "to": "/hwar/create", "label": "Create", "description": "Generate videos from prompts/presets/trends" },
+        { "to": "/hwar/factory", "label": "Factory", "description": "Production pipeline orchestration" },
+        { "to": "/hwar/library", "label": "Library", "description": "Manage presets, characters, datasets, templates" }
+      ]
+    },
+    {
+      "id": "hwar-create-list",
+      "route": "/hwar/create",
+      "name": "Projects List",
+      "type": "list-view",
+      "dataSource": "API: /api/actions (projects.list action)",
+      "components": [
+        "Page header with title and 'New Project' button",
+        "Project cards grid (responsive: 1/2/3 columns)",
+        "Empty state with 'Create Project' CTA",
+        "Loading skeleton states"
+      ],
+      "features": [
+        "TanStack Query for data fetching",
+        "Real-time status badges",
+        "Project metadata display (title, date, status)",
+        "Click to navigate to project detail"
+      ],
+      "navigation": [
+        { "to": "/hwar/create/new", "label": "New Project", "trigger": "button" },
+        { "to": "/hwar/create/[project_id]", "label": "Project Detail", "trigger": "card-click" }
+      ],
+      "emptyState": {
+        "icon": "FolderOpen",
+        "title": "No projects yet",
+        "description": "Create your first video project using AI-powered scenario generation, presets, or YouTube trends",
+        "action": "Create Project"
+      }
+    },
+    {
+      "id": "hwar-create-new",
+      "route": "/hwar/create/new",
+      "name": "New Project Wizard",
+      "type": "form-wizard",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Project Details",
+          "fields": [
+            {
+              "name": "title",
+              "type": "text",
+              "label": "Project Title",
+              "placeholder": "e.g., Motivational Story",
+              "testId": "input-title"
+            },
+            {
+              "name": "ratio",
+              "type": "button-group",
+              "label": "Aspect Ratio",
+              "options": ["16:9", "9:16", "4:3", "3:4"],
+              "default": "16:9",
+              "testIds": ["button-ratio-16:9", "button-ratio-9:16", "button-ratio-4:3", "button-ratio-3:4"]
+            },
+            {
+              "name": "lang",
+              "type": "select",
+              "label": "Language",
+              "options": [
+                { "value": "none", "label": "No audio track" },
+                { "value": "ru", "label": "Russian" },
+                { "value": "en", "label": "English" },
+                { "value": "he", "label": "Hebrew" },
+                { "value": "es", "label": "Spanish" }
+              ],
+              "default": "none",
+              "testId": "select-language"
+            },
+            {
+              "name": "textModel",
+              "type": "model-selector",
+              "label": "Text Generation Model",
+              "modelType": "text-to-text",
+              "testId": "select-text-model"
+            },
+            {
+              "name": "imageModel",
+              "type": "model-selector",
+              "label": "Image Generation Model",
+              "modelType": "text-to-image",
+              "testId": "select-image-model"
+            }
+          ],
+          "preview": {
+            "type": "aspect-ratio-box",
+            "description": "Visual preview of selected aspect ratio"
+          }
+        },
+        {
+          "step": 2,
+          "title": "Content Source",
+          "description": "How would you like to generate your video?",
+          "tabs": [
+            {
+              "id": "prompt",
+              "label": "Prompt",
+              "testId": "tab-prompt",
+              "fields": [
+                {
+                  "name": "prompt",
+                  "type": "textarea",
+                  "label": "Describe your video",
+                  "placeholder": "Example: A dramatic story about a person overcoming challenges...",
+                  "rows": 4,
+                  "testId": "input-prompt"
+                }
+              ],
+              "hint": "Tip: Include AES structure (Attention → Emotion → Solution), emotional arc, and pacing details"
+            },
+            {
+              "id": "preset",
+              "label": "Presets",
+              "testId": "tab-presets",
+              "dataSource": "API: /api/actions (storyTemplates.list action)",
+              "component": "SelectableCardGrid",
+              "itemFields": [
+                "name",
+                "description",
+                "targetDurationSeconds",
+                "tags"
+              ],
+              "emptyState": {
+                "message": "No story templates available. Create one in the Library first.",
+                "action": "Go to Library",
+                "link": "/hwar/library/presets"
+              }
+            },
+            {
+              "id": "trends",
+              "label": "Trends",
+              "testId": "tab-trends",
+              "description": "Generate scenarios based on successful YouTube video patterns",
+              "dataSource": "API: /api/analytics/trends",
+              "component": "SelectableCardList",
+              "itemFields": [
+                "title",
+                "description",
+                "insights"
+              ],
+              "emptyState": {
+                "message": "No trends data available."
+              }
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Review & Generate",
+          "description": "Confirm your settings before generating scenarios",
+          "components": [
+            "Summary table (Aspect Ratio, Language, Source, Prompt/Preset/Trend)",
+            "Info card about next steps (AI will generate 5 scenario concepts with scoring)"
+          ]
+        }
+      ],
+      "actions": {
+        "back": {
+          "label": "Back/Cancel",
+          "variant": "outline",
+          "testId": "button-back"
+        },
+        "next": {
+          "label": "Continue/Create Project",
+          "variant": "primary",
+          "testId": "button-next",
+          "validation": "Step 2 requires source selection (prompt filled OR preset selected OR trend selected)"
+        }
+      },
+      "mutation": {
+        "action": "generation.startProject",
+        "method": "callAction",
+        "successRedirect": "/hwar/create/[project_id]"
+      },
+      "features": [
+        "3-step progress indicator",
+        "Real-time validation",
+        "Loading states",
+        "Error handling with toast notifications",
+        "AI model selection integration",
+        "MiniMax-M2 scenario generation on submit"
+      ]
+    },
+    {
+      "id": "hwar-project-detail",
+      "route": "/hwar/create/[project_id]",
+      "name": "Project Detail",
+      "type": "detail-view",
+      "dataSources": [
+        {
+          "key": "project",
+          "api": "/api/generation/projects/[project_id]",
+          "polling": "5 seconds when status=processing"
+        },
+        {
+          "key": "assets",
+          "api": "/api/generation/projects/[project_id]/assets",
+          "polling": "3 seconds when any asset is pending/processing",
+          "condition": "project.meta.keyframeGenerationStartedAt exists"
+        }
+      ],
+      "sections": [
+        {
+          "id": "header",
+          "components": [
+            "Back button to projects list",
+            "Project title",
+            "Status badges (aspect ratio, status, generation progress)"
+          ]
+        },
+        {
+          "id": "scenario-selection",
+          "title": "Select a Scenario",
+          "visibleWhen": "!hasGeneratedKeyframes",
+          "components": [
+            "Scenario cards grid (responsive: 1/2/3 columns)",
+            "Each card shows: title, description, AES score, hook strength, emotional curve tags",
+            "Selected card has ring-2 ring-primary styling"
+          ],
+          "action": {
+            "label": "Generate Keyframes",
+            "icon": "ImageIcon",
+            "disabled": "selectedScenarioIndex === null OR mutation.isPending",
+            "mutation": "generation.generateKeyframes"
+          }
+        },
+        {
+          "id": "keyframe-preview",
+          "title": "Generated Keyframes",
+          "visibleWhen": "hasGeneratedKeyframes",
+          "components": [
+            "Scene cards with phase, duration, description",
+            "Two-column grid per scene: Opening Frame | Closing Frame",
+            "R2Image component for completed frames",
+            "Loading spinners for pending/processing frames",
+            "Error states for failed frames"
+          ],
+          "features": [
+            "Real-time asset status updates via polling",
+            "Progress badge showing completed/total count",
+            "Completion badge when all done"
+          ]
+        }
+      ],
+      "features": [
+        "Dynamic polling based on status",
+        "Optimistic UI updates",
+        "TanStack Query for data management",
+        "R2 image loading with proper error handling",
+        "Auto-select first scenario on load"
+      ]
+    },
+    {
+      "id": "hwar-library",
+      "route": "/hwar/library",
+      "name": "Library Hub",
+      "type": "hub",
+      "navigation": [
+        { "to": "/hwar/library/presets", "label": "Story Presets", "icon": "FileText" },
+        { "to": "/hwar/library/characters", "label": "Characters", "icon": "User" },
+        { "to": "/hwar/library/templates", "label": "Templates", "icon": "Layout" },
+        { "to": "/hwar/library/datasets", "label": "Datasets", "icon": "Database" }
+      ]
+    },
+    {
+      "id": "hwar-library-presets",
+      "route": "/hwar/library/presets",
+      "name": "Story Presets Management",
+      "type": "management-list",
+      "dataSource": "API: /api/actions (storyTemplates.list action)",
+      "components": [
+        "Page header with 'New Template' button",
+        "Story template cards/table",
+        "Create/Edit dialog with form",
+        "Beats editor (phase, duration, description, emotion, contrast, intendedImpact)"
+      ],
+      "features": [
+        "CRUD operations on story templates",
+        "Nested beats management",
+        "Zod validation",
+        "Real-time updates"
+      ]
+    },
+    {
+      "id": "hwar-library-characters",
+      "route": "/hwar/library/characters",
+      "name": "Characters Management",
+      "type": "management-list",
+      "dataSource": "API: /api/actions (characters.list action)",
+      "components": [
+        "Page header with 'New Character' button",
+        "Character cards with name, description, reference images",
+        "Create/Edit dialog with form"
+      ],
+      "features": [
+        "CRUD operations on characters",
+        "Visual description and style presets",
+        "Reference image URLs management"
+      ]
+    },
+    {
+      "id": "hwar-factory-dashboard",
+      "route": "/hwar/factory",
+      "name": "Factory Dashboard",
+      "type": "dashboard",
+      "navigation": [
+        { "to": "/hwar/factory/harvests", "label": "Harvests" },
+        { "to": "/hwar/factory/analysis", "label": "Analysis" },
+        { "to": "/hwar/factory/queues", "label": "Queues" },
+        { "to": "/hwar/factory/workers", "label": "Workers" },
+        { "to": "/hwar/factory/batches", "label": "Batches" },
+        { "to": "/hwar/factory/analytics", "label": "Analytics" },
+        { "to": "/hwar/factory/settings", "label": "Settings" }
+      ]
+    }
+  ]
+}

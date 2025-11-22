@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm';
 export const runtime = 'nodejs';
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { project_id: string } }
 ) {
   try {

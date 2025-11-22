@@ -1,0 +1,300 @@
+{
+  "workers": [
+    {
+      "name": "keyframe-worker",
+      "file": "packages/workers/src/keyframe-worker.ts",
+      "description": "Processes keyframe generation jobs using AI image generation models",
+      "queue": "jobs.keyframe_job_queue",
+      "status": "active",
+      "polling": {
+        "strategy": "FOR UPDATE SKIP LOCKED",
+        "interval": "Continuous loop with 5 second sleep when no jobs"
+      },
+      "workflow": [
+        "1. Atomic job capture from keyframe_job_queue (status=pending)",
+        "2. Update job status to 'processing'",
+        "3. Resolve AI model from modelId (fetch from ai_models + ai_providers tables)",
+        "4. Generate image based on model provider:",
+        "   - Google Gemini: gemini-2.5-flash-image API",
+        "   - Other providers: extensible architecture",
+        "5. Upload generated image to Cloudflare R2 (multipart upload)",
+        "6. Update asset record with storage_url and status='completed'",
+        "7. Update job status to 'completed'",
+        "8. On error: update job and asset status to 'failed', store error message"
+      ],
+      "dependencies": [
+        "@aec/logger",
+        "@aec/storage-client",
+        "@scrimspec/db",
+        "@scrimspec/halu-client"
+      ],
+      "externalAPIs": [
+        {
+          "name": "Google Gemini",
+          "model": "gemini-2.5-flash-image",
+          "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+          "envVar": "GEMINI_API_KEY",
+          "purpose": "Text-to-image generation",
+          "retryStrategy": "retryFetch with exponential backoff"
+        },
+        {
+          "name": "Cloudflare R2",
+          "purpose": "Image storage",
+          "path": "keyframes/{projectId}/scene-{sceneIndex}-{frameType}-{timestamp}.png",
+          "method": "uploadLargeStream (multipart upload)"
+        }
+      ],
+      "errorHandling": {
+        "strategy": "Try-catch with database rollback",
+        "failureActions": [
+          "Update job.status = 'failed'",
+          "Update asset.status = 'failed'",
+          "Store error message in job.error field"
+        ],
+        "deadLetterQueue": "Not implemented",
+        "monitoring": "Pino logger with structured logging"
+      },
+      "startCommand": "pnpm --filter @scrimspec/workers dev:keyframe",
+      "runtime": "Node.js with tsx --watch"
+    },
+    {
+      "name": "animation-worker",
+      "file": "packages/workers/src/animation-worker.ts",
+      "description": "Processes animation generation jobs using image-to-video AI models",
+      "queue": "jobs.animation_job_queue",
+      "status": "active",
+      "polling": {
+        "strategy": "FOR UPDATE SKIP LOCKED",
+        "interval": "Continuous loop with 5 second sleep when no jobs"
+      },
+      "workflow": [
+        "1. Atomic job capture from animation_job_queue (status=pending)",
+        "2. Update job status to 'processing'",
+        "3. Load first and last keyframe assets from R2",
+        "4. Download keyframe images from R2 using presigned URLs",
+        "5. Convert images to base64",
+        "6. Submit video generation request to MiniMax HALU API:",
+        "   - first_frame_image (base64)",
+        "   - last_frame_image (base64)",
+        "   - prompt_optimizer: true",
+        "   - model: video-01 (image-to-video)",
+        "7. Poll HALU API for task completion",
+        "8. Download generated video",
+        "9. Upload video to Cloudflare R2",
+        "10. Create new asset record (type=video) with storage URL",
+        "11. Update job status to 'completed'",
+        "12. On error: update job status to 'failed', store error"
+      ],
+      "dependencies": [
+        "@aec/logger",
+        "@aec/storage-client",
+        "@scrimspec/db",
+        "@scrimspec/halu-client"
+      ],
+      "externalAPIs": [
+        {
+          "name": "MiniMax HALU",
+          "model": "video-01",
+          "endpoint": "https://api.minimax.chat/v1/video_generation",
+          "envVar": "MINIMAX_API_KEY",
+          "purpose": "Image-to-video generation",
+          "retryStrategy": "Built-in retry with p-retry library",
+          "taskPolling": {
+            "interval": "5 seconds",
+            "maxAttempts": 120,
+            "timeout": "600 seconds (10 minutes)"
+          }
+        },
+        {
+          "name": "Cloudflare R2",
+          "purpose": "Video storage",
+          "path": "animations/{projectId}/scene-{sceneIndex}-{timestamp}.mp4",
+          "method": "uploadLargeStream (multipart upload)"
+        }
+      ],
+      "errorHandling": {
+        "strategy": "Try-catch with database rollback",
+        "specificErrors": [
+          "HaluApiError: Specific handling for HALU API errors",
+          "MinimaxErrorCode: Categorized error codes from MiniMax API"
+        ],
+        "failureActions": [
+          "Update job.status = 'failed'",
+          "Store error message in job.error field",
+          "Log detailed error with context"
+        ],
+        "deadLetterQueue": "Not implemented",
+        "monitoring": "Pino logger with structured logging"
+      },
+      "startCommand": "pnpm --filter @scrimspec/workers dev:animation",
+      "runtime": "Node.js with tsx --watch"
+    },
+    {
+      "name": "ingest-worker",
+      "file": "packages/workers/src/ingest-worker.ts",
+      "description": "Processes YouTube video ingestion jobs",
+      "queue": "jobs.ingest_job_queue",
+      "status": "active",
+      "workflow": [
+        "1. Poll ingest_job_queue for pending jobs",
+        "2. Search YouTube using YouTube Data API",
+        "3. Download video metadata",
+        "4. Store video info in database",
+        "5. Update job status"
+      ],
+      "externalAPIs": [
+        {
+          "name": "YouTube Data API",
+          "envVar": "YOUTUBE_API_KEY",
+          "purpose": "Video search and metadata extraction"
+        }
+      ],
+      "startCommand": "pnpm --filter @scrimspec/workers dev:ingest",
+      "runtime": "Node.js with tsx --watch"
+    },
+    {
+      "name": "enrichment-worker",
+      "file": "packages/workers/src/enrichment-worker.ts",
+      "description": "Enriches video data with additional metadata",
+      "queue": "Not specified",
+      "status": "active",
+      "startCommand": "pnpm --filter @scrimspec/workers dev:enrich",
+      "runtime": "Node.js with tsx --watch"
+    },
+    {
+      "name": "analysis-worker",
+      "file": "packages/workers/src/analysis-worker.ts",
+      "description": "Processes video analysis jobs using Gemini multimodal AI",
+      "queue": "jobs.analysis_job_queue",
+      "status": "active",
+      "workflow": [
+        "1. Poll analysis_job_queue for pending jobs",
+        "2. Load video from R2 storage",
+        "3. Send video to Gemini 1.5 Pro for analysis",
+        "4. Extract emotional architecture (AES framework)",
+        "5. Store analysis results in database",
+        "6. Update job status"
+      ],
+      "externalAPIs": [
+        {
+          "name": "Google Gemini",
+          "model": "gemini-1.5-pro",
+          "envVar": "GEMINI_API_KEY",
+          "purpose": "Video analysis (multimodal)"
+        }
+      ],
+      "startCommand": "pnpm --filter @scrimspec/workers dev:analysis",
+      "runtime": "Node.js with tsx --watch"
+    }
+  ],
+  "queueConfiguration": {
+    "atomicity": {
+      "strategy": "PostgreSQL FOR UPDATE SKIP LOCKED",
+      "description": "Prevents race conditions by locking rows during job capture",
+      "benefits": [
+        "Multiple workers can run concurrently without conflicts",
+        "No external message broker required",
+        "ACID guarantees from PostgreSQL"
+      ]
+    },
+    "concurrency": {
+      "keyframe-worker": "Multiple instances supported (via FOR UPDATE SKIP LOCKED)",
+      "animation-worker": "Multiple instances supported (via FOR UPDATE SKIP LOCKED)",
+      "note": "Each worker instance runs in a continuous loop and processes one job at a time"
+    },
+    "monitoring": {
+      "method": "Database queries",
+      "queries": [
+        "SELECT COUNT(*) FROM jobs.keyframe_job_queue WHERE status = 'pending'",
+        "SELECT COUNT(*) FROM jobs.keyframe_job_queue WHERE status = 'processing'",
+        "SELECT COUNT(*) FROM jobs.keyframe_job_queue WHERE status = 'failed'"
+      ],
+      "dashboards": [
+        "/hwar/factory/queues (Queue monitoring page)",
+        "/hwar/factory/workers (Worker status page)"
+      ]
+    }
+  },
+  "processManagerConfig": {
+    "tool": "PM2",
+    "file": "ecosystem.config.cjs",
+    "commands": {
+      "start": "pnpm start:all (pm2 start ecosystem.config.cjs)",
+      "stop": "pnpm stop:all (pm2 stop all && pm2 delete all)",
+      "restart": "pnpm restart:all (pm2 restart all)",
+      "logs": "pnpm logs (pm2 logs)"
+    },
+    "apps": [
+      {
+        "name": "dashboard",
+        "script": "pnpm --filter dashboard dev",
+        "cwd": "./apps/dashboard"
+      },
+      {
+        "name": "ingest-worker",
+        "script": "pnpm --filter workers dev:ingest",
+        "cwd": "./packages/workers"
+      },
+      {
+        "name": "analysis-worker",
+        "script": "pnpm --filter workers dev:analysis",
+        "cwd": "./packages/workers"
+      },
+      {
+        "name": "keyframe-worker",
+        "script": "pnpm --filter workers dev:keyframe",
+        "cwd": "./packages/workers"
+      },
+      {
+        "name": "animation-worker",
+        "script": "pnpm --filter workers dev:animation",
+        "cwd": "./packages/workers"
+      }
+    ]
+  },
+  "retryStrategy": {
+    "library": "p-retry",
+    "config": {
+      "retries": 3,
+      "minTimeout": 1000,
+      "maxTimeout": 5000,
+      "factor": 2
+    },
+    "usage": [
+      "retryFetch function in workers/src/utils/retry.ts",
+      "Used for external API calls (Gemini, HALU, R2)"
+    ]
+  },
+  "gaps": [
+    {
+      "issue": "No dead letter queue implementation",
+      "severity": "medium",
+      "impact": "Failed jobs remain in queue indefinitely without manual intervention",
+      "recommendation": "Implement DLQ after N retry attempts"
+    },
+    {
+      "issue": "No job timeout mechanism",
+      "severity": "medium",
+      "impact": "Long-running jobs can block workers indefinitely",
+      "recommendation": "Add timeout field to jobs and kill stuck jobs"
+    },
+    {
+      "issue": "No retry count tracking in job queue",
+      "severity": "low",
+      "impact": "Cannot implement exponential backoff or limit retries",
+      "recommendation": "Add retry_count column to job tables"
+    },
+    {
+      "issue": "No worker health checks",
+      "severity": "medium",
+      "impact": "Cannot detect crashed or unresponsive workers",
+      "recommendation": "Implement heartbeat mechanism or external monitoring"
+    },
+    {
+      "issue": "No rate limiting on external APIs",
+      "severity": "high",
+      "impact": "Risk of hitting API rate limits and being blocked",
+      "recommendation": "Implement rate limiter for Gemini and MiniMax APIs"
+    }
+  ]
+}

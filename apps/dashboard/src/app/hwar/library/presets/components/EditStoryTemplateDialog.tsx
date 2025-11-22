@@ -33,10 +33,9 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import { useToast } from "@/shared/hooks/use-toast";
-import { getStoryTemplateById, updateStoryTemplate } from "@/shared/api/actions";
+import { getStoryTemplateById, updateStoryTemplate, StoryTemplateWithBeats } from "@/shared/api/actions";
 import { Plus, Trash2, MoveUp, MoveDown, Loader2 } from "lucide-react";
 import { Card } from "@/shared/components/ui/card";
-import { Badge } from "@/shared/components/ui/badge";
 
 const beatSchema = z.object({
   order: z.number().int().min(0),
@@ -102,7 +101,7 @@ export function EditStoryTemplateDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch full template with beats
-  const { data: fullTemplate, isLoading } = useQuery({
+  const { data: fullTemplate, isLoading } = useQuery<StoryTemplateWithBeats>({
     queryKey: ["storyTemplate", template.id],
     queryFn: () => getStoryTemplateById(template.id),
     enabled: open,
@@ -127,7 +126,7 @@ export function EditStoryTemplateDialog({
   // Update form when full template loads
   useEffect(() => {
     if (fullTemplate?.beats) {
-      const beatsData = fullTemplate.beats.map((beat: any) => ({
+      const beatsData = fullTemplate.beats.map((beat) => ({
         order: beat.order,
         phase: beat.phase,
         durationSeconds: parseFloat(beat.durationSeconds),
@@ -318,118 +317,127 @@ export function EditStoryTemplateDialog({
 
                 {fields.map((field, index) => (
                   <Card key={field.id} className="p-4">
-                    <div className="flex items-start gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Badge variant="outline" className="w-fit">
-                          Beat {index + 1}
-                        </Badge>
-                        <div className="flex flex-col gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => moveBeatUp(index)}
-                            disabled={index === 0 || isSubmitting}
-                            className="h-7 w-7 p-0"
-                          >
-                            <MoveUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => moveBeatDown(index)}
-                            disabled={index === fields.length - 1 || isSubmitting}
-                            className="h-7 w-7 p-0"
-                          >
-                            <MoveDown className="h-4 w-4" />
-                          </Button>
-                        </div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium">Beat {index + 1}</h4>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveBeatUp(index)}
+                          disabled={index === 0 || isSubmitting}
+                          className="h-7 w-7 p-0"
+                        >
+                          <MoveUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveBeatDown(index)}
+                          disabled={index === fields.length - 1 || isSubmitting}
+                          className="h-7 w-7 p-0"
+                        >
+                          <MoveDown className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => remove(index)}
+                          disabled={fields.length <= 1 || isSubmitting}
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <FormField
+                          control={form.control}
+                          name={`beats.${index}.phase`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phase</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                                disabled={isSubmitting}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="HOOK">HOOK</SelectItem>
+                                  <SelectItem value="BUILD">BUILD</SelectItem>
+                                  <SelectItem value="PAYOFF">PAYOFF</SelectItem>
+                                  <SelectItem value="RESOLUTION">RESOLUTION</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
 
-                      <div className="flex-1 space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <FormField
-                            control={form.control}
-                            name={`beats.${index}.phase`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Phase</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value}
-                                  disabled={isSubmitting}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="HOOK">Hook</SelectItem>
-                                    <SelectItem value="BUILD">Build</SelectItem>
-                                    <SelectItem value="PAYOFF">Payoff</SelectItem>
-                                    <SelectItem value="RESOLUTION">Resolution</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                      <FormField
+                        control={form.control}
+                        name={`beats.${index}.durationSeconds`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Duration (seconds)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                placeholder="10"
+                                {...field}
+                                disabled={isSubmitting}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                          <FormField
-                            control={form.control}
-                            name={`beats.${index}.emotion`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Emotion</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value}
-                                  disabled={isSubmitting}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="joy">Joy</SelectItem>
-                                    <SelectItem value="sadness">Sadness</SelectItem>
-                                    <SelectItem value="surprise">Surprise</SelectItem>
-                                    <SelectItem value="anticipation">Anticipation</SelectItem>
-                                    <SelectItem value="tension">Tension</SelectItem>
-                                    <SelectItem value="relief">Relief</SelectItem>
-                                    <SelectItem value="empathy">Empathy</SelectItem>
-                                    <SelectItem value="curiosity">Curiosity</SelectItem>
-                                    <SelectItem value="humor">Humor</SelectItem>
-                                    <SelectItem value="awe">Awe</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                      <FormField
+                        control={form.control}
+                        name={`beats.${index}.emotion`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Emotion</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              disabled={isSubmitting}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="joy">Joy</SelectItem>
+                                <SelectItem value="sadness">Sadness</SelectItem>
+                                <SelectItem value="surprise">Surprise</SelectItem>
+                                <SelectItem value="anticipation">Anticipation</SelectItem>
+                                <SelectItem value="tension">Tension</SelectItem>
+                                <SelectItem value="relief">Relief</SelectItem>
+                                <SelectItem value="empathy">Empathy</SelectItem>
+                                <SelectItem value="curiosity">Curiosity</SelectItem>
+                                <SelectItem value="humor">Humor</SelectItem>
+                                <SelectItem value="awe">Awe</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                          <FormField
-                            control={form.control}
-                            name={`beats.${index}.durationSeconds`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Duration (s)</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    {...field}
-                                    disabled={isSubmitting}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
+                      <div className="col-span-2">
                         <FormField
                           control={form.control}
                           name={`beats.${index}.description`}
@@ -438,85 +446,8 @@ export function EditStoryTemplateDialog({
                               <FormLabel>Description</FormLabel>
                               <FormControl>
                                 <Textarea
-                                  placeholder="Describe what happens in this beat..."
+                                  placeholder="Describe the scene and emotional beat..."
                                   {...field}
-                                  disabled={isSubmitting}
-                                  rows={2}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name={`beats.${index}.contrast`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Contrast (Optional)</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || undefined}
-                                  disabled={isSubmitting}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select contrast..." />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="small_vs_big">Small vs Big</SelectItem>
-                                    <SelectItem value="slow_vs_fast">Slow vs Fast</SelectItem>
-                                    <SelectItem value="alone_vs_together">
-                                      Alone vs Together
-                                    </SelectItem>
-                                    <SelectItem value="sad_vs_happy">Sad vs Happy</SelectItem>
-                                    <SelectItem value="problem_vs_solution">
-                                      Problem vs Solution
-                                    </SelectItem>
-                                    <SelectItem value="before_vs_after">
-                                      Before vs After
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name={`beats.${index}.actionPrompt`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Action Prompt (Optional)</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Show character struggling..."
-                                    {...field}
-                                    value={field.value || ""}
-                                    disabled={isSubmitting}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <FormField
-                          control={form.control}
-                          name={`beats.${index}.intendedImpact`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Intended Impact (Optional)</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Create suspense and anticipation..."
-                                  {...field}
-                                  value={field.value || ""}
                                   disabled={isSubmitting}
                                 />
                               </FormControl>
@@ -526,16 +457,78 @@ export function EditStoryTemplateDialog({
                         />
                       </div>
 
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1 || isSubmitting}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="col-span-2">
+                        <FormField
+                          control={form.control}
+                          name={`beats.${index}.actionPrompt`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Action Prompt (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Specific visual/action guidance for this beat..."
+                                  {...field}
+                                  value={field.value || ""}
+                                  disabled={isSubmitting}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Visual or action guidance for this beat
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name={`beats.${index}.contrast`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Contrast (Optional)</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || undefined}
+                              disabled={isSubmitting}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select contrast" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="small_vs_big">Small vs Big</SelectItem>
+                                <SelectItem value="slow_vs_fast">Slow vs Fast</SelectItem>
+                                <SelectItem value="alone_vs_together">Alone vs Together</SelectItem>
+                                <SelectItem value="sad_vs_happy">Sad vs Happy</SelectItem>
+                                <SelectItem value="problem_vs_solution">Problem vs Solution</SelectItem>
+                                <SelectItem value="before_vs_after">Before vs After</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`beats.${index}.intendedImpact`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Intended Impact (Optional)</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="What should this beat accomplish emotionally?"
+                                {...field}
+                                value={field.value || ""}
+                                disabled={isSubmitting}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </Card>
                 ))}
@@ -551,7 +544,7 @@ export function EditStoryTemplateDialog({
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Updating..." : "Update Template"}
+                  {isSubmitting ? "Saving..." : "Save Changes"}
                 </Button>
               </DialogFooter>
             </form>

@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
  * Fetch a single generation project by ID
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { project_id: string } }
 ) {
   try {

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { db } from '@/shared/lib/db';
-import { generationProjects, storyTemplates, beats, characters, assets, keyframeJobQueue, animationJobQueue } from '@/shared/lib/schema';
+import { generationProjects, storyTemplates, beats, characters, assets, keyframeJobQueue, animationJobQueue, aiModels } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { createTextClient, generateScenariosWithTools } from '@scrimspec/halu-client';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -20,6 +20,8 @@ export const startProjectSchema = z.object({
   presetId: z.string().uuid().optional(),
   trendId: z.string().optional(),
   ownerId: z.string().uuid().optional(),
+  textModelId: z.string().optional(),
+  imageModelId: z.string().optional(),
 });
 
 export type StartProjectPayload = z.infer<typeof startProjectSchema>;
@@ -220,6 +222,11 @@ async function generateScenariosWithMiniMax(input: {
                           phase: { type: 'string', description: 'Scene phase: HOOK, BUILD, PAYOFF, or RESOLUTION' },
                           duration: { type: 'number', description: 'Scene duration in seconds' },
                           description: { type: 'string', description: 'Visual description of the scene' },
+                          cameraCommands: { 
+                            type: 'array', 
+                            description: 'Suggested camera movements for this scene (e.g., [Push in, Pan right])',
+                            items: { type: 'string' }
+                          },
                         },
                         required: ['phase', 'duration', 'description'],
                       },
@@ -256,6 +263,7 @@ Requirements:
 - AES scores should reflect viral potential (0-100)
 - Hook strength should reflect immediate engagement (0-100)
 - Emotional curve should show progression through the video
+- Include suggested camera movements for each scene (e.g., [Push in, Pan right])
 
 `;
 
@@ -294,7 +302,9 @@ When generating scenarios, ensure each one is:
 - Visually compelling and specific
 - Emotionally engaging with clear progression
 - Optimized for the requested aspect ratio
-- Structured with proper timing and pacing`;
+- Structured with proper timing and pacing
+- Include suggested camera movements for dynamic visual storytelling (e.g., [Push in, Pan right, Tilt up])
+`;
 
     // First API call - MiniMax-M2 decides what to do
     logger.info({ source: input.source }, 'Calling MiniMax-M2 for scenario generation');
@@ -403,6 +413,54 @@ export async function startProject(payload: unknown) {
     'Starting project generation'
   );
 
+  // Resolve AI models - use provided IDs or fetch defaults
+  let textModelId = validated.textModelId;
+  let imageModelId = validated.imageModelId;
+
+  if (!textModelId) {
+    logger.info('textModelId not provided, fetching default text-to-text model');
+    const [defaultTextModel] = await db
+      .select()
+      .from(aiModels)
+      .where(
+        and(
+          eq(aiModels.type, 'text-to-text'),
+          eq(aiModels.isDefault, true),
+          eq(aiModels.isEnabled, true)
+        )
+      )
+      .limit(1);
+
+    if (defaultTextModel) {
+      textModelId = defaultTextModel.id;
+      logger.info({ modelId: textModelId }, 'Using default text-to-text model');
+    } else {
+      logger.warn('No default text-to-text model found');
+    }
+  }
+
+  if (!imageModelId) {
+    logger.info('imageModelId not provided, fetching default text-to-image model');
+    const [defaultImageModel] = await db
+      .select()
+      .from(aiModels)
+      .where(
+        and(
+          eq(aiModels.type, 'text-to-image'),
+          eq(aiModels.isDefault, true),
+          eq(aiModels.isEnabled, true)
+        )
+      )
+      .limit(1);
+
+    if (defaultImageModel) {
+      imageModelId = defaultImageModel.id;
+      logger.info({ modelId: imageModelId }, 'Using default text-to-image model');
+    } else {
+      logger.warn('No default text-to-image model found');
+    }
+  }
+
   // Fetch preset data if using preset source
   let presetData = null;
   if (validated.source === 'preset' && validated.presetId) {
@@ -463,12 +521,19 @@ export async function startProject(payload: unknown) {
         trendId: validated.trendId,
         scenarios,
         generatedAt: new Date().toISOString(),
+        textModelId,
+        imageModelId,
       },
     })
     .returning();
 
   logger.info(
-    { projectId: project.id, scenariosCount: scenarios.length },
+    {
+      projectId: project.id,
+      scenariosCount: scenarios.length,
+      textModelId,
+      imageModelId,
+    },
     'Project created successfully'
   );
 
@@ -541,6 +606,9 @@ export async function generateKeyframes(payload: unknown) {
   // Get project characters if available
   const characters = meta.characters || [];
 
+  // Get image model ID from project meta
+  const imageModelId = meta.imageModelId;
+
   const jobsCreated: string[] = [];
 
   // Process each scene
@@ -598,6 +666,7 @@ export async function generateKeyframes(payload: unknown) {
         frameType: 'first',
         prompt: firstFramePrompt,
         assetId: firstAsset.id,
+        modelId: imageModelId, // Add model ID to job
         status: 'pending',
       } as any)
       .returning();
@@ -610,6 +679,7 @@ export async function generateKeyframes(payload: unknown) {
         frameType: 'last',
         prompt: lastFramePrompt,
         assetId: lastAsset.id,
+        modelId: imageModelId, // Add model ID to job
         status: 'pending',
       } as any)
       .returning();
@@ -617,7 +687,7 @@ export async function generateKeyframes(payload: unknown) {
     jobsCreated.push(firstJob.id, lastJob.id);
 
     logger.info(
-      { sceneIndex, firstAssetId: firstAsset.id, lastAssetId: lastAsset.id },
+      { sceneIndex, firstAssetId: firstAsset.id, lastAssetId: lastAsset.id, imageModelId },
       'Created keyframe jobs for scene'
     );
   }
@@ -758,6 +828,15 @@ export async function startAnimation(payload: unknown) {
 
   for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
     const sceneAssets = assetsByScene.get(sceneIndex)!;
+    const scene = scenes[sceneIndex];
+    
+    // Build scene description including camera commands if available
+    let sceneDescription = scene.description || '';
+    
+    // Add camera commands if available
+    if (scene.cameraCommands && Array.isArray(scene.cameraCommands) && scene.cameraCommands.length > 0) {
+      sceneDescription += ` [${scene.cameraCommands.join(',')}]`;
+    }
 
     const [job] = await db
       .insert(animationJobQueue)
@@ -766,6 +845,7 @@ export async function startAnimation(payload: unknown) {
         sceneIndex,
         assetIdFirstFrame: sceneAssets.first.id,
         assetIdLastFrame: sceneAssets.last.id,
+        sceneDescription, // Add scene description to job
         status: 'pending',
       } as any)
       .returning();
@@ -778,6 +858,7 @@ export async function startAnimation(payload: unknown) {
         jobId: job.id,
         firstFrameAssetId: sceneAssets.first.id,
         lastFrameAssetId: sceneAssets.last.id,
+        sceneDescription,
       },
       'Created animation job for scene'
     );

@@ -86,9 +86,10 @@ export default function ProjectDetailPage() {
     },
     // Теперь useQuery не будет запускаться с undefined в queryKey
     enabled: !!projectId, // Явно указываем, что запрос можно делать только когда есть projectId
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Refetch every 5 seconds if project is processing
-      return data?.status === 'processing' ? 5000 : false;
+      const data = query.state.data;
+      return data && 'status' in data && data.status === 'processing' ? 5000 : false;
     },
   });
 

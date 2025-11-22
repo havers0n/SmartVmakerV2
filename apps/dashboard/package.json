@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "clean": "rm -rf .next"
+    "clean": "rimraf .next"
   },
   "dependencies": {
     "@aec/logger": "workspace:*",
@@ -99,6 +99,7 @@
     "eslint-config-next": "^14.0.0",
     "postcss": "^8.4.0",
     "prettier": "^3.1.0",
+    "rimraf": "^5.0.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
     "vitest": "^2.1.8"
