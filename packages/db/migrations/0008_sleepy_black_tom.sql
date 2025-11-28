@@ -1,0 +1,1 @@
+ALTER TABLE "generation_pipeline"."generation_projects" ADD COLUMN "stage" text DEFAULT 'init' NOT NULL;

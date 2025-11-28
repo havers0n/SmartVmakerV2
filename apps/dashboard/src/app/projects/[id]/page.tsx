@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 import {
     AlertCircle,
     Play,
@@ -154,10 +155,10 @@ function PipelineStepper({ status }: { status: PipelineStatus }) {
                             <div key={step.key} className="relative z-10 flex flex-1 flex-col items-center gap-2 bg-background px-2 md:bg-transparent">
                                 <div
                                     className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${isCompleted
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : isCurrent
-                                                ? 'border-primary bg-background text-primary'
-                                                : 'border-muted bg-muted text-muted-foreground'
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : isCurrent
+                                            ? 'border-primary bg-background text-primary'
+                                            : 'border-muted bg-muted text-muted-foreground'
                                         }`}
                                 >
                                     {isCompleted ? <CheckCircle2 className="h-6 w-6" /> : <Icon className="h-5 w-5" />}
@@ -251,7 +252,23 @@ function StageContent({ status }: { status: PipelineStatus }) {
                     </div>
 
                     <div className="flex gap-2">
-                        <Button onClick={() => console.log('Approve Script')}>Approve Script</Button>
+                        <Button
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch(`/api/projects/${status.projectId}/approve-script`, {
+                                        method: 'POST',
+                                    });
+                                    if (!res.ok) throw new Error('Failed to approve');
+                                    toast.success("Production Started");
+                                    window.location.reload(); // Will trigger refetch via polling
+                                } catch (e) {
+                                    console.error(e);
+                                    toast.error("Failed to approve script");
+                                }
+                            }}
+                        >
+                            Approve Script
+                        </Button>
                         <Button variant="outline" onClick={() => console.log('Edit Script')}>Edit</Button>
                     </div>
                 </CardContent>
