@@ -15,6 +15,17 @@ import crypto from 'crypto';
 // Load environment variables from root .env file
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// === ANTI-CRASH SHIELD ===
+process.on('uncaughtException', (err) => {
+  const msg = String(err);
+  if (msg.includes('ECONNRESET') || msg.includes('Connection terminated') || msg.includes('57P01')) {
+    console.warn('[System] DB Connection glitch intercepted. Staying alive.');
+    return;
+  }
+  console.error('[System] CRITICAL UNCAUGHT ERROR:', err);
+  process.exit(1);
+});
+
 // Ensure NODE_ENV is set
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
@@ -547,6 +558,8 @@ export async function processKeyframeJob() {
 /**
  * Main worker loop
  */
+
+
 async function main() {
   logger.info('Starting Keyframe Worker (Secure Mode)...');
   logger.info({
