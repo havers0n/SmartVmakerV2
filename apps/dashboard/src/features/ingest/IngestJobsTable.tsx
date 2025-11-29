@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
+// Updated interface to match the response from /api/hwar/harvests
 interface IngestJob {
   id: string;
   query: string;
@@ -24,12 +25,23 @@ interface IngestJob {
   videoDefinition: string | null;
   createdAt: string;
   errorMessage: string | null;
-}
-
-interface IngestJobsResponse {
-  success: boolean;
-  jobs: IngestJob[];
-  message: string;
+  // Fields that may be missing in the new API response
+  publishedAfter?: string | null;
+  duration?: number | null;
+  error?: string | null;
+  retryCount?: number;
+  updatedAt?: string;
+  regionCode?: string | null;
+  relevanceLanguage?: string | null;
+  searchType?: string | null;
+  videoCaption?: string | null;
+  videoEmbeddable?: boolean | null;
+  videoLicense?: string | null;
+  eventType?: string | null;
+  lastCheckedAt?: string | null;
+  stage?: string;
+  externalId?: string | null;
+  idempotencyKey?: string | null;
 }
 
 /**
@@ -43,15 +55,13 @@ export function IngestJobsTable() {
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/ingest/jobs');
-      const data: IngestJobsResponse = await response.json();
+      // Changed from '/api/ingest/jobs' to '/api/hwar/harvests'
+      const response = await fetch('/api/hwar/harvests');
+      const data: IngestJob[] = await response.json();
 
-      if (data.success) {
-        setJobs(data.jobs);
-        setError(null);
-      } else {
-        setError('Не удалось загрузить задачи');
-      }
+      // Set jobs directly since the new endpoint returns the array directly
+      setJobs(data);
+      setError(null);
     } catch (err) {
       console.error('Error fetching jobs:', err);
       setError('Ошибка загрузки задач');
@@ -99,7 +109,7 @@ export function IngestJobsTable() {
     });
   };
 
-  const formatDuration = (duration: string | null) => {
+  const formatDuration = (duration: string | null | undefined) => {
     if (!duration) return '—';
     const labels: Record<string, string> = {
       any: 'Любая',
@@ -110,7 +120,7 @@ export function IngestJobsTable() {
     return labels[duration] || duration;
   };
 
-  const formatOrder = (order: string | null) => {
+  const formatOrder = (order: string | null | undefined) => {
     if (!order) return '—';
     const labels: Record<string, string> = {
       date: 'По дате',
@@ -121,7 +131,7 @@ export function IngestJobsTable() {
     return labels[order] || order;
   };
 
-  const formatDefinition = (definition: string | null) => {
+  const formatDefinition = (definition: string | null | undefined) => {
     if (!definition) return '—';
     const labels: Record<string, string> = {
       any: 'Любое',
@@ -183,9 +193,9 @@ export function IngestJobsTable() {
                       <div className="max-w-[300px] truncate" title={job.query}>
                         {job.query}
                       </div>
-                      {job.errorMessage && (
-                        <div className="text-xs text-destructive mt-1 truncate" title={job.errorMessage}>
-                          {job.errorMessage}
+                      {(job.errorMessage || job.error) && (
+                        <div className="text-xs text-destructive mt-1 truncate" title={job.errorMessage || job.error || ''}>
+                          {job.errorMessage || job.error}
                         </div>
                       )}
                     </TableCell>
