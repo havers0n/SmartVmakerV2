@@ -273,6 +273,21 @@ importers:
       tsup: 8.5.0_typescript@5.9.3
       typescript: 5.9.3
 
+  packages/hwar-core:
+    specifiers:
+      '@scrimspec/db': workspace:*
+      '@scrimspec/shared-types': workspace:*
+      '@types/node': ^24.10.1
+      tsup: ^8.0.0
+      typescript: ^5.0.0
+    dependencies:
+      '@scrimspec/db': link:../db
+      '@scrimspec/shared-types': link:../shared-types
+    devDependencies:
+      '@types/node': 24.10.1
+      tsup: 8.5.0_typescript@5.9.3
+      typescript: 5.9.3
+
   packages/logger:
     specifiers:
       '@types/node': ^20.11.24
@@ -323,6 +338,7 @@ importers:
       '@scrimspec/core-domain': workspace:*
       '@scrimspec/db': workspace:*
       '@scrimspec/halu-client': workspace:*
+      '@scrimspec/hwar-core': workspace:*
       '@types/node': ^20.10.0
       dotenv: ^16.3.1
       p-retry: ^6.2.1
@@ -336,6 +352,7 @@ importers:
       '@scrimspec/core-domain': link:../core-domain
       '@scrimspec/db': link:../db
       '@scrimspec/halu-client': link:../halu-client
+      '@scrimspec/hwar-core': link:../hwar-core
       dotenv: 16.6.1
       p-retry: 6.2.1
     devDependencies:
@@ -4079,6 +4096,12 @@ packages:
     resolution: {integrity: sha512-FE5u0ezmi6y9OZEzlJfg37mqqf6ZDSF2V/NLjUyGrR9uTZ7Sb9F7bLNZ03S4XVUNRWGA7Ck4c1kK+YnuWjl+DA==}
     dependencies:
       undici-types: 6.21.0
+    dev: true
+
+  /@types/node/24.10.1:
+    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
+    dependencies:
+      undici-types: 7.16.0
 
   /@types/pg/8.15.6:
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
@@ -4126,7 +4149,7 @@ packages:
   /@types/ws/8.18.1:
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
     dependencies:
-      '@types/node': 20.19.24
+      '@types/node': 24.10.1
     dev: false
 
   /@typescript-eslint/eslint-plugin/6.21.0_6bjyp4njf2pou6veal5dpp4r2u:
@@ -9358,6 +9381,10 @@ packages:
 
   /undici-types/6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+    dev: true
+
+  /undici-types/7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
   /unrs-resolver/1.11.1:
     resolution: {integrity: sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg==}

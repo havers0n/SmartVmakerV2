@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
-import { getDrizzleClient } from '@scrimspec/db';
+import { db } from '@/shared/lib/db';
 import {
     generationProjects,
     analysisJobQueue,
@@ -8,10 +8,8 @@ import {
     animationJobQueue,
     youtubeVideos,
     analysisResults
-} from '@scrimspec/db/schema';
+} from '@/shared/lib/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
-
-const db = getDrizzleClient();
 
 interface PipelineStatus {
     projectId: string;
@@ -50,9 +48,11 @@ export async function GET(
         const projectId = params.id;
 
         // 1. Fetch Project
-        const project = await db.query.generationProjects.findFirst({
-            where: eq(generationProjects.id, projectId),
-        });
+        const [project] = await db
+            .select()
+            .from(generationProjects)
+            .where(eq(generationProjects.id, projectId))
+            .limit(1);
 
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -66,25 +66,31 @@ export async function GET(
 
         if (project.youtubeVideoId) {
             // Find the video record first to get the UUID
-            const video = await db.query.youtubeVideos.findFirst({
-                where: eq(youtubeVideos.youtubeId, project.youtubeVideoId),
-            });
+            const [video] = await db
+                .select()
+                .from(youtubeVideos)
+                .where(eq(youtubeVideos.youtubeId, project.youtubeVideoId))
+                .limit(1);
 
             if (video) {
                 // Check analysis queue
-                const analysisJob = await db.query.analysisJobQueue.findFirst({
-                    where: eq(analysisJobQueue.videoId, video.id),
-                    orderBy: [desc(analysisJobQueue.createdAt)],
-                });
+                const [analysisJob] = await db
+                    .select()
+                    .from(analysisJobQueue)
+                    .where(eq(analysisJobQueue.videoId, video.id))
+                    .orderBy(desc(analysisJobQueue.createdAt))
+                    .limit(1);
 
                 if (analysisJob) {
                     if (analysisJob.status === 'completed') {
                         analysisStatus.status = 'completed';
                         // Try to fetch actual results for details
-                        const result = await db.query.analysisResults.findFirst({
-                            where: eq(analysisResults.videoId, video.id),
-                            orderBy: [desc(analysisResults.createdAt)]
-                        });
+                        const [result] = await db
+                            .select()
+                            .from(analysisResults)
+                            .where(eq(analysisResults.videoId, video.id))
+                            .orderBy(desc(analysisResults.createdAt))
+                            .limit(1);
 
                         if (result && result.aesBreakdown) {
                             // @ts-ignore

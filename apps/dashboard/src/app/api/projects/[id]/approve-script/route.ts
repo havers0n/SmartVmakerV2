@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getDrizzleClient } from '@scrimspec/db';
-import { generationProjects, beats, assets, keyframeJobQueue } from '@scrimspec/db';
+import { db } from '@/shared/lib/db';
+import { generationProjects, beats, assets, keyframeJobQueue } from '@/shared/lib/schema';
 import { eq, asc } from 'drizzle-orm';
-
-const db = getDrizzleClient();
 
 export async function POST(
     _request: Request,
@@ -13,9 +11,11 @@ export async function POST(
         const projectId = params.id;
 
         // 1. Fetch Project to get templateId
-        const project = await db.query.generationProjects.findFirst({
-            where: eq(generationProjects.id, projectId),
-        });
+        const [project] = await db
+            .select()
+            .from(generationProjects)
+            .where(eq(generationProjects.id, projectId))
+            .limit(1);
 
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -26,10 +26,11 @@ export async function POST(
         }
 
         // 2. Fetch Beats
-        const projectBeats = await db.query.beats.findMany({
-            where: eq(beats.templateId, project.templateId),
-            orderBy: [asc(beats.order)],
-        });
+        const projectBeats = await db
+            .select()
+            .from(beats)
+            .where(eq(beats.templateId, project.templateId))
+            .orderBy(asc(beats.order));
 
         if (!projectBeats || projectBeats.length === 0) {
             return NextResponse.json({ error: 'No beats found for this project template' }, { status: 400 });

@@ -1,0 +1,28 @@
+{
+    "name": "@scrimspec/hwar-core",
+    "version": "0.0.1",
+    "description": "Core domain logic for HWAR (Haverson Web AR)",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsup src/index.ts --format cjs,esm --dts",
+        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "type-check": "tsc --noEmit",
+        "lint": "echo 'No linting configured' && exit 0"
+    },
+    "dependencies": {
+        "@scrimspec/db": "workspace:*",
+        "@scrimspec/shared-types": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^24.10.1",
+        "tsup": "^8.0.0",
+        "typescript": "^5.0.0"
+    }
+}

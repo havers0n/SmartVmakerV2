@@ -21,6 +21,7 @@
     "@aec/logger": "workspace:*",
     "@aec/storage-client": "workspace:*",
     "@scrimspec/core-domain": "workspace:*",
+    "@scrimspec/hwar-core": "workspace:*",
     "@scrimspec/db": "workspace:*",
     "@scrimspec/halu-client": "workspace:*",
     "dotenv": "^16.3.1",

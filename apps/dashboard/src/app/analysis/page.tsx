@@ -22,6 +22,7 @@ import {
 import { Video as VideoIcon, ExternalLink } from 'lucide-react';
 import { callAction } from '@/shared/api/actions';
 import { useToast } from '@/shared/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface Video {
   id: string;
@@ -63,6 +64,7 @@ export default function AnalysisPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState('');
   const { toast } = useToast();
+  const router = useRouter();
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -307,12 +309,32 @@ export default function AnalysisPage() {
                   {videos.map(video => (
                     <TableRow
                       key={video.id}
-                      className={selectedVideos.has(video.id) ? "bg-muted" : ""}
+                      className={`cursor-pointer hover:bg-muted/50 ${selectedVideos.has(video.id) ? "bg-muted" : ""}`}
+                      onClick={(e) => {
+                        // Prevent navigation if clicking on checkbox or link
+                        if (
+                          (e.target as HTMLElement).closest('[role="checkbox"]') ||
+                          (e.target as HTMLElement).closest('a')
+                        ) {
+                          return;
+                        }
+
+                        if (video.isAnalyzed || video.analysisUrl) {
+                          router.push(`/analysis/${video.id}`);
+                        } else {
+                          toast({
+                            title: 'Not analyzed yet',
+                            description: 'Please run analysis on this video first.',
+                            variant: 'default',
+                          });
+                        }
+                      }}
                     >
                       <TableCell>
                         <Checkbox
                           checked={selectedVideos.has(video.id)}
                           onCheckedChange={() => handleVideoToggle(video.id)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </TableCell>
                       <TableCell>
@@ -334,6 +356,7 @@ export default function AnalysisPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {video.title}
                           <ExternalLink className="h-3 w-3" />
