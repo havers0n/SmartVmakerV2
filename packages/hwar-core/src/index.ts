@@ -179,4 +179,9 @@ export type { AiRouter } from './ai/router';
 export type {
     AnalyzeVideoInput,
     AnalyzeVideoOutput,
+    AnimationJobStatus,
+    AnimationKeyframe,
+    GenerateAnimationInput,
+    GenerateAnimationOutput,
 } from './ai/types';
+export * from './types/generation';

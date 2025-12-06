@@ -32,7 +32,7 @@ export interface GenerateKeyframeOutput {
     externalId?: string;
 }
 
-export type AnimationJobStatus = 'queued' | 'processing' | 'success' | 'failed';
+export type AnimationJobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
 export interface AnimationKeyframe {
     assetId?: string;

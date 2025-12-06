@@ -44,7 +44,7 @@ export async function syncMiniMaxVideoJob(jobId: string) {
     await db
       .update(generationAnimationJobs)
       .set({
-        status: 'processing',
+        status: 'running',
         updatedAt: new Date().toISOString(),
       })
       .where(eq(generationAnimationJobs.id, job.id));
@@ -56,6 +56,8 @@ export async function syncMiniMaxVideoJob(jobId: string) {
       .update(generationAnimationJobs)
       .set({
         status: 'failed',
+        errorCode: res.base_resp?.status_code ? String(res.base_resp.status_code) : 'fail',
+        errorMessage: res.base_resp?.status_msg ?? 'MiniMax reported failure',
         updatedAt: new Date().toISOString(),
       })
       .where(eq(generationAnimationJobs.id, job.id));
@@ -68,7 +70,7 @@ export async function syncMiniMaxVideoJob(jobId: string) {
     await db
       .update(generationAnimationJobs)
       .set({
-        status: 'success',
+        status: 'succeeded',
         minimaxFileId: res.file_id!,
         videoUrl,
         updatedAt: new Date().toISOString(),

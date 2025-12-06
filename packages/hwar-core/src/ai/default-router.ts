@@ -380,7 +380,7 @@ export class DefaultAiRouter implements AiRouter {
             throw new Error('DefaultAiRouter is not configured with db; cannot persist animation job');
         }
 
-        const status: AnimationJobStatus = 'queued';
+        const status: AnimationJobStatus = 'pending';
 
         const animationJobsTable = (schema as any).generationAnimationJobs;
 

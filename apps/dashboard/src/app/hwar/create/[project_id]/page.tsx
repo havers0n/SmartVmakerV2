@@ -13,6 +13,8 @@ import { generateKeyframes } from "@/shared/api/actions";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import Image from "next/image";
 import { PROJECT_TABS, type ProjectTabId } from "@/shared/const/projectTabs";
+import { MissionControlTab } from "./MissionControlTab";
+import { useAnimationOverview } from "@/hooks/useAnimationOverview";
 
 interface Scene {
   phase: string;
@@ -54,15 +56,6 @@ export interface GenerationAsset {
   };
   created_at: string;
   status: string;
-}
-
-interface AnimationJobDto {
-  id: string;
-  projectId: string;
-  sceneIndex: number;
-  status: 'queued' | 'processing' | 'success' | 'failed';
-  videoUrl: string | null;
-  errorMessage: string | null;
 }
 
 function groupAssetsByScene(assets: GenerationAsset[]) {
@@ -112,6 +105,9 @@ export default function ProjectDetailPage() {
   const activeTab: ProjectTabId = isValidTab ? tabParam! : "script";
 
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<number | null>(null);
+  const [lastClipRequestAt, setLastClipRequestAt] = useState<Record<number, number>>({});
+  const [pendingScene, setPendingScene] = useState<number | null>(null);
+  const COOLDOWN_MS = 30_000;
 
   // --- ВОТ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
   // Если у нас еще нет projectId, мы не можем ничего делать дальше.
@@ -164,24 +160,7 @@ export default function ProjectDetailPage() {
     enabled: !!project?.meta?.keyframeGenerationStartedAt,
   });
 
-  const { data: animationJobs } = useQuery({
-    queryKey: ["animation-jobs", projectId],
-    queryFn: async () => {
-      const res = await fetch(`/api/generation/projects/${projectId}/animation`);
-      if (!res.ok) throw new Error("Failed to load animation jobs");
-      const json = await res.json();
-      return json.jobs as AnimationJobDto[];
-    },
-    enabled: !!projectId,
-    refetchInterval: (query) => {
-      const jobs = query.state.data as AnimationJobDto[] | undefined;
-      if (!Array.isArray(jobs)) return 5000;
-      const hasPending = jobs.some(
-        (job) => job.status === "queued" || job.status === "processing",
-      );
-      return hasPending ? 5000 : false;
-    },
-  });
+  const animationOverview = useAnimationOverview(projectId);
 
   // Auto-select first scenario on load
   useEffect(() => {
@@ -259,11 +238,61 @@ export default function ProjectDetailPage() {
 
   const handleGenerateAnimation = async (sceneIndex: number) => {
     if (!projectId) return;
-    await fetch(`/api/generation/projects/${projectId}/animation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sceneIndex }),
-    });
+
+    const now = Date.now();
+    const last = lastClipRequestAt[sceneIndex] ?? 0;
+    const diff = now - last;
+    const isOnCooldown = diff < COOLDOWN_MS;
+    const remainingSeconds = Math.max(0, Math.ceil((COOLDOWN_MS - diff) / 1000));
+    if (isOnCooldown) {
+      toast({
+        title: "Please wait",
+        description: `Wait ${remainingSeconds}s before starting a new clip for this scene.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLastClipRequestAt((prev) => ({ ...prev, [sceneIndex]: now }));
+    setPendingScene(sceneIndex);
+
+    try {
+      const res = await fetch(`/api/generation/projects/${projectId}/animation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sceneIndex }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        toast({
+          title: "Rate limited",
+          description:
+            json?.message ||
+            "You can start a new clip for this scene only once every 30 seconds.",
+          variant: "destructive",
+        });
+        setLastClipRequestAt((prev) => ({ ...prev, [sceneIndex]: Date.now() }));
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(json?.error || `Failed to start animation (${res.status})`);
+      }
+
+      toast({
+        title: "Animation started",
+        description: "MiniMax job created. Track progress in Mission Control.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to start animation",
+        variant: "destructive",
+      });
+    } finally {
+      setPendingScene(null);
+    }
   };
 
   if (isLoading) {
@@ -340,27 +369,35 @@ export default function ProjectDetailPage() {
 
         {activeTab === "script" && (
           <>
-            {/* Scenario Selection */}
-            {!hasGeneratedKeyframes && (
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold mb-4">Select a Scenario</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {scenarios.map((scenario, index) => (
+            {hasGeneratedKeyframes && (
+              <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Scenario locked because keyframes already generated
+              </div>
+            )}
+
+            <div className="mb-8">
+              <h2 className="text-xl font-semibold mb-4">Select a Scenario</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {scenarios.map((scenario, index) => {
+                  const isSelected = selectedScenarioIndex === index;
+                  const isLocked = hasGeneratedKeyframes;
+                  return (
                     <Card
                       key={index}
                       className={cn(
-                        "p-4 cursor-pointer transition-all",
-                        selectedScenarioIndex === index
-                          ? "ring-2 ring-primary bg-primary/5"
-                          : "hover:shadow-md"
+                        "p-4 transition-all",
+                        isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:shadow-md",
+                        isLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
                       )}
-                      onClick={() => setSelectedScenarioIndex(index)}
+                      onClick={!isLocked ? () => setSelectedScenarioIndex(index) : undefined}
                     >
                       <div className="flex items-start gap-2 mb-3">
-                        <Sparkles className={cn(
-                          "w-5 h-5 mt-0.5",
-                          selectedScenarioIndex === index ? "text-primary" : "text-muted-foreground"
-                        )} />
+                        <Sparkles
+                          className={cn(
+                            "w-5 h-5 mt-0.5",
+                            isSelected ? "text-primary" : "text-muted-foreground"
+                          )}
+                        />
                         <h3 className="font-medium flex-1">{scenario.title}</h3>
                       </div>
                       <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
@@ -384,32 +421,90 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                     </Card>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
 
-                {selectedScenarioIndex !== null && (
-                  <div className="mt-6 flex justify-end">
-                    <Button
-                      size="lg"
-                      onClick={() => generateKeyframesMutation.mutate()}
-                      disabled={generateKeyframesMutation.isPending}
-                    >
-                      {generateKeyframesMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Creating Jobs...
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="w-4 h-4 mr-2" />
-                          Generate Keyframes
-                        </>
-                      )}
-                    </Button>
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  {hasGeneratedKeyframes
+                    ? "Scenario selection is locked because keyframes already generated."
+                    : "Select a scenario to generate keyframes."}
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => generateKeyframesMutation.mutate()}
+                  disabled={
+                    hasGeneratedKeyframes ||
+                    generateKeyframesMutation.isPending ||
+                    selectedScenarioIndex === null
+                  }
+                >
+                  {hasGeneratedKeyframes ? (
+                    <>
+                      <ImageIcon className="w-4 h-4 mr-2" />
+                      Keyframes already generated
+                    </>
+                  ) : generateKeyframesMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating Jobs...
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-4 h-4 mr-2" />
+                      Generate Keyframes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold">Scenario Preview</h3>
+              <div className="rounded-lg border bg-muted/30 p-4 max-h-96 overflow-y-auto">
+                {selectedScenario ? (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium">{selectedScenario.title}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {selectedScenario.description}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {selectedScenario.emotionalCurve.map((emotion, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {emotion}
+                        </Badge>
+                      ))}
+                    </div>
+                    {selectedScenario.scenes?.length ? (
+                      <div className="space-y-2">
+                        {selectedScenario.scenes.map((scene, idx) => (
+                          <div key={idx} className="rounded-md border p-3 bg-background">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium">
+                                Scene {idx + 1}: {scene.phase}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {scene.duration}s
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{scene.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No detailed beats available for this scenario.
+                      </p>
+                    )}
                   </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No scenario selected.</p>
                 )}
               </div>
-            )}
+            </div>
           </>
         )}
 
@@ -453,13 +548,29 @@ export default function ProjectDetailPage() {
                       <Card key={sceneIndex} className="p-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <p className="font-medium">Scene {Number(sceneIndex) + 1}</p>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleGenerateAnimation(Number(sceneIndex))}
-                          >
-                            Generate Clip (MiniMax)
-                          </Button>
+                          {(() => {
+                            const last = lastClipRequestAt[Number(sceneIndex)] ?? 0;
+                            const remainingSeconds = Math.max(
+                              0,
+                              Math.ceil((COOLDOWN_MS - (Date.now() - last)) / 1000),
+                            );
+                            const disabledByCooldown = remainingSeconds > 0;
+                            const isPending = pendingScene === Number(sceneIndex);
+                            return (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleGenerateAnimation(Number(sceneIndex))}
+                                disabled={isPending || disabledByCooldown}
+                              >
+                                {isPending
+                                  ? "Starting..."
+                                  : disabledByCooldown
+                                    ? `Wait ${remainingSeconds}s`
+                                    : "Generate Clip (MiniMax)"}
+                              </Button>
+                            );
+                          })()}
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -509,29 +620,25 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {activeTab === "mission" && (
-          <Card className="mt-8 p-6">
-            <div className="text-sm text-muted-foreground">Mission Control coming soon</div>
-          </Card>
-        )}
+        {activeTab === "mission" && <MissionControlTab projectId={projectId} />}
 
         {activeTab === "final" && (
           <div className="space-y-4 mt-8">
-            {!animationJobs?.length && (
+            {!animationOverview.overview?.jobs?.length && (
               <p className="text-sm text-muted-foreground">
                 No animation jobs yet. Generate a clip from the Keyframes tab.
               </p>
             )}
 
-            {animationJobs?.map((job) => (
+            {animationOverview.overview?.jobs?.map((job) => (
               <Card key={job.id} className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium">
-                    Scene {job.sceneIndex} • {job.status}
+                    Scene {job.sceneIndex !== null ? job.sceneIndex + 1 : "Global"} • {job.status}
                   </div>
                 </div>
 
-                {job.status === 'success' && job.videoUrl && (
+                {job.status === 'succeeded' && job.videoUrl && (
                   <video
                     src={job.videoUrl}
                     controls
