@@ -1,83 +1,99 @@
 import React from 'react';
 import { StartIngestForm } from '@/features/ingest/StartIngestForm';
 import { IngestJobsTable } from '@/features/ingest/IngestJobsTable';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { Activity, Database, Search } from 'lucide-react';
 
-/**
- * Страница Ingest - запуск поиска и ингеста YouTube видео
- */
 export default function IngestPage() {
   return (
-    <div className="container mx-auto py-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Заголовок страницы */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Ingest</h1>
-          <p className="text-muted-foreground mt-2">
-            Поиск и загрузка видео с YouTube для анализа и генерации контента
-          </p>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight text-white">Content Discovery</h1>
+        <p className="text-muted-foreground">
+          Harvest, enrich, and prepare video assets for the production pipeline.
+        </p>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-primary/5 border-primary/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-primary">Active Harvesters</CardTitle>
+            <Activity className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">3 Workers</div>
+            <p className="text-xs text-muted-foreground">Polling queues every 1s</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ingested Today</CardTitle>
+            <Database className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">142</div>
+            <p className="text-xs text-muted-foreground">+20.1% from yesterday</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Analysis</CardTitle>
+            <Search className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">89</div>
+            <p className="text-xs text-muted-foreground">Queue depth normal</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Left Column: Input */}
+        <div className="lg:col-span-1 space-y-6">
+           <Card className="border-primary/20 shadow-lg shadow-primary/5">
+             <CardHeader>
+               <CardTitle>New Harvest</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <StartIngestForm />
+             </CardContent>
+           </Card>
+
+           <Card className="bg-muted/30">
+            <CardContent className="p-6">
+               <h3 className="font-semibold mb-2 text-sm text-foreground">How it works</h3>
+               <ul className="space-y-2 text-xs text-muted-foreground">
+                 <li className="flex gap-2">
+                   <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">1</span>
+                   Search triggers the Ingest Worker
+                 </li>
+                 <li className="flex gap-2">
+                   <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">2</span>
+                   Enrichment Worker fetches metadata (views, likes)
+                 </li>
+                 <li className="flex gap-2">
+                   <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">3</span>
+                   Video becomes available for Deep Analysis
+                 </li>
+               </ul>
+            </CardContent>
+           </Card>
         </div>
 
-        {/* Основной контент */}
-        <div className="grid gap-8">
-          {/* Форма запуска поиска */}
-          <div className="flex justify-center">
-            <StartIngestForm />
-          </div>
-
-          {/* Таблица задач */}
-          <IngestJobsTable />
-
-          {/* Информационная секция */}
-          <div className="bg-muted/50 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Как это работает</h2>
-            <div className="grid md:grid-cols-3 gap-4 text-sm">
-              <div className="space-y-2">
-                <h3 className="font-medium text-primary">1. Поиск</h3>
-                <p className="text-muted-foreground">
-                  Введите поисковый запрос, и система найдет релевантные видео на YouTube
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-medium text-primary">2. Загрузка</h3>
-                <p className="text-muted-foreground">
-                  Видео будут загружены и добавлены в очередь для дальнейшей обработки
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-medium text-primary">3. Анализ</h3>
-                <p className="text-muted-foreground">
-                  После загрузки видео пройдут анализ для извлечения метаданных и контента
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Статус системы */}
-          <div className="bg-card border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Статус системы</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Очередь ингеста</span>
-                  <span className="text-sm text-muted-foreground">Активна</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Обработка видео</span>
-                  <span className="text-sm text-muted-foreground">Работает</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Последний поиск</span>
-                  <span className="text-sm text-muted-foreground">Недавно</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Всего видео</span>
-                  <span className="text-sm text-muted-foreground">Загружается...</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Right Column: Queue Table */}
+        <div className="lg:col-span-2">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>Ingest Queue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <IngestJobsTable />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
