@@ -5,24 +5,45 @@ import { createLogger } from '@aec/logger';
 import { eq, and } from 'drizzle-orm';
 import { createTextClient, generateScenariosWithTools } from '@scrimspec/halu-client';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import { getTrends, type Trend } from '@/shared/trends';
 
 const logger = createLogger({ name: 'api-generation' });
 
 /**
  * Validation schema for generation.startProject action
  */
-export const startProjectSchema = z.object({
+const baseProjectSchema = {
   title: z.string().optional(),
   ratio: z.enum(['16:9', '9:16', '4:3', '3:4']).default('16:9'),
   lang: z.string().default('none'),
-  source: z.enum(['prompt', 'preset', 'trends']),
-  prompt: z.string().optional(),
-  presetId: z.string().uuid().optional(),
-  trendId: z.string().optional(),
   ownerId: z.string().uuid().optional(),
   textModelId: z.string().optional(),
   imageModelId: z.string().optional(),
-});
+};
+
+export const startProjectSchema = z.discriminatedUnion('source', [
+  z.object({
+    source: z.literal('prompt'),
+    prompt: z.string().optional(),
+    presetId: z.string().uuid().optional(),
+    trendId: z.string().optional(),
+    ...baseProjectSchema,
+  }),
+  z.object({
+    source: z.literal('preset'),
+    presetId: z.string().uuid(),
+    prompt: z.string().optional(),
+    trendId: z.string().optional(),
+    ...baseProjectSchema,
+  }),
+  z.object({
+    source: z.literal('trends'),
+    trendId: z.string().min(1, "trendId is required when source='trends'"),
+    prompt: z.string().optional(),
+    presetId: z.string().uuid().optional(),
+    ...baseProjectSchema,
+  }),
+]);
 
 export type StartProjectPayload = z.infer<typeof startProjectSchema>;
 
@@ -483,16 +504,24 @@ export async function startProject(payload: unknown) {
     logger.info({ templateId: template.id }, 'Loaded preset template');
   }
 
-  // Fetch trend data if using trends source
-  let trendData = null;
-  if (validated.source === 'trends' && validated.trendId) {
-    // Fetch from trends API
-    const trendsResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analytics/trends`);
-    if (trendsResponse.ok) {
-      const trends = await trendsResponse.json();
-      trendData = trends.find((t: any) => t.id === validated.trendId);
-      logger.info({ trendId: validated.trendId }, 'Loaded trend data');
+  // Resolve trend data locally (no self-fetch)
+  let trendData: Trend | null = null;
+  if (validated.source === 'trends') {
+    const trends = getTrends();
+    const trend = trends.find((t) => t.id === validated.trendId) ?? null;
+
+    if (!trend) {
+      throw new z.ZodError([
+        {
+          code: 'custom',
+          path: ['trendId'],
+          message: `Trend not found: ${validated.trendId}`,
+        },
+      ]);
     }
+
+    trendData = trend;
+    logger.info({ trendId: validated.trendId }, 'Loaded trend data');
   }
 
   // Generate scenarios using MiniMax-M2

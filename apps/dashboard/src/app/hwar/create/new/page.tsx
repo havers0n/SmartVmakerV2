@@ -53,7 +53,8 @@ export default function NewProject() {
     queryFn: async () => {
       const res = await fetch("/api/analytics/trends");
       if (!res.ok) throw new Error("Failed to load trends");
-      return res.json();
+      const { trends } = await res.json();
+      return trends;
     },
   });
 
