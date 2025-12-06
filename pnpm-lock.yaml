@@ -275,14 +275,20 @@ importers:
 
   packages/hwar-core:
     specifiers:
+      '@aec/logger': workspace:*
+      '@aec/storage-client': workspace:*
       '@scrimspec/db': workspace:*
       '@scrimspec/shared-types': workspace:*
       '@types/node': ^24.10.1
+      p-retry: ^6.2.1
       tsup: ^8.0.0
       typescript: ^5.0.0
     dependencies:
+      '@aec/logger': link:../logger
+      '@aec/storage-client': link:../storage-client
       '@scrimspec/db': link:../db
       '@scrimspec/shared-types': link:../shared-types
+      p-retry: 6.2.1
     devDependencies:
       '@types/node': 24.10.1
       tsup: 8.5.0_typescript@5.9.3

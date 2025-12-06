@@ -8,24 +8,23 @@ import { Plus, FolderOpen } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { StatusBadge } from "@/shared/components/ui/status-badge";
 import { listProjects } from "@/shared/api/actions";
+import { ProjectPreview } from "@scrimspec/shared-types";
+import { type ProjectTabId } from "@/shared/const/projectTabs";
 
-// Project type based on the actual data structure returned by the API
-type Project = {
-  id: string;
-  title: string;
-  createdAt: string;
-  status: string;
-};
 
 export default function CreateIndex() {
   const router = useRouter();
 
-  const { data: projects = [], isLoading } = useQuery<Project[], Error>({
+  const handleCardClick = (id: string, tab?: ProjectTabId) => {
+    router.push(tab ? `/hwar/create/${id}?tab=${tab}` : `/hwar/create/${id}`);
+  };
+
+  const { data: projects = [], isLoading } = useQuery<ProjectPreview[], Error>({
     queryKey: ["projects"],
     queryFn: async () => {
       try {
         const data = await listProjects();
-        return data as Project[];
+        return data;
       } catch (error) {
         console.error("Failed to fetch projects:", error);
         return [];
@@ -72,7 +71,7 @@ export default function CreateIndex() {
               <Card
                 key={project.id}
                 className="p-6 hover-elevate cursor-pointer"
-                onClick={() => router.push(`/hwar/create/${project.id}`)}
+                onClick={() => handleCardClick(project.id)}
                 data-testid={`card-project-${project.id}`}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -82,12 +81,27 @@ export default function CreateIndex() {
                   </div>
                   <StatusBadge status={project.status} />
                 </div>
-                <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>N/A</span>
-                  <span>•</span>
-                  <span className="capitalize">N/A</span>
-                  <span>•</span>
-                  <span className="capitalize">N/A</span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <button
+                    className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
+                    onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "script"); }}
+                  >
+                    {project.scenesCount} scenes
+                  </button>
+                  <button
+                    className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
+                    onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "keyframes"); }}
+                  >
+                    {project.keyframesCount} frames
+                  </button>
+                  {project.hasFinalVideo && (
+                    <button
+                      className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
+                      onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "final"); }}
+                    >
+                      Final video
+                    </button>
+                  )}
                 </div>
               </Card>
             ))}

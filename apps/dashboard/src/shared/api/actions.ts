@@ -1,3 +1,5 @@
+import { ProjectPreview } from "@scrimspec/shared-types";
+
 /**
  * API клиент для вызова Actions
  * Универсальная функция для взаимодействия с Action Runner
@@ -184,8 +186,8 @@ export async function startAnimation(payload: unknown) {
 // Projects Actions
 // =============================================================================
 
-export async function listProjects() {
-  return callAction('projects.list', {});
+export async function listProjects(): Promise<ProjectPreview[]> {
+  return callAction<ProjectPreview[]>('projects.list', {});
 }
 
 // =============================================================================

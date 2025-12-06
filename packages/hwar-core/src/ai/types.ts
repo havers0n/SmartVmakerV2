@@ -20,6 +20,7 @@ export interface AnalyzeVideoOutput {
 
 export interface GenerateKeyframeInput {
     prompt: string;
+    negativePrompt?: string;
     aspectRatio: string;
     modelId?: string;
     projectId: string; // For logging/context
@@ -31,16 +32,30 @@ export interface GenerateKeyframeOutput {
     externalId?: string;
 }
 
+export type AnimationJobStatus = 'queued' | 'processing' | 'success' | 'failed';
+
+export interface AnimationKeyframe {
+    assetId?: string;
+    publicUrl: string;
+    frameType?: 'first' | 'last' | 'middle';
+    frameIndex?: number;
+}
+
 export interface GenerateAnimationInput {
-    prompt: string;
-    firstFrameAssetId: string;
-    lastFrameAssetId: string;
-    modelId?: string;
     projectId: string;
+    sceneIndex: number;
+    keyframes: AnimationKeyframe[];
+    prompt?: string;
+    modelId?: string;
+    durationSec?: number;
+    resolution?: '512P' | '720P' | '768P' | '1080P';
 }
 
 export interface GenerateAnimationOutput {
-    videoUrl?: string; // If provider returns URL
-    videoBuffer?: Buffer; // If provider returns bytes
-    externalId?: string;
+    provider: string;
+    model: string;
+    externalTaskId: string;
+    status: AnimationJobStatus;
+    videoUrl?: string;
+    minimaxFileId?: string;
 }

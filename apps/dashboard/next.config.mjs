@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+
 // Получаем путь к текущей директории в ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,14 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@scrimspec/shared-types', '@scrimspec/db', '@project/api-client', '@project/shared-types'],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "pub-fd57dec48e2f4f94841a42456bfe0eec.r2.dev",
+      },
+    ],
+  },
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,

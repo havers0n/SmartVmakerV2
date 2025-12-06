@@ -587,6 +587,30 @@ export const generateKeyframesSchema = z.object({
 
 export type GenerateKeyframesPayload = z.infer<typeof generateKeyframesSchema>;
 
+const KEYFRAME_IMAGE_STYLE = 'Ultra realistic, cinematic still frame, 8k, shallow depth of field, natural lighting.';
+const KEYFRAME_NEGATIVE_TEXT = 'no text, no captions, no subtitles, no watermarks, no titles, no interface elements, no logos, no numbers on the image, no graphic overlays';
+
+function buildVisualPrompt(raw?: string): string {
+  if (!raw) return '';
+
+  let cleaned = raw
+    // Убираем служебные лейблы сцен/кадров
+    .replace(/^scene\s*\d+(?:\/\d+)?\s*[:\-]\s*/i, '')
+    .replace(/\bframe\s*\d+(?:\/\d+)?\s*[:\-]?\s*/gi, '')
+    .replace(/\b(opening|closing|final)\s*frame\s*[:\-]?\s*/gi, '')
+    .replace(/\bphase\s*[:\-]\s*\w+\b/gi, '')
+    // Убираем явные указания текста на экране
+    .replace(/text on screen:[^.]+/gi, '')
+    .trim();
+
+  // Если после чистки всё убрали — возвращаем исходное, чтобы не потерять смысл
+  if (!cleaned) {
+    cleaned = raw.trim();
+  }
+
+  return cleaned;
+}
+
 /**
  * Handler for generation.generateKeyframes action
  * Creates keyframe generation jobs for first and last frame of each scene
@@ -644,12 +668,22 @@ export async function generateKeyframes(payload: unknown) {
   for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
     const scene = scenes[sceneIndex];
 
-    // Create prompts for first and last keyframe
-    const basePrompt = `A photorealistic shot from a ${aspectRatio} video. Scene ${sceneIndex + 1} of ${scenes.length}. Phase: ${scene.phase}. ${scene.description}`;
+    const sceneDescription = scene.description || '';
+    const visualPrompt = buildVisualPrompt(scene.visualPrompt || sceneDescription);
 
-    const firstFramePrompt = `${basePrompt}. This is the OPENING frame of the scene, showing the initial state.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+    if (!visualPrompt) {
+      throw new Error(`Scene ${sceneIndex} has empty visual description`);
+    }
 
-    const lastFramePrompt = `${basePrompt}. This is the CLOSING frame of the scene, showing the final state or result.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+    const charactersLine =
+      characters.length > 0 ? ` featuring ${characters.map((c: any) => c.name).join(', ')}` : '';
+
+    const baseVisual = `${visualPrompt}${charactersLine}`.trim();
+    const positivePrompt = `${baseVisual}. ${KEYFRAME_IMAGE_STYLE}`;
+    const fullPrompt = `${positivePrompt} Avoid any written text or titles on the image. Negative prompt: ${KEYFRAME_NEGATIVE_TEXT}.`;
+
+    const firstFramePrompt = `${fullPrompt} Opening moment, initial state.`;
+    const lastFramePrompt = `${fullPrompt} Closing moment, final state or result.`;
 
     // Create asset records for both keyframes
     const [firstAsset] = await db
@@ -665,6 +699,7 @@ export async function generateKeyframes(payload: unknown) {
           phase: scene.phase,
           duration: scene.duration,
           aspectRatio: geminiAspectRatio,
+          visualPrompt,
         },
       } as any)
       .returning();
@@ -682,6 +717,7 @@ export async function generateKeyframes(payload: unknown) {
           phase: scene.phase,
           duration: scene.duration,
           aspectRatio: geminiAspectRatio,
+          visualPrompt,
         },
       } as any)
       .returning();

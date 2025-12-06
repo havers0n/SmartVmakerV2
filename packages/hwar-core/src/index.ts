@@ -3,10 +3,13 @@
 import {
     analysisJobQueue,
     analysisResults,
+    keyframeJobQueue,
 } from '@scrimspec/db';
 import { DrizzleJobAdapter } from './jobs/drizzle-adapter';
 import { runJobTick } from './jobs/processor';
 import { createAnalysisHandler, AnalysisJob } from './analysis/handler';
+import { createKeyframeHandler } from './keyframes/handler';
+import { KeyframeJob } from './keyframes/types';
 import { eq } from 'drizzle-orm';
 
 // --- ВАЖНО: убираем "export *" наружу ---
@@ -104,14 +107,44 @@ export function createHwarCore(deps: HwarDeps) {
         },
 
         keyframes: {
-            enqueueForProject: async () => {
-                throw new Error('NYI');
+            enqueueForProject: async (
+                projectId: string,
+                sceneIndex: number,
+                frameType: 'first' | 'last',
+                prompt: string,
+                assetId: string,
+                modelId?: string
+            ) => {
+                await deps.db
+                    .insert(keyframeJobQueue)
+                    .values({
+                        projectId,
+                        sceneIndex,
+                        frameType,
+                        prompt,
+                        assetId,
+                        modelId,
+                        status: 'pending',
+                        stage: 'init',
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    })
+                    .onConflictDoNothing();
             },
             runTick: async () => {
-                throw new Error('NYI');
+                const repo = new DrizzleJobAdapter<KeyframeJob>(
+                    deps.db,
+                    keyframeJobQueue,
+                );
+                const handler = createKeyframeHandler(deps);
+                await runJobTick(repo, handler, 1);
             },
-            getJobStatus: async () => {
-                throw new Error('NYI');
+            getJobStatus: async (jobId: string) => {
+                const [job] = await deps.db
+                    .select()
+                    .from(keyframeJobQueue)
+                    .where(eq(keyframeJobQueue.id, jobId));
+                return job;
             },
         },
 

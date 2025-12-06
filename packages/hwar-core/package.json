@@ -18,7 +18,10 @@
     },
     "dependencies": {
         "@scrimspec/db": "workspace:*",
-        "@scrimspec/shared-types": "workspace:*"
+        "@scrimspec/shared-types": "workspace:*",
+        "@aec/logger": "workspace:*",
+        "@aec/storage-client": "workspace:*",
+        "p-retry": "^6.2.1"
     },
     "devDependencies": {
         "@types/node": "^24.10.1",

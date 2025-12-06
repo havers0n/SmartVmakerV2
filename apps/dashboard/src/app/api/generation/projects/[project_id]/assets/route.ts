@@ -19,17 +19,33 @@ export async function GET(
       );
     }
 
-    // Use raw SQL to fetch assets for the project, ordered by createdAt
+    // Use raw SQL to fetch assets for the project
+    // Filter by asset_type = 'keyframe'
+    // Sort by sceneIndex (int) and frameType
     const result = await db.execute(sql`
       SELECT *
       FROM generation_pipeline.assets
       WHERE generation_project_id = ${project_id}
-      ORDER BY created_at ASC
+        AND asset_type = 'keyframe'
+      ORDER BY 
+        (meta->>'sceneIndex')::int ASC,
+        (meta->>'frameType') ASC
     `);
 
     const assets = result.rows;
 
-    return NextResponse.json(assets);
+    const PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL;
+
+    // Enrich assets with public_url (snake_case)
+    const assetsWithPublicUrl = assets.map((asset: any) => ({
+      ...asset,
+      public_url:
+        asset.storage_url && PUBLIC_BASE_URL
+          ? `${PUBLIC_BASE_URL}/${asset.storage_url}`
+          : null,
+    }));
+
+    return NextResponse.json(assetsWithPublicUrl);
   } catch (error) {
     console.error('Failed to fetch project assets:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';

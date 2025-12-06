@@ -394,6 +394,24 @@ export const assets = generationPipeline.table("assets", {
 	}
 });
 
+export const generationAnimationJobs = generationPipeline.table("generation_animation_jobs", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	projectId: uuid("project_id").notNull().references(() => generationProjects.id, { onDelete: 'cascade' }),
+	sceneIndex: integer("scene_index").notNull(),
+	provider: text("provider").default('minimax').notNull(),
+	model: text("model").notNull(),
+	minimaxTaskId: text("minimax_task_id"),
+	minimaxFileId: text("minimax_file_id"),
+	status: text("status").default('queued').notNull(),
+	resolution: text("resolution"),
+	durationSec: integer("duration_sec"),
+	videoUrl: text("video_url"),
+	errorCode: text("error_code"),
+	errorMessage: text("error_message"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 // =================== JOB QUEUES ===================
 
 export const ingestJobQueue = jobs.table("ingest_job_queue", {
