@@ -1,5 +1,6 @@
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
-const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL || 'https://api.minimax.chat';
+// Official docs use api.minimax.io; allow override via env.
+const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL || 'https://api.minimax.io';
 
 type MiniMaxBaseResp = {
     status_code: number;
@@ -7,7 +8,7 @@ type MiniMaxBaseResp = {
 };
 
 export type MiniMaxVideoTaskResponse = {
-    task_id: string;
+    task_id?: string;
     base_resp: MiniMaxBaseResp;
 };
 
@@ -27,7 +28,7 @@ export type MiniMaxVideoQueryResponse = {
     base_resp: MiniMaxBaseResp;
 };
 
-async function minimaxFetch<T>(path: string, init: RequestInit): Promise<T> {
+export async function minimaxFetch<T>(path: string, init: RequestInit): Promise<T> {
     if (!MINIMAX_API_KEY) {
         throw new Error('MINIMAX_API_KEY is not configured');
     }
@@ -68,10 +69,14 @@ export async function createFirstLastVideoTask(opts: {
         prompt_optimizer: opts.promptOptimizer ?? true,
     };
 
-    return minimaxFetch('/v1/video_generation', {
+    const res = await minimaxFetch<MiniMaxVideoTaskResponse>('/v1/video_generation', {
         method: 'POST',
         body: JSON.stringify(body),
     });
+    if (process.env.NODE_ENV !== 'test') {
+        console.log('[minimax-video] createFirstLastVideoTask response', JSON.stringify(res));
+    }
+    return res;
 }
 
 export async function createImageToVideoTask(opts: {
@@ -91,10 +96,14 @@ export async function createImageToVideoTask(opts: {
         prompt_optimizer: opts.promptOptimizer ?? true,
     };
 
-    return minimaxFetch('/v1/video_generation', {
+    const res = await minimaxFetch<MiniMaxVideoTaskResponse>('/v1/video_generation', {
         method: 'POST',
         body: JSON.stringify(body),
     });
+    if (process.env.NODE_ENV !== 'test') {
+        console.log('[minimax-video] createImageToVideoTask response', JSON.stringify(res));
+    }
+    return res;
 }
 
 export async function queryVideoTask(taskId: string): Promise<MiniMaxVideoQueryResponse> {

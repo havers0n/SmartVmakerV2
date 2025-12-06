@@ -365,6 +365,16 @@ export class DefaultAiRouter implements AiRouter {
                 promptOptimizer: true,
             });
 
+        if (process.env.NODE_ENV !== 'test') {
+            console.log('[ai-default-router] minimax video_generation response', JSON.stringify(task));
+        }
+
+        if (!task || task.base_resp?.status_code !== 0 || !task.task_id) {
+            const code = task?.base_resp?.status_code;
+            const msg = task?.base_resp?.status_msg || 'Unknown MiniMax error';
+            throw new Error(`MiniMax video_generation error: ${code} ${msg}`);
+        }
+
         const db = this.config.db;
         if (!db) {
             throw new Error('DefaultAiRouter is not configured with db; cannot persist animation job');

@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@scrimspec/shared-types', '@scrimspec/db', '@project/api-client', '@project/shared-types'],
+  transpilePackages: ['@scrimspec/shared-types', '@scrimspec/db', '@scrimspec/hwar-core', '@project/api-client', '@project/shared-types'],
   images: {
     remotePatterns: [
       {
@@ -25,6 +25,8 @@ const nextConfig = {
       '@project/shared-types': path.resolve(__dirname, '../../packages/shared-types/src'),
       '@scrimspec/db': path.resolve(__dirname, '../../packages/db/src'),
       '@scrimspec/shared-types': path.resolve(__dirname, '../../packages/shared-types/src'),
+      '@scrimspec/hwar-core': path.resolve(__dirname, '../../packages/hwar-core/src'),
+      '@scrimspec/hwar-core/providers': path.resolve(__dirname, '../../packages/hwar-core/src/providers'),
     };
     return config;
   },

@@ -11,6 +11,7 @@ export const analysisJobQueue = schema.analysisJobQueue;
 export const generationJobQueue = schema.generationJobQueue;
 export const keyframeJobQueue = schema.keyframeJobQueue;
 export const animationJobQueue = schema.animationJobQueue;
+export const generationAnimationJobs = schema.generationAnimationJobs;
 
 // Public tables - use tables mapping to get correct references
 export const youtubeVideos = schema.youtubeVideos;

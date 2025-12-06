@@ -56,6 +56,15 @@ export interface GenerationAsset {
   status: string;
 }
 
+interface AnimationJobDto {
+  id: string;
+  projectId: string;
+  sceneIndex: number;
+  status: 'queued' | 'processing' | 'success' | 'failed';
+  videoUrl: string | null;
+  errorMessage: string | null;
+}
+
 function groupAssetsByScene(assets: GenerationAsset[]) {
   const groups: Record<number, GenerationAsset[]> = {};
   for (const asset of assets) {
@@ -155,6 +164,25 @@ export default function ProjectDetailPage() {
     enabled: !!project?.meta?.keyframeGenerationStartedAt,
   });
 
+  const { data: animationJobs } = useQuery({
+    queryKey: ["animation-jobs", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/generation/projects/${projectId}/animation`);
+      if (!res.ok) throw new Error("Failed to load animation jobs");
+      const json = await res.json();
+      return json.jobs as AnimationJobDto[];
+    },
+    enabled: !!projectId,
+    refetchInterval: (query) => {
+      const jobs = query.state.data as AnimationJobDto[] | undefined;
+      if (!Array.isArray(jobs)) return 5000;
+      const hasPending = jobs.some(
+        (job) => job.status === "queued" || job.status === "processing",
+      );
+      return hasPending ? 5000 : false;
+    },
+  });
+
   // Auto-select first scenario on load
   useEffect(() => {
     if (project?.meta?.scenarios && selectedScenarioIndex === null) {
@@ -227,6 +255,15 @@ export default function ProjectDetailPage() {
     params.set("tab", tabId);
     const query = params.toString();
     router.push(query ? `/hwar/create/${projectId}?${query}` : `/hwar/create/${projectId}`);
+  };
+
+  const handleGenerateAnimation = async (sceneIndex: number) => {
+    if (!projectId) return;
+    await fetch(`/api/generation/projects/${projectId}/animation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sceneIndex }),
+    });
   };
 
   if (isLoading) {
@@ -416,6 +453,13 @@ export default function ProjectDetailPage() {
                       <Card key={sceneIndex} className="p-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <p className="font-medium">Scene {Number(sceneIndex) + 1}</p>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleGenerateAnimation(Number(sceneIndex))}
+                          >
+                            Generate Clip (MiniMax)
+                          </Button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -472,9 +516,37 @@ export default function ProjectDetailPage() {
         )}
 
         {activeTab === "final" && (
-          <Card className="mt-8 p-6">
-            <div className="text-sm text-muted-foreground">Final Output coming soon</div>
-          </Card>
+          <div className="space-y-4 mt-8">
+            {!animationJobs?.length && (
+              <p className="text-sm text-muted-foreground">
+                No animation jobs yet. Generate a clip from the Keyframes tab.
+              </p>
+            )}
+
+            {animationJobs?.map((job) => (
+              <Card key={job.id} className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">
+                    Scene {job.sceneIndex} • {job.status}
+                  </div>
+                </div>
+
+                {job.status === 'success' && job.videoUrl && (
+                  <video
+                    src={job.videoUrl}
+                    controls
+                    className="w-full rounded-md"
+                  />
+                )}
+
+                {job.status === 'failed' && (
+                  <div className="text-xs text-destructive">
+                    {job.errorMessage ?? 'Failed to generate video'}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
         )}
       </div>
     </div>

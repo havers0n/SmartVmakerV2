@@ -55,6 +55,7 @@ async function main() {
   const aiRouter = new DefaultAiRouter({
     geminiApiKey: process.env.GEMINI_API_KEY,
     minimaxApiKey: process.env.MINIMAX_API_KEY,
+    db,
   });
 
   const hwar = createHwarCore({
