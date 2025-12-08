@@ -21,13 +21,23 @@ import { startProject, generateKeyframes } from './handlers/generation';
 import { listProjects } from './handlers/projects';
 import { listModels } from './handlers/models';
 
-/**
- * Action Registry
- * Maps action names to their handler functions
- */
-const actionRegistry = {
-  'ingest.startSearch': startSearch,
-  'analysis.startAnalysis': startAnalysis,
+type ActionHandler = (payload: unknown) => Promise<unknown> | unknown;
+
+const envFlag = (name: string, defaultValue: boolean) => {
+  const value = process.env[name];
+  if (value === undefined) return defaultValue;
+  return value === '1' || value.toLowerCase() === 'true';
+};
+
+const featureFlags = {
+  enableIngest: envFlag('HWAR_ENABLE_INGEST', false),
+  enableAnalysis: envFlag('HWAR_ENABLE_ANALYSIS', true),
+  enableGeneration: envFlag('HWAR_ENABLE_GENERATION', false),
+  enableAnimation: envFlag('HWAR_ENABLE_ANIMATION', false),
+  enableKeyframes: envFlag('HWAR_ENABLE_KEYFRAMES', true),
+};
+
+const baseRegistry = {
   'storyTemplates.create': createStoryTemplate,
   'storyTemplates.list': listStoryTemplates,
   'storyTemplates.getById': getStoryTemplateById,
@@ -38,10 +48,16 @@ const actionRegistry = {
   'characters.getById': getCharacterById,
   'characters.update': updateCharacter,
   'characters.delete': deleteCharacter,
-  'generation.startProject': startProject,
-  'generation.generateKeyframes': generateKeyframes,
   'projects.list': listProjects,
   'models.list': listModels,
+} satisfies Record<string, ActionHandler>;
+
+const actionRegistry = {
+  ...baseRegistry,
+  ...(featureFlags.enableIngest ? { 'ingest.startSearch': startSearch } : {}),
+  ...(featureFlags.enableAnalysis ? { 'analysis.startAnalysis': startAnalysis } : {}),
+  ...(featureFlags.enableGeneration ? { 'generation.startProject': startProject } : {}),
+  ...(featureFlags.enableKeyframes ? { 'generation.generateKeyframes': generateKeyframes } : {}),
 } as const;
 
 type ActionName = keyof typeof actionRegistry;
