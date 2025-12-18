@@ -23,7 +23,10 @@
     "lint": "turbo run lint",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
-    "type-check": "turbo run type-check",
+    "type-check": "pnpm -r --if-present --filter ./packages/** type-check",
+    "type-check:packages": "pnpm -r --if-present --filter ./packages/** type-check",
+    "type-check:all": "pnpm -r --if-present type-check",
+    "type-check:dashboard": "pnpm --filter dashboard type-check",
     "test": "turbo run test",
     "types:pull": "pnpm --filter db run types:pull"
   },

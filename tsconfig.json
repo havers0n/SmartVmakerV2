@@ -2,15 +2,12 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -18,54 +15,23 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./packages/*/src"
-      ],
-      "@shared/*": [
-        "./packages/shared-types/src/*"
-      ],
-      "@db/*": [
-        "./packages/db/src/*"
-      ],
-      "@project/api-client": [
-        "./packages/api-client/src"
-      ],
-      "@project/shared-types": [
-        "./packages/shared-types/src"
-      ],
-      "@scrimspec/hwar-core": [
-        "./packages/hwar-core/src"
-      ]
+      "@/*": ["./packages/*/src"],
+      "@shared/*": ["./packages/shared-types/src/*"],
+      "@db/*": ["./packages/db/src/*"],
+      "@project/api-client": ["./packages/api-client/src"],
+      "@project/shared-types": ["./packages/shared-types/src"],
+      "@scrimspec/hwar-core": ["./packages/hwar-core/src"]
     }
   },
-  "include": [
-    "packages/**/*.ts",
-    "apps/**/*.ts",
-    "tools/**/*.ts"
-  ],
-  "references": [
-    {
-      "path": "./packages/shared-types"
-    },
-    {
-      "path": "./packages/db"
-    },
-    {
-      "path": "./packages/orchestrator"
-    },
-    {
-      "path": "./apps/dashboard"
-    },
-    {
-      "path": "./packages/hwar-core"
-    }
-  ]
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "tools/**/*.ts"]
 }

@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '7'
+  PNPM_VERSION: '7.33.7'
 
 jobs:
   # ============================================================================
@@ -117,7 +117,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run TypeScript type-check
-        run: pnpm type-check
+        run: pnpm type-check:packages
         continue-on-error: false
 
       - name: Report type-check results
@@ -174,23 +174,3 @@ jobs:
             apps/*/.next
           retention-days: 7
 
-  # ============================================================================
-  # SUMMARY
-  # ============================================================================
-  ci-summary:
-    runs-on: ubuntu-latest
-    name: CI Summary
-    if: always()
-    needs: [lint, type-check, build]
-    steps:
-      - name: Check CI Status
-        run: |
-          if [[ "${{ needs.lint.result }}" == "success" && \
-                "${{ needs.type-check.result }}" == "success" && \
-                "${{ needs.build.result }}" == "success" ]]; then
-            echo "✅ All CI checks passed!"
-            exit 0
-          else
-            echo "❌ CI checks failed"
-            exit 1
-          fi

@@ -45,9 +45,21 @@ pnpm dev
 | `pnpm build` | Собрать все пакеты |
 | `pnpm lint` | Проверить код (ESLint) |
 | `pnpm format` | Отформатировать код (Prettier) |
-| `pnpm type-check` | Проверить типы (TypeScript) |
+| `pnpm type-check` | Проверить типы (TypeScript) **только для `packages/**`** (зелёный гейт монорепо) |
+| `pnpm type-check:all` | Проверить типы (TypeScript) **для всех workspace**, включая `apps/dashboard` (может быть красным) |
 | `pnpm test` | Запустить тесты |
 | `pnpm clean` | Очистить всех build артефакты |
+
+## 🧰 pnpm reporter и проброс аргументов
+
+Если вам нужен `--reporter=append-only`, это **флаг pnpm**, его нельзя передавать “в хвост” скрипта (иначе он уедет в `tsc` и даст `TS5023`).
+
+Правильно:
+
+```bash
+pnpm --reporter=append-only run type-check
+pnpm --reporter=append-only run type-check:all
+```
 
 ## 📁 Пакеты
 

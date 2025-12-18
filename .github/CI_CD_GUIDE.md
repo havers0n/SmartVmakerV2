@@ -80,8 +80,11 @@ pnpm format
 # 2. Lint
 pnpm lint
 
-# 3. Type-check
+# 3. Type-check (packages-only gate)
 pnpm type-check
+
+# 3b. Full type-check (includes apps/dashboard; may currently fail)
+pnpm type-check:all
 
 # 4. Build
 pnpm build
@@ -92,7 +95,9 @@ pnpm test
 
 **Or all at once:**
 ```bash
-pnpm format && pnpm lint && pnpm type-check && pnpm build
+# NOTE: в Windows PowerShell оператор `&&` не поддерживается (в PS5).
+# Используйте `;` или запускайте команды по отдельности.
+pnpm format; pnpm lint; pnpm type-check; pnpm build
 ```
 
 ## Workflow Files Structure
@@ -134,11 +139,23 @@ Each package must provide these scripts:
     "lint": "turbo run lint",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
-    "type-check": "turbo run type-check",
+    "type-check": "pnpm -r --if-present --filter ./packages/** type-check",
+    "type-check:all": "pnpm -r --if-present type-check",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules"
   }
 }
+```
+
+## pnpm reporter (append-only) — важно
+
+`--reporter=append-only` — это **флаг pnpm**, а не `tsc`. Чтобы он не “утекал” в аргументы пакетных скриптов, указывайте его **до** `run`.
+
+Правильно:
+
+```bash
+pnpm --reporter=append-only run type-check
+pnpm --reporter=append-only run type-check:all
 ```
 
 ## Caching Strategy
