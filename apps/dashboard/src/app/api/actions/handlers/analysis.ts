@@ -16,9 +16,9 @@ export async function startAnalysis(payload: unknown) {
   try {
     // Step 1: Validate payload
     const validatedPayload = startAnalysisPayloadSchema.parse(payload);
-    const { videoIds } = validatedPayload;
+    const { videoIds, analyzer } = validatedPayload;
 
-    logger.info({ videoCount: videoIds.length }, 'Starting analysis for videos');
+    logger.info({ videoCount: videoIds.length, analyzer }, 'Starting analysis for videos');
 
     const db = getDrizzleClient();
 
@@ -52,7 +52,7 @@ export async function startAnalysis(payload: unknown) {
     // Step 5: Create analysis jobs for videos without analysis
     const jobsToInsert = idsToAnalyze.map((videoId) => ({
       videoId,
-      analyzer: 'default', // Default analyzer name
+      analyzer,
       status: 'pending' as const,
       retryCount: 0,
     }));
