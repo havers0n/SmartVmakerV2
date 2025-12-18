@@ -7,6 +7,10 @@ export interface JobRecord {
     id: string;
     status: JobStatus;
     stage: JobStage;
+    lockedAt: Date | null;
+    attempts: number;
+    lastError?: string | null;
+    nextRetryAt?: Date | null;
     retryCount: number;
     externalId: string | null;
     idempotencyKey: string | null;

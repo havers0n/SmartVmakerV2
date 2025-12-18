@@ -5,32 +5,80 @@ import { JobRepository } from './repository';
 
 export type JobHandler<J extends JobRecord> = (job: J) => Promise<void>;
 
+type LoggerLike = {
+    info?: (...args: any[]) => void;
+    warn?: (...args: any[]) => void;
+    error?: (...args: any[]) => void;
+};
+
+export type RunJobOptions = {
+    batchSize?: number;
+    concurrency?: number;
+    logger?: LoggerLike;
+    retryDelayMs?: (attempts: number) => number;
+    maxAttempts?: number;
+};
+
+const defaultRetryDelay = (attempts: number) => {
+    // exponential backoff with cap at 5 minutes
+    const delay = Math.pow(2, Math.max(attempts - 1, 0)) * 1000;
+    return Math.min(delay, 5 * 60 * 1000);
+};
+
+const DEFAULT_MAX_ATTEMPTS = 5;
+
 /**
- * Generic tick function to process a batch of jobs.
- * Fetches pending jobs, runs the handler, and updates status.
+ * Generic tick function to process a batch of jobs with idempotent locking,
+ * attempt tracking and bounded concurrency.
  */
 export async function runJobTick<J extends JobRecord>(
     repo: JobRepository<J>,
     handler: JobHandler<J>,
-    batchSize: number = 1
+    options: RunJobOptions = {}
 ): Promise<void> {
-    const jobs = await repo.fetchNextPending(batchSize);
+    const batchSize = options.batchSize ?? 1;
+    const concurrency = Math.max(1, options.concurrency ?? batchSize);
+    const logger = options.logger ?? console;
+    const retryDelayMs = options.retryDelayMs ?? defaultRetryDelay;
+    const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
-    if (jobs.length === 0) {
-        return;
-    }
+    const now = new Date();
+    const jobs = await repo.fetchNextPending(batchSize, now, maxAttempts);
+    if (jobs.length === 0) return;
 
-    await Promise.all(jobs.map(async (job) => {
+    const processJob = async (job: J) => {
+        const lockedAt = new Date();
+        await repo.markLocked(job.id, lockedAt);
+        await repo.incrementAttempts(job.id);
+
         try {
             await handler(job);
-            // Only mark completed if the handler didn't already mark it (e.g. as failed or another stage)
-            // But usually the handler just does work and throws if failed.
-            // We should check if the job is still in 'processing' state or if we should auto-complete.
-            // For now, simple auto-complete:
-            await repo.markCompleted(job.id);
+
+            const latest = await repo.getById(job.id);
+            if (latest && latest.status === 'processing') {
+                await repo.markCompleted(job.id, latest.stage);
+            }
         } catch (error: any) {
-            console.error(`Job ${job.id} failed:`, error);
-            await repo.markFailed(job.id, error.message || String(error));
+            const message = error?.message ?? String(error);
+            if (logger?.error) {
+                logger.error({ jobId: job.id, error }, 'Job handler failed');
+            }
+
+            const latest = await repo.getById(job.id);
+            const attempts = latest?.attempts ?? (job.attempts + 1);
+            const stage = latest?.stage ?? job.stage;
+
+            if (attempts >= maxAttempts) {
+                await repo.markFailedPermanently(job.id, message, 'failed_permanently');
+            } else {
+                const nextRetryAt = new Date(Date.now() + retryDelayMs(attempts));
+                await repo.markFailed(job.id, message, stage, nextRetryAt);
+            }
         }
-    }));
+    };
+
+    for (let i = 0; i < jobs.length; i += concurrency) {
+        const chunk = jobs.slice(i, i + concurrency);
+        await Promise.all(chunk.map((job) => processJob(job)));
+    }
 }
