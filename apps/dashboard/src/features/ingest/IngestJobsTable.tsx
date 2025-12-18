@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -51,30 +51,58 @@ export function IngestJobsTable() {
   const [jobs, setJobs] = useState<IngestJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
-      // Changed from '/api/ingest/jobs' to '/api/hwar/harvests'
-      const response = await fetch('/api/hwar/harvests');
-      const data: IngestJob[] = await response.json();
+      const response = await fetch('/api/hwar/harvests', { signal });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      let data: IngestJob[];
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        throw new Error('Invalid JSON response from /api/hwar/harvests');
+      }
 
       // Set jobs directly since the new endpoint returns the array directly
       setJobs(data);
       setError(null);
     } catch (err) {
+      if (signal?.aborted) return;
       console.error('Error fetching jobs:', err);
       setError('Ошибка загрузки задач');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
+  const handleRefresh = () => {
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
+    fetchJobs(controllerRef.current.signal);
+  };
+
   useEffect(() => {
-    fetchJobs();
-    // Автообновление каждые 10 секунд
-    const interval = setInterval(fetchJobs, 10000);
-    return () => clearInterval(interval);
+    controllerRef.current = new AbortController();
+    fetchJobs(controllerRef.current.signal);
+
+    // Автообновление каждые 10 секунд с отменой предыдущего запроса
+    const interval = setInterval(() => {
+      controllerRef.current?.abort();
+      controllerRef.current = new AbortController();
+      fetchJobs(controllerRef.current.signal);
+    }, 10000);
+
+    return () => {
+      controllerRef.current?.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusBadge = (status: IngestJob['status']) => {
@@ -151,7 +179,7 @@ export function IngestJobsTable() {
               Последние 50 задач поиска и загрузки видео
             </CardDescription>
           </div>
-          <Button onClick={fetchJobs} disabled={loading} variant="outline" size="sm">
+          <Button onClick={handleRefresh} disabled={loading} variant="outline" size="sm">
             {loading ? 'Загрузка...' : 'Обновить'}
           </Button>
         </div>
