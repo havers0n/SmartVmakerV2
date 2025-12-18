@@ -14,19 +14,36 @@ vi.mock('@scrimspec/core-domain', () => ({
       if (!payload.videoIds || !Array.isArray(payload.videoIds)) {
         throw new Error('Invalid payload');
       }
-      return payload;
+      // Mirror expected domain behavior: default analyzer when not provided
+      return { ...payload, analyzer: payload.analyzer ?? 'default' };
     }),
   },
 }));
 
 // Mock @scrimspec/db
+var mockDb: any;
+var selectChain: any;
+var insertChain: any;
+
 vi.mock('@scrimspec/db', () => {
-  const mockDb = {
-    select: vi.fn().mockReturnThis(),
+  // SELECT chain must be thenable because handler awaits the builder.
+  selectChain = {
     from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue([]),
+    then: (onfulfilled?: any, onrejected?: any) => selectChain.execute().then(onfulfilled, onrejected),
+  };
+
+  // INSERT chain is awaited too: `await db.insert(...).values(...)`.
+  insertChain = {
+    values: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue(undefined),
+    then: (onfulfilled?: any, onrejected?: any) => insertChain.execute().then(onfulfilled, onrejected),
+  };
+
+  mockDb = {
+    select: vi.fn(() => selectChain),
+    insert: vi.fn(() => insertChain),
   };
 
   return {
@@ -99,7 +116,7 @@ describe('startAnalysis', () => {
       const mockDb = getDrizzleClient();
 
       // Mock existing analysis for video 1 and 2
-      (mockDb.where as any).mockResolvedValueOnce([
+      selectChain.execute.mockResolvedValueOnce([
         { videoId: 1 },
         { videoId: 2 },
       ]);
@@ -121,7 +138,7 @@ describe('startAnalysis', () => {
       const mockDb = getDrizzleClient();
 
       // Mock that all videos already have analysis
-      (mockDb.where as any).mockResolvedValueOnce([
+      selectChain.execute.mockResolvedValueOnce([
         { videoId: 1 },
         { videoId: 2 },
         { videoId: 3 },
@@ -148,7 +165,7 @@ describe('startAnalysis', () => {
       const mockDb = getDrizzleClient();
 
       // Mock no existing analysis
-      (mockDb.where as any).mockResolvedValueOnce([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const payload = {
         videoIds: [1, 2, 3],
@@ -158,7 +175,7 @@ describe('startAnalysis', () => {
 
       expect(result.success).toBe(true);
       expect(mockDb.insert).toHaveBeenCalled();
-      expect(mockDb.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
             videoId: 1,
@@ -187,7 +204,7 @@ describe('startAnalysis', () => {
       const mockDb = getDrizzleClient();
 
       // Mock existing analysis for video 1
-      (mockDb.where as any).mockResolvedValueOnce([{ videoId: 1 }]);
+      selectChain.execute.mockResolvedValueOnce([{ videoId: 1 }]);
 
       const payload = {
         videoIds: [1, 2, 3],
@@ -195,7 +212,7 @@ describe('startAnalysis', () => {
 
       await startAnalysis(payload);
 
-      expect(mockDb.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ videoId: 2 }),
           expect.objectContaining({ videoId: 3 }),
@@ -203,7 +220,7 @@ describe('startAnalysis', () => {
       );
 
       // Should not create job for video 1
-      expect(mockDb.values).not.toHaveBeenCalledWith(
+      expect(insertChain.values).not.toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ videoId: 1 }),
         ])
@@ -216,7 +233,7 @@ describe('startAnalysis', () => {
       const { getDrizzleClient } = await import('@scrimspec/db');
       const mockDb = getDrizzleClient();
 
-      (mockDb.where as any).mockResolvedValueOnce([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const payload = {
         videoIds: [1, 2],
@@ -239,7 +256,7 @@ describe('startAnalysis', () => {
       const { getDrizzleClient } = await import('@scrimspec/db');
       const mockDb = getDrizzleClient();
 
-      (mockDb.where as any).mockResolvedValueOnce([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const payload = {
         videoIds: [1], // Single video
@@ -255,7 +272,7 @@ describe('startAnalysis', () => {
       const { getDrizzleClient } = await import('@scrimspec/db');
       const mockDb = getDrizzleClient();
 
-      (mockDb.where as any).mockResolvedValueOnce([
+      selectChain.execute.mockResolvedValueOnce([
         { videoId: 1 },
         { videoId: 2 },
       ]);
@@ -303,7 +320,7 @@ describe('startAnalysis', () => {
       const { getDrizzleClient } = await import('@scrimspec/db');
       const mockDb = getDrizzleClient();
 
-      (mockDb.where as any).mockRejectedValueOnce(new Error('Database connection failed'));
+      selectChain.execute.mockRejectedValueOnce(new Error('Database connection failed'));
 
       const payload = {
         videoIds: [1, 2, 3],
@@ -321,7 +338,7 @@ describe('startAnalysis', () => {
       const mockDb = getDrizzleClient();
 
       // Throw non-Error object
-      (mockDb.where as any).mockRejectedValueOnce('Unknown error');
+      selectChain.execute.mockRejectedValueOnce('Unknown error');
 
       const payload = {
         videoIds: [1, 2, 3],
