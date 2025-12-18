@@ -71,6 +71,13 @@
       "when": 1765028611676,
       "tag": "0009_exotic_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1765217001345,
+      "tag": "0010_magical_the_anarchist",
+      "breakpoints": true
     }
   ]
 }
