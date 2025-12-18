@@ -58,7 +58,7 @@ interface AnalysisResult {
 export default function AnalysisPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
-  const [analyzer, setAnalyzer] = useState('gemini');
+  const [selectedAnalyzer, setSelectedAnalyzer] = useState('gemini');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -149,12 +149,13 @@ export default function AnalysisPage() {
         };
       }>('analysis.startAnalysis', {
         videoIds: Array.from(selectedVideos),
+        analyzer: selectedAnalyzer,
       });
 
       // Show success toast
       toast({
         title: 'Analysis started',
-        description: result.message,
+        description: `${result.message} Analyzer: ${selectedAnalyzer}`,
         variant: 'default',
       });
 
@@ -250,8 +251,8 @@ export default function AnalysisPage() {
         
         {/* Actions Bar */}
         <div className="flex items-center gap-4 bg-card/50 p-2 rounded-lg border border-border/50 backdrop-blur-sm">
-           <Select value={analyzer} onValueChange={setAnalyzer}>
-              <SelectTrigger className="w-[180px] border-none bg-transparent focus:ring-0">
+           <Select value={selectedAnalyzer} onValueChange={setSelectedAnalyzer} disabled={submitting}>
+              <SelectTrigger className="w-[180px] border-none bg-transparent focus:ring-0" disabled={submitting}>
                 <SelectValue placeholder="Select analyzer" />
               </SelectTrigger>
               <SelectContent>
