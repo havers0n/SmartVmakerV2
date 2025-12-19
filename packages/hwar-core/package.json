@@ -7,12 +7,26 @@
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
-            "default": "./dist/index.js"
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        },
+        "./types/generation": {
+            "types": "./dist/types/generation.d.ts",
+            "import": "./dist/types/generation.mjs",
+            "require": "./dist/types/generation.js"
+        },
+        "./providers/minimax-video": {
+            "types": "./dist/providers/minimax-video.d.ts",
+            "import": "./dist/providers/minimax-video.mjs",
+            "require": "./dist/providers/minimax-video.js"
         }
     },
+    "files": [
+        "dist"
+    ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "build": "tsup src/index.ts src/types/generation.ts src/providers/minimax-video.ts --format cjs,esm --dts",
+        "dev": "tsup src/index.ts src/types/generation.ts src/providers/minimax-video.ts --format cjs,esm --dts --watch",
         "type-check": "tsc --noEmit",
         "lint": "echo 'No linting configured' && exit 0"
     },

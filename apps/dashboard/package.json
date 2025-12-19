@@ -10,7 +10,7 @@
     "lint": "next lint",
     "format": "prettier -w src",
     "format:check": "prettier --check src",
-    "type-check": "tsc --noEmit",
+    "type-check": "pnpm --filter @scrimspec/hwar-core run build && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
