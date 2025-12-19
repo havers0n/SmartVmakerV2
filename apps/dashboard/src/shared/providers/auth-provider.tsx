@@ -10,7 +10,7 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   signIn: (email: string, password: string) => Promise<{ error?: { message: string } }>;
-  signUp: (email: string, password: string) => Promise<{ error?: { message: string } }>;
+  signUp: (email: string, password: string) => Promise<{ error?: { message: string }; sessionCreated: boolean }>;
   signOut: () => Promise<void>;
   loading: boolean;
 };
@@ -63,8 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Redirect logic - only redirect after auth state changes, not on initial load
       if (event === 'SIGNED_OUT' && !isPublicPath) {
         router.push('/login');
-      } else if (event === 'SIGNED_IN' && isPublicPath) {
-        router.push('/');
       }
     });
 
@@ -87,8 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setSession(data.session);
     setUser(data.session?.user || null);
-    router.push('/');
-    router.refresh();
     
     return {};
   };
@@ -102,13 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     
     if (error) {
-      return { error: { message: error.message } };
+      return { error: { message: error.message }, sessionCreated: false };
     }
     
     setSession(data.session);
     setUser(data.session?.user || null);
     
-    return {};
+    return { sessionCreated: Boolean(data.session) };
   };
 
   const signOut = async () => {

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/providers/auth-provider';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { sanitizeRedirectPath } from '@/shared/lib/redirect';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const { signUp } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -31,12 +33,19 @@ export default function SignupPage() {
     setSuccess(false);
 
     try {
-      const { error } = await signUp(email, password);
+      const { error, sessionCreated } = await signUp(email, password);
       
       if (error) {
         setError(error.message);
       } else {
-        setSuccess(true);
+        if (sessionCreated) {
+          const redirectedFrom = searchParams.get('redirectedFrom');
+          const target = sanitizeRedirectPath(redirectedFrom, '/hwar/create');
+          router.replace(target);
+          router.refresh();
+        } else {
+          setSuccess(true);
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
@@ -62,7 +71,13 @@ export default function SignupPage() {
                 Account created successfully! Please check your email to confirm your account.
               </div>
               <Button 
-                onClick={() => router.push('/login')}
+                onClick={() => {
+                  const redirectedFrom = searchParams.get('redirectedFrom');
+                  const next = redirectedFrom
+                    ? `/login?redirectedFrom=${encodeURIComponent(redirectedFrom)}`
+                    : '/login';
+                  router.push(next);
+                }}
                 className="w-full"
               >
                 Go to Login
@@ -125,7 +140,13 @@ export default function SignupPage() {
           <div className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
             <button 
-              onClick={() => router.push('/login')}
+              onClick={() => {
+                const redirectedFrom = searchParams.get('redirectedFrom');
+                const next = redirectedFrom
+                  ? `/login?redirectedFrom=${encodeURIComponent(redirectedFrom)}`
+                  : '/login';
+                router.push(next);
+              }}
               className="text-primary hover:underline"
             >
               Sign in
