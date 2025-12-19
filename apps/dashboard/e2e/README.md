@@ -4,7 +4,7 @@ This directory contains end-to-end tests for the Scrimspec generation workflow.
 
 ## Tests Included
 
-### `generation.test.ts`
+### `generation.run.ts`
 
 Comprehensive E2E test suite that validates:
 
@@ -36,17 +36,17 @@ Comprehensive E2E test suite that validates:
 
 ### Run all E2E tests
 ```bash
-npm test -- generation.test.ts
+npm run test:e2e:generation
 ```
 
 ### Run with custom base URL
 ```bash
-BASE_URL=http://localhost:3001 npm test -- generation.test.ts
+BASE_URL=http://localhost:3001 npm run test:e2e:generation
 ```
 
 ### Run in watch mode
 ```bash
-npm test -- generation.test.ts --watch
+npm run test:e2e:generation
 ```
 
 ## Test Scenarios
@@ -55,7 +55,7 @@ npm test -- generation.test.ts --watch
 Run the tests to ensure the API is responding correctly and shorts can be created.
 
 ```bash
-BASE_URL=http://localhost:3000 npm test -- generation.test.ts
+BASE_URL=http://localhost:3000 npm run test:e2e:generation
 ```
 
 This takes ~5 seconds and validates:
@@ -75,7 +75,7 @@ cd packages/orchestrator
 npm run worker
 
 # Terminal 3: Run tests
-npm test -- generation.test.ts
+npm run test:e2e:generation
 ```
 
 This validates the complete flow including:
@@ -179,7 +179,7 @@ jobs:
       - run: pnpm run build
       - run: pnpm run dev &
       - run: sleep 10  # Wait for app to start
-      - run: npm test -- generation.test.ts
+      - run: npm run test:e2e:generation
 ```
 
 ## Extending Tests

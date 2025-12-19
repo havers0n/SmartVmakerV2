@@ -1,18 +1,14 @@
 /**
- * E2E Tests for Generation Workflow
+ * E2E Runner for Generation Workflow
  *
- * This test suite validates the complete generation workflow:
- * 1. Create a short from a template
- * 2. Verify assets are enqueued for generation
- * 3. Check job queue status
- * 4. Verify worker processing (via API status endpoint)
+ * Это НЕ unit-тест и НЕ должен подхватываться test-runner'ами (Vitest/Playwright).
+ * Скрипт предназначен для ручного запуска против поднятого dashboard и настроенного окружения.
  *
  * Prerequisites:
  * - Dashboard app is running on http://localhost:3000
  * - Database is configured with generation_pipeline tables
- * - MiniMax/Hailuo APIs are mocked or available
  *
- * Run with: npm test -- generation.test.ts
+ * Run with: node e2e/generation.run.ts
  */
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -32,10 +28,7 @@ const ctx: TestContext = {
 /**
  * Helper to make API calls
  */
-async function apiCall(
-  path: string,
-  options: RequestInit = {},
-): Promise<any> {
+async function apiCall(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${BASE_URL}/api${path}`;
   const response = await fetch(url, {
     headers: {
@@ -155,7 +148,6 @@ async function testGenerationStatus(): Promise<void> {
     if (!Array.isArray(result.jobQueueStats)) {
       throw new Error('jobQueueStats is not an array');
     }
-
   } catch (error) {
     console.error(`   ❌ Failed to verify generation status:`, error);
     throw error;
@@ -194,7 +186,6 @@ async function testAPIResponseStructure(): Promise<void> {
     }
 
     console.log(`   ✅ All fields have correct types`);
-
   } catch (error) {
     console.error(`   ❌ API response structure test failed:`, error);
     throw error;
@@ -252,3 +243,5 @@ runTests().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
+
+

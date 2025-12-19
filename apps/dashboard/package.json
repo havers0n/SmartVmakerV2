@@ -12,6 +12,9 @@
     "format:check": "prettier --check src",
     "type-check": "pnpm --filter @scrimspec/hwar-core run build && tsc --noEmit",
     "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:generation": "node e2e/generation.run.ts",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "clean": "rimraf .next"
