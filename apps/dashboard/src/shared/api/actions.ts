@@ -18,6 +18,20 @@ export interface ActionError {
   details?: unknown;
 }
 
+export class ActionHttpError extends Error {
+  public readonly action: string;
+  public readonly status: number;
+  public readonly details?: unknown;
+
+  constructor(params: { action: string; status: number; message: string; details?: unknown }) {
+    super(params.message);
+    this.name = 'ActionHttpError';
+    this.action = params.action;
+    this.status = params.status;
+    this.details = params.details;
+  }
+}
+
 // Define types for story templates
 export interface StoryTemplate {
   id: string;
@@ -87,7 +101,12 @@ export async function callAction<T = unknown>(
     const data: ActionResponse<T> = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+      throw new ActionHttpError({
+        action,
+        status: response.status,
+        message: data.error || `HTTP ${response.status}: ${response.statusText}`,
+        details: data.details,
+      });
     }
 
     if (!data.success) {
@@ -101,6 +120,9 @@ export async function callAction<T = unknown>(
     return data.result;
   } catch (error) {
     // Перебрасываем ошибку с дополнительным контекстом
+    if (error instanceof ActionHttpError) {
+      throw error;
+    }
     if (error instanceof Error) {
       throw new Error(`Action ${action} failed: ${error.message}`);
     }
