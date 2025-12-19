@@ -570,3 +570,40 @@ export const animationJobQueue = jobs.table("animation_job_queue", {
 		uniqueSceneGen: uniqueIndex("uidx_anim_project_scene").on(table.projectId, table.sceneIndex),
 	}
 });
+
+// =================== HWAR WORKERS ===================
+
+export const hwarWorkerType = pgEnum("hwar_worker_type", [
+	"ingest",
+	"analysis",
+	"keyframe",
+	"animation",
+	"enrichment",
+	"cleanup",
+]);
+
+export const hwarWorkerStatus = pgEnum("hwar_worker_status", [
+	"idle",
+	"running",
+	"paused",
+	"error",
+]);
+
+export const hwarWorkers = pgTable(
+	"hwar_workers",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		name: text("name").notNull(),
+		type: hwarWorkerType("type").notNull(),
+		status: hwarWorkerStatus("status").notNull().default("idle"),
+		lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+		isPaused: boolean("is_paused").notNull().default(false),
+		concurrency: integer("concurrency").notNull().default(1),
+		dailyLimitUsd: numeric("daily_limit_usd").notNull().default("0"),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => ({
+		typeIdx: index("hwar_workers_type_idx").on(table.type),
+		lastSeenIdx: index("hwar_workers_last_seen_idx").on(table.lastSeenAt),
+	})
+);
