@@ -6,6 +6,7 @@ import { IngestJobsTable } from '@/features/ingest/IngestJobsTable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Activity, Database, Search } from 'lucide-react';
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { formatNumber } from '@/shared/lib/locale';
 
 type IngestOverview = {
   activeWorkers: number;
@@ -73,7 +74,7 @@ export default function IngestPage() {
             <div className="text-sm text-destructive">Error loading</div>
           ) : hasData ? (
             <>
-              <div className="text-2xl font-bold">{value?.toLocaleString('en-US')}</div>
+              <div className="text-2xl font-bold">{formatNumber(value as number)}</div>
               <p className="text-xs text-muted-foreground">{description}</p>
             </>
           ) : (
