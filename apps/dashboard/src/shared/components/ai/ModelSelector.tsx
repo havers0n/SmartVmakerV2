@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { listModels, ModelType, ModelWithProvider } from "@/shared/api/actions";
 import { Badge } from "@/shared/components/ui/badge";
+import { useEffect } from "react";
 
 export interface ModelSelectorProps {
   /**
@@ -61,10 +62,12 @@ export function ModelSelector({
   // Find the default model to use as initial selection if no value is set
   const defaultModel = models.find((m) => m.isDefault);
 
-  // If no value is set and we have a default model, use it
-  if (!value && defaultModel && models.length > 0) {
-    onChange(defaultModel.id);
-  }
+  // If no value is set and we have a default model, use it (side-effect must not run during render)
+  useEffect(() => {
+    if (!value && defaultModel && models.length > 0) {
+      onChange(defaultModel.id);
+    }
+  }, [defaultModel, models.length, onChange, value]);
 
   return (
     <div>
