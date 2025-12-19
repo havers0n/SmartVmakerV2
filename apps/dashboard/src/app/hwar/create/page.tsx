@@ -7,7 +7,7 @@ import { Card } from "@/shared/components/ui/card";
 import { Plus, FolderOpen } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { StatusBadge } from "@/shared/components/ui/status-badge";
-import { listProjects } from "@/shared/api/actions";
+import { ActionHttpError, listProjects } from "@/shared/api/actions";
 import { ProjectPreview } from "@scrimspec/shared-types";
 import { type ProjectTabId } from "@/shared/const/projectTabs";
 
@@ -19,18 +19,15 @@ export default function CreateIndex() {
     router.push(tab ? `/hwar/create/${id}?tab=${tab}` : `/hwar/create/${id}`);
   };
 
-  const { data: projects = [], isLoading } = useQuery<ProjectPreview[], Error>({
+  const query = useQuery<ProjectPreview[], Error>({
     queryKey: ["projects"],
-    queryFn: async () => {
-      try {
-        const data = await listProjects();
-        return data;
-      } catch (error) {
-        console.error("Failed to fetch projects:", error);
-        return [];
-      }
-    },
+    queryFn: listProjects,
   });
+
+  const projects = query.data ?? [];
+  const isLoading = query.isLoading;
+  const isError = query.isError;
+  const error = query.error;
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,6 +52,46 @@ export default function CreateIndex() {
               </Card>
             ))}
           </div>
+        ) : isError ? (
+          <Card className="p-8">
+            {(() => {
+              const status = error instanceof ActionHttpError ? error.status : undefined;
+              const title =
+                status === 401
+                  ? "Session expired"
+                  : status === 403
+                    ? "Access denied"
+                    : "Couldn’t load projects";
+
+              const description =
+                status === 401
+                  ? "Please sign in again to continue."
+                  : status === 403
+                    ? "You don’t have permission to view projects. Check your access / RLS policies."
+                    : "Check your connection or permissions and try again.";
+
+              const primaryAction = status === 401 || status === 403
+                ? { label: "Re-login", onClick: () => router.push("/login") }
+                : { label: "Retry", onClick: () => query.refetch() };
+
+              return (
+                <div className="text-center">
+                  <h3 className="text-lg font-medium mb-2">{title}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{description}</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <Button onClick={primaryAction.onClick} variant={status === 401 || status === 403 ? "default" : "default"}>
+                      {primaryAction.label}
+                    </Button>
+                    {status === 401 && (
+                      <Button onClick={() => query.refetch()} variant="outline">
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
         ) : projects.length === 0 ? (
           <EmptyState
             icon={FolderOpen}
