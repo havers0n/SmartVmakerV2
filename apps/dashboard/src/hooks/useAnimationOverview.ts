@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AnimationOverviewResponse } from '@scrimspec/hwar-core/types/generation';
+import type { AnimationOverviewResponse } from '@scrimspec/hwar-core/types/generation';
 
 export interface UseAnimationOverviewResult {
   overview: AnimationOverviewResponse | undefined;
@@ -11,7 +11,7 @@ export interface UseAnimationOverviewResult {
 }
 
 export function useAnimationOverview(projectId: string | undefined): UseAnimationOverviewResult {
-  const query = useQuery<AnimationOverviewResponse>({
+  const query = useQuery<AnimationOverviewResponse, Error>({
     queryKey: ['animation-overview', projectId],
     enabled: !!projectId,
     queryFn: async () => {
@@ -22,10 +22,11 @@ export function useAnimationOverview(projectId: string | undefined): UseAnimatio
         const text = await res.text();
         throw new Error(text || `Failed to load animation overview (${res.status})`);
       }
-      return res.json();
+      return res.json() as Promise<AnimationOverviewResponse>;
     },
-    refetchInterval: (data) => {
-      const jobs = data?.jobs ?? [];
+    // React Query v5 passes the Query object here (not the raw `data`).
+    refetchInterval: (q) => {
+      const jobs = q.state.data?.jobs ?? [];
       const hasProcessing = jobs.some(
         (job) => job.status === 'pending' || job.status === 'running',
       );

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
 import { generationProjects } from '@scrimspec/db';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 
 export const runtime = 'nodejs';
 

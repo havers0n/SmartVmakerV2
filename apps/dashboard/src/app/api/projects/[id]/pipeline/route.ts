@@ -9,7 +9,7 @@ import {
     youtubeVideos,
     analysisResults
 } from '@/shared/lib/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc } from 'drizzle-orm';
 
 interface PipelineStatus {
     projectId: string;
@@ -41,7 +41,7 @@ interface PipelineStatus {
 }
 
 export async function GET(
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {

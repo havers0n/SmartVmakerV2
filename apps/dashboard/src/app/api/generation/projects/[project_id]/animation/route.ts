@@ -4,6 +4,7 @@ import { db } from '@/shared/lib/db';
 import { generationAnimationJobs } from '@/shared/lib/schema';
 import { defaultAiRouter } from '@/server/ai';
 import { syncMiniMaxVideoJob } from '@/server/minimax-sync';
+import type { AnimationKeyframe } from '@scrimspec/hwar-core';
 import {
   AnimationOverviewResponse,
   AnimationJobDto,
@@ -13,6 +14,9 @@ import {
 export const runtime = 'nodejs';
 
 const COOLDOWN_MS = 30_000;
+
+const toFrameType = (v: unknown): AnimationKeyframe['frameType'] =>
+  v === 'first' || v === 'middle' || v === 'last' ? v : undefined;
 
 function mapDbStatus(status: string): AnimationJobStatus {
   switch (status) {
@@ -128,17 +132,16 @@ export async function POST(req: NextRequest, { params }: { params: { project_id:
       return NextResponse.json({ error: 'First keyframe has no publicUrl' }, { status: 400 });
     }
 
-    const animationKeyframes = keyframes.map((kf, idx) => ({
-      assetId: kf.id,
-      publicUrl: kf.publicUrl!,
-      frameIndex: idx,
-      frameType:
-        idx === 0
-          ? 'first'
-          : idx === keyframes.length - 1
-            ? 'last'
-            : 'middle',
-    }));
+    const animationKeyframes: AnimationKeyframe[] = keyframes.map((kf, idx) => {
+      const frameType = idx === 0 ? 'first' : idx === keyframes.length - 1 ? 'last' : 'middle';
+
+      return {
+        assetId: kf.id,
+        publicUrl: kf.publicUrl!,
+        frameIndex: idx,
+        frameType: toFrameType(frameType),
+      };
+    });
 
     const result = await defaultAiRouter.generateAnimation({
       projectId,

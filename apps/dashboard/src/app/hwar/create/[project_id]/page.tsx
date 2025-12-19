@@ -431,15 +431,18 @@ export default function ProjectDetailPage() {
                     ? "Scenario selection is locked because keyframes already generated."
                     : "Select a scenario to generate keyframes."}
                 </div>
-                <Button
-                  size="lg"
-                  onClick={() => generateKeyframesMutation.mutate()}
-                  disabled={
-                    hasGeneratedKeyframes ||
+                {(() => {
+                  const isGenerateKeyframesDisabled =
+                    Boolean(hasGeneratedKeyframes) ||
                     generateKeyframesMutation.isPending ||
-                    selectedScenarioIndex === null
-                  }
-                >
+                    selectedScenarioIndex === null;
+
+                  return (
+                    <Button
+                      size="lg"
+                      onClick={() => generateKeyframesMutation.mutate()}
+                      disabled={isGenerateKeyframesDisabled}
+                    >
                   {hasGeneratedKeyframes ? (
                     <>
                       <ImageIcon className="w-4 h-4 mr-2" />
@@ -456,7 +459,9 @@ export default function ProjectDetailPage() {
                       Generate Keyframes
                     </>
                   )}
-                </Button>
+                    </Button>
+                  );
+                })()}
               </div>
             </div>
 

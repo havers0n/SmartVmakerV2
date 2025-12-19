@@ -3,9 +3,6 @@ import { minimaxFetch, queryVideoTask } from '@scrimspec/hwar-core/providers/min
 import { db } from '@/shared/lib/db';
 import { generationAnimationJobs } from '@/shared/lib/schema';
 
-const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL || 'https://api.minimax.io';
-const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
-
 async function resolveMiniMaxFileUrl(fileId: string): Promise<string | null> {
   const json = await minimaxFetch<any>(`/v1/files/retrieve?file_id=${encodeURIComponent(fileId)}`, {
     method: 'GET',

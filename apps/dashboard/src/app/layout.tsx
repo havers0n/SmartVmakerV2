@@ -5,7 +5,7 @@ import { AuthProvider } from '../shared/providers/auth-provider';
 import { TooltipProvider } from '../shared/components/ui/tooltip';
 import { Toaster } from '../shared/components/ui/toaster';
 import { Button } from '@/shared/components/ui/button';
-import { LayoutDashboard, RadioReceiver, Microscope, Settings, Clapperboard } from 'lucide-react';
+import { RadioReceiver, Microscope, Settings, Clapperboard } from 'lucide-react';
 import './globals.css';
 
 export const metadata: Metadata = {
