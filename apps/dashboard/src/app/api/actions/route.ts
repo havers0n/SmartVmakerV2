@@ -17,7 +17,7 @@ import {
   updateCharacter,
   deleteCharacter,
 } from './handlers/characters';
-import { startProject, generateKeyframes } from './handlers/generation';
+import { startProject, generateKeyframes, startAnimation } from './handlers/generation';
 import { listProjects } from './handlers/projects';
 import { listModels } from './handlers/models';
 
@@ -32,8 +32,10 @@ const envFlag = (name: string, defaultValue: boolean) => {
 const featureFlags = {
   enableIngest: envFlag('HWAR_ENABLE_INGEST', false),
   enableAnalysis: envFlag('HWAR_ENABLE_ANALYSIS', true),
-  enableGeneration: envFlag('HWAR_ENABLE_GENERATION', false),
-  enableAnimation: envFlag('HWAR_ENABLE_ANIMATION', false),
+  // По умолчанию включаем generation/animation, т.к. это core-функционал создания видео.
+  // Если нужно отключить дорогостоящие операции в конкретной среде — используйте HWAR_ENABLE_GENERATION/HWAR_ENABLE_ANIMATION.
+  enableGeneration: envFlag('HWAR_ENABLE_GENERATION', true),
+  enableAnimation: envFlag('HWAR_ENABLE_ANIMATION', true),
   enableKeyframes: envFlag('HWAR_ENABLE_KEYFRAMES', true),
 };
 
@@ -58,6 +60,7 @@ const actionRegistry = {
   ...(featureFlags.enableAnalysis ? { 'analysis.startAnalysis': startAnalysis } : {}),
   ...(featureFlags.enableGeneration ? { 'generation.startProject': startProject } : {}),
   ...(featureFlags.enableKeyframes ? { 'generation.generateKeyframes': generateKeyframes } : {}),
+  ...(featureFlags.enableAnimation ? { 'generation.startAnimation': startAnimation } : {}),
 } as const;
 
 type ActionName = keyof typeof actionRegistry;
