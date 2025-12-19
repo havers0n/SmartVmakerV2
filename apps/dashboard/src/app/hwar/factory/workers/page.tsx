@@ -10,22 +10,7 @@ import { EmptyState } from "@/shared/components/ui/empty-state";
 import { Play, Pause, Server } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { client } from "@project/api-client";
-
-type Worker = {
-  id: string;
-  name: string;
-  type: string;
-  isOnline: boolean;
-  isPaused: boolean;
-  concurrency: number;
-  dailyLimitUsd: number;
-  status?: string;
-  stats?: {
-    processed?: number;
-    failed?: number;
-    costToday?: number;
-  };
-};
+import type { Worker } from "@scrimspec/shared-types";
 
 export default function Workers() {
   const queryClient = useQueryClient();
@@ -46,7 +31,7 @@ export default function Workers() {
   const togglePause = (id: string, isPaused: boolean) => {
     updateWorkerMutation.mutate({ 
       id, 
-      data: { status: isPaused ? "active" : "paused" } 
+      data: { status: isPaused ? "running" : "paused" } 
     });
   };
 
