@@ -4,6 +4,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { ExternalLink, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { StartAnalysisButton } from './StartAnalysisButton';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +42,14 @@ type VideoAnalysisResponse = {
         version: number;
         analysisUrl: string | null;
     } | null;
+    job: {
+        id: string;
+        status: string;
+        analyzer: string | null;
+        createdAt: string;
+        updatedAt: string;
+        errorMessage: string | null;
+    } | null;
 };
 
 async function getAnalysis(id: string): Promise<VideoAnalysisResponse | null> {
@@ -73,47 +82,69 @@ async function getAnalysis(id: string): Promise<VideoAnalysisResponse | null> {
     // I will implement `getVideoAnalysis` helper in this file to keep it simple and robust.
 
     const { db } = await import('@/shared/lib/db');
-    const { analysisResults, youtubeVideos } = await import('@/shared/lib/schema');
+    const { analysisResults, analysisJobQueue, youtubeVideos } = await import('@/shared/lib/schema');
     const { eq, desc } = await import('drizzle-orm');
 
-    const result = await db
+    const videoRows = await db
         .select({
-            video: {
-                id: youtubeVideos.id,
-                title: youtubeVideos.title,
-                youtubeId: youtubeVideos.youtubeId,
-                url: youtubeVideos.url,
-                createdAt: youtubeVideos.createdAt,
-            },
-            analysis: {
-                id: analysisResults.id,
-                analyzer: analysisResults.analyzer,
-                createdAt: analysisResults.createdAt,
-                updatedAt: analysisResults.updatedAt,
-                aesBreakdown: analysisResults.aesBreakdown,
-                overallScore: analysisResults.overallScore,
-                emotionalTags: analysisResults.emotionalTags,
-                analyzerName: analysisResults.analyzerName,
-                version: analysisResults.version,
-                analysisUrl: analysisResults.analysisUrl,
-            },
+            id: youtubeVideos.id,
+            title: youtubeVideos.title,
+            youtubeId: youtubeVideos.youtubeId,
+            url: youtubeVideos.url,
+            createdAt: youtubeVideos.createdAt,
+        })
+        .from(youtubeVideos)
+        .where(eq(youtubeVideos.id, id))
+        .limit(1);
+
+    if (videoRows.length === 0) return null;
+
+    const analysisRows = await db
+        .select({
+            id: analysisResults.id,
+            analyzer: analysisResults.analyzer,
+            createdAt: analysisResults.createdAt,
+            updatedAt: analysisResults.updatedAt,
+            aesBreakdown: analysisResults.aesBreakdown,
+            overallScore: analysisResults.overallScore,
+            emotionalTags: analysisResults.emotionalTags,
+            analyzerName: analysisResults.analyzerName,
+            version: analysisResults.version,
+            analysisUrl: analysisResults.analysisUrl,
         })
         .from(analysisResults)
-        .innerJoin(youtubeVideos, eq(analysisResults.videoId, youtubeVideos.id))
-        .where(eq(youtubeVideos.id, id))
+        .where(eq(analysisResults.videoId, id))
         .orderBy(desc(analysisResults.createdAt))
         .limit(1);
 
-    if (result.length === 0) return null;
+    const jobRows = await db
+        .select({
+            id: analysisJobQueue.id,
+            status: analysisJobQueue.status,
+            analyzer: analysisJobQueue.analyzer,
+            createdAt: analysisJobQueue.createdAt,
+            updatedAt: analysisJobQueue.updatedAt,
+            errorMessage: analysisJobQueue.errorMessage,
+        })
+        .from(analysisJobQueue)
+        .where(eq(analysisJobQueue.videoId, id))
+        .orderBy(desc(analysisJobQueue.createdAt))
+        .limit(1);
 
-    const row = result[0];
+    const analysis = analysisRows[0]
+        ? {
+            ...analysisRows[0],
+            aesBreakdown: analysisRows[0].aesBreakdown as AesBreakdown | null,
+            emotionalTags: analysisRows[0].emotionalTags as string[] | null,
+        }
+        : null;
+
+    const job = jobRows[0] ?? null;
+
     return {
-        video: row.video,
-        analysis: {
-            ...row.analysis,
-            aesBreakdown: row.analysis.aesBreakdown as AesBreakdown | null,
-            emotionalTags: row.analysis.emotionalTags as string[] | null,
-        },
+        video: videoRows[0],
+        analysis,
+        job,
     };
 }
 
@@ -135,7 +166,7 @@ export default async function AnalysisDetailsPage({
         return notFound();
     }
 
-    const { video, analysis } = data;
+    const { video, analysis, job } = data;
     const aes = analysis?.aesBreakdown;
 
     return (
@@ -153,9 +184,19 @@ export default async function AnalysisDetailsPage({
                 <div className="flex items-start justify-between">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">{video.title}</h1>
-                        <p className="text-muted-foreground mt-1">
-                            Analyzed on {new Date(analysis?.createdAt || '').toLocaleDateString()}
-                        </p>
+                        {analysis?.createdAt ? (
+                            <p className="text-muted-foreground mt-1">
+                                Analyzed on {new Date(analysis.createdAt).toLocaleDateString()}
+                            </p>
+                        ) : job?.status === 'pending' || job?.status === 'processing' ? (
+                            <p className="text-muted-foreground mt-1">
+                                Analysis in progress ({job.status})
+                            </p>
+                        ) : (
+                            <p className="text-muted-foreground mt-1">
+                                Not analyzed yet
+                            </p>
+                        )}
                     </div>
                     {video.url && (
                         <Button variant="outline" asChild>
@@ -166,6 +207,27 @@ export default async function AnalysisDetailsPage({
                     )}
                 </div>
             </div>
+
+            {!analysis && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Status</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {job?.status === 'failed' && (
+                            <div className="text-sm text-destructive">
+                                {job.errorMessage ?? 'Analysis failed'}
+                            </div>
+                        )}
+                        <div className="flex items-center gap-3">
+                            {(!job || job.status === 'failed') && <StartAnalysisButton videoId={video.id} />}
+                            <Button variant="outline" asChild>
+                                <Link href="/analysis">Back to list</Link>
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* AES Breakdown Cards */}
             {aes ? (

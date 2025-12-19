@@ -327,8 +327,14 @@ export default function AnalysisPage() {
                       `}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest('[role="checkbox"]') || (e.target as HTMLElement).closest('a')) return;
-                        if (video.isAnalyzed || video.analysisUrl) router.push(`/analysis/${video.id}`);
-                        else handleVideoToggle(video.id);
+                        router.push(`/analysis/${video.id}`);
+                      }}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          router.push(`/analysis/${video.id}`);
+                        }
                       }}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
