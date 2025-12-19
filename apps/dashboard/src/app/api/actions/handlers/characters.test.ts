@@ -10,9 +10,6 @@ import {
   updateCharacter,
   deleteCharacter,
   createCharacterSchema,
-  updateCharacterSchema,
-  getByIdSchema,
-  deleteSchema,
 } from './characters';
 
 // Mock the database module

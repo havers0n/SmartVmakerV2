@@ -10,9 +10,6 @@ import {
   updateStoryTemplate,
   deleteStoryTemplate,
   createStoryTemplateSchema,
-  updateStoryTemplateSchema,
-  getByIdSchema,
-  deleteSchema,
 } from './story-templates';
 
 // Mock the database module

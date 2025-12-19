@@ -112,8 +112,7 @@ describe('startAnalysis', () => {
 
   describe('Duplicate Detection', () => {
     it('should skip videos that already have analysis', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       // Mock existing analysis for video 1 and 2
       selectChain.execute.mockResolvedValueOnce([
@@ -200,8 +199,7 @@ describe('startAnalysis', () => {
     });
 
     it('should only create jobs for new videos', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       // Mock existing analysis for video 1
       selectChain.execute.mockResolvedValueOnce([{ videoId: 1 }]);
@@ -230,8 +228,7 @@ describe('startAnalysis', () => {
 
   describe('Response Format', () => {
     it('should return success response with job counts', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       selectChain.execute.mockResolvedValueOnce([]);
 
@@ -253,8 +250,7 @@ describe('startAnalysis', () => {
     });
 
     it('should include singular/plural in message', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       selectChain.execute.mockResolvedValueOnce([]);
 
@@ -269,8 +265,7 @@ describe('startAnalysis', () => {
     });
 
     it('should mention already analyzed videos in message', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       selectChain.execute.mockResolvedValueOnce([
         { videoId: 1 },
@@ -317,8 +312,7 @@ describe('startAnalysis', () => {
     });
 
     it('should catch and return database errors', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       selectChain.execute.mockRejectedValueOnce(new Error('Database connection failed'));
 
@@ -334,8 +328,7 @@ describe('startAnalysis', () => {
     });
 
     it('should handle unknown errors gracefully', async () => {
-      const { getDrizzleClient } = await import('@scrimspec/db');
-      const mockDb = getDrizzleClient();
+      await import('@scrimspec/db');
 
       // Throw non-Error object
       selectChain.execute.mockRejectedValueOnce('Unknown error');
