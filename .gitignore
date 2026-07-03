@@ -61,3 +61,10 @@ Thumbs.db
 .DS_Store
 
 .mcp.json
+
+# Tooling
+.codex/
+
+# Generated docs
+docs/DATA_CONTRACTS*.md
+docs/EVOLUTION*.md
