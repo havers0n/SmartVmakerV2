@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql, eq, and, desc } from 'drizzle-orm';
 import { db } from '@/shared/lib/db';
-import { generationAnimationJobs } from '@/shared/lib/schema';
+import { generationAnimationJobs, generationProjects } from '@/shared/lib/schema';
 import { defaultAiRouter } from '@/server/ai';
 import { syncMiniMaxVideoJob } from '@/server/minimax-sync';
 import type { AnimationKeyframe } from '@scrimspec/hwar-core';
@@ -10,6 +10,7 @@ import {
   AnimationJobDto,
   AnimationJobStatus,
 } from '@scrimspec/hwar-core/types/generation';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -90,12 +91,24 @@ async function getProjectKeyframesByScene(projectId: string, sceneIndex: number)
 
 export async function POST(req: NextRequest, { params }: { params: { project_id: string } }) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) return unauthorizedResponse();
+
     const projectId = params.project_id;
     const body = await req.json();
     const sceneIndex: number = body.sceneIndex;
 
     if (!projectId || typeof sceneIndex !== 'number') {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+
+    const [project] = await db
+      .select({ id: generationProjects.id })
+      .from(generationProjects)
+      .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
+      .limit(1);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     const [lastJob] = await db
@@ -167,7 +180,19 @@ export async function POST(req: NextRequest, { params }: { params: { project_id:
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { project_id: string } }) {
+  const userId = getTrustedUserId(_req);
+  if (!userId) return unauthorizedResponse();
+
   const projectId = params.project_id;
+
+  const [project] = await db
+    .select({ id: generationProjects.id })
+    .from(generationProjects)
+    .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
+    .limit(1);
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
 
   const jobs = await db.query.generationAnimationJobs.findMany({
     where: eq(generationAnimationJobs.projectId, projectId),
@@ -210,4 +235,3 @@ export async function GET(_req: NextRequest, { params }: { params: { project_id:
     { status: 200 },
   );
 }
-

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
 import { generationProjects } from '@scrimspec/db';
 import { eq, and, isNull } from 'drizzle-orm';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -10,10 +11,13 @@ export const runtime = 'nodejs';
  * Fetch a single generation project by ID
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { project_id: string } }
 ) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) return unauthorizedResponse();
+
     const projectId = params.project_id;
 
     if (!projectId) {
@@ -27,7 +31,7 @@ export async function GET(
     const [project] = await db
       .select()
       .from(generationProjects)
-      .where(eq(generationProjects.id, projectId));
+      .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)));
 
     if (!project) {
       return NextResponse.json(
@@ -52,10 +56,13 @@ export async function GET(
  * Soft delete a generation project
  */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { project_id: string } }
 ) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) return unauthorizedResponse();
+
     const projectId = params.project_id;
 
     if (!projectId) {
@@ -71,6 +78,7 @@ export async function DELETE(
       .set({ deletedAt: new Date().toISOString() })
       .where(and(
         eq(generationProjects.id, projectId),
+        eq(generationProjects.ownerId, userId),
         isNull(generationProjects.deletedAt)
       ))
       .returning({ id: generationProjects.id });

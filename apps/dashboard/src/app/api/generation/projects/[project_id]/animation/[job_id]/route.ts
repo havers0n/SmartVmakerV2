@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/shared/lib/db';
-import { generationAnimationJobs } from '@/shared/lib/schema';
+import { generationAnimationJobs, generationProjects } from '@/shared/lib/schema';
 import { AnimationJobDto } from '@scrimspec/hwar-core/types/generation';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -41,13 +42,25 @@ function toDto(job: typeof generationAnimationJobs.$inferSelect): AnimationJobDt
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: { project_id: string; job_id: string } },
 ) {
+  const userId = getTrustedUserId(req);
+  if (!userId) return unauthorizedResponse();
+
   const { project_id: projectId, job_id: jobId } = params;
 
   if (!projectId || !jobId) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
+  }
+
+  const [project] = await db
+    .select({ id: generationProjects.id })
+    .from(generationProjects)
+    .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
+    .limit(1);
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
   const job = await db.query.generationAnimationJobs.findFirst({
