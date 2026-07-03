@@ -25,6 +25,15 @@ import {
 const DEFAULT_BASE_URL = 'https://api.minimax.io/v1';
 const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
 
+function isAllowedDownloadHost(hostname: string): boolean {
+  const configured = process.env.HALU_ALLOWED_VIDEO_HOSTS;
+  const rules = (configured ? configured.split(',') : ['minimax.io'])
+    .map((rule) => rule.trim().toLowerCase())
+    .filter(Boolean);
+  const host = hostname.toLowerCase();
+  return rules.some((rule) => host === rule || host.endsWith(`.${rule}`));
+}
+
 /**
  * HALU API Client
  */
@@ -299,8 +308,22 @@ export class HaluClient {
       downloadUrl = fileInfo.file.download_url;
     }
 
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(downloadUrl);
+    } catch {
+      throw new Error('Invalid download URL returned by provider');
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Insecure video download URL protocol');
+    }
+    if (!isAllowedDownloadHost(parsedUrl.hostname)) {
+      throw new Error(`Video download host is not allowed: ${parsedUrl.hostname}`);
+    }
+
     // Download the video
-    const response = await fetch(downloadUrl);
+    const response = await fetch(parsedUrl.toString());
 
     if (!response.ok) {
       throw new Error(`Failed to download video: HTTP ${response.status}`);
