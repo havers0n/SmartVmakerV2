@@ -1,7 +1,7 @@
 import { startAnalysisPayloadSchema } from '@scrimspec/core-domain';
 import { getDrizzleClient, schema } from '@scrimspec/db';
 import { ZodError } from 'zod';
-import { inArray } from 'drizzle-orm';
+import { inArray, and, eq } from 'drizzle-orm';
 import { createLogger } from '@aec/logger';
 
 const logger = createLogger({ name: 'api-analysis' });
@@ -28,9 +28,20 @@ export async function startAnalysis(payload: unknown) {
       .from(schema.analysisResults)
       .where(inArray(schema.analysisResults.videoId, videoIds)); // <-- Fixed: replaced sql`${schema.analysisResults.videoId} = ANY(${videoIds})` with inArray
 
-    const existingVideoIds = new Set(
-      existingAnalysis.map((result) => result.videoId)
-    );
+    const existingJobs = await db
+      .select({ videoId: schema.analysisJobQueue.videoId })
+      .from(schema.analysisJobQueue)
+      .where(
+        and(
+          eq(schema.analysisJobQueue.analyzer, analyzer),
+          inArray(schema.analysisJobQueue.videoId, videoIds)
+        )
+      );
+
+    const existingVideoIds = new Set([
+      ...existingAnalysis.map((result) => result.videoId),
+      ...existingJobs.map((job) => job.videoId),
+    ]);
 
     // Step 3: Filter out videos that already have analysis
     const idsToAnalyze = videoIds.filter((id) => !existingVideoIds.has(id));
@@ -57,7 +68,12 @@ export async function startAnalysis(payload: unknown) {
       retryCount: 0,
     }));
 
-    await db.insert(schema.analysisJobQueue).values(jobsToInsert as any);
+    await db
+      .insert(schema.analysisJobQueue)
+      .values(jobsToInsert as any)
+      .onConflictDoNothing({
+        target: [schema.analysisJobQueue.videoId, schema.analysisJobQueue.analyzer],
+      });
 
     // Step 6: Return success message
     const alreadyAnalyzedCount = videoIds.length - idsToAnalyze.length;

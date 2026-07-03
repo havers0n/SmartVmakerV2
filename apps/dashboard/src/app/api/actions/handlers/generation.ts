@@ -426,7 +426,15 @@ ${toolResults.map(tr => JSON.stringify(tr.result, null, 2)).join('\n\n')}`;
  * Handler for generation.startProject action
  * Creates a new generation project and generates scenarios
  */
-export async function startProject(payload: unknown) {
+export async function startProject(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = startProjectSchema.parse(payload);
 
   logger.info(
@@ -538,7 +546,7 @@ export async function startProject(payload: unknown) {
   const [project] = await db
     .insert(generationProjects)
     .values({
-      ownerId: validated.ownerId,
+      ownerId: userId,
       templateId: validated.presetId,
       status: 'pending',
       meta: {
@@ -615,7 +623,15 @@ function buildVisualPrompt(raw?: string): string {
  * Handler for generation.generateKeyframes action
  * Creates keyframe generation jobs for first and last frame of each scene
  */
-export async function generateKeyframes(payload: unknown) {
+export async function generateKeyframes(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = generateKeyframesSchema.parse(payload);
 
   logger.info(
@@ -627,7 +643,7 @@ export async function generateKeyframes(payload: unknown) {
   const [project] = await db
     .select()
     .from(generationProjects)
-    .where(eq(generationProjects.id, validated.projectId));
+    .where(and(eq(generationProjects.id, validated.projectId), eq(generationProjects.ownerId, userId)));
 
   if (!project) {
     throw new Error(`Project with id ${validated.projectId} not found`);
@@ -797,7 +813,15 @@ export type StartAnimationPayload = z.infer<typeof startAnimationSchema>;
  * Handler for generation.startAnimation action
  * Creates animation generation jobs for each scene's keyframe pair
  */
-export async function startAnimation(payload: unknown) {
+export async function startAnimation(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = startAnimationSchema.parse(payload);
 
   logger.info(
@@ -809,7 +833,7 @@ export async function startAnimation(payload: unknown) {
   const [project] = await db
     .select()
     .from(generationProjects)
-    .where(eq(generationProjects.id, validated.projectId));
+    .where(and(eq(generationProjects.id, validated.projectId), eq(generationProjects.ownerId, userId)));
 
   if (!project) {
     throw new Error(`Project with id ${validated.projectId} not found`);
@@ -913,7 +937,15 @@ export async function startAnimation(payload: unknown) {
         sceneDescription, // Add scene description to job
         status: 'pending',
       } as any)
+      .onConflictDoNothing({
+        target: [animationJobQueue.projectId, animationJobQueue.sceneIndex],
+      })
       .returning();
+
+    if (!job) {
+      logger.warn({ projectId: validated.projectId, sceneIndex }, 'Animation job already exists, skipping duplicate');
+      continue;
+    }
 
     jobsCreated.push(job.id);
 

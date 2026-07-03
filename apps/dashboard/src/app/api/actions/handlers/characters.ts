@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { db } from '@/shared/lib/db';
 import { characters } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
-import { eq } from 'drizzle-orm';
+import { eq, or, isNull, and } from 'drizzle-orm';
 
 const logger = createLogger({ name: 'api-characters' });
 
@@ -42,7 +42,13 @@ export type DeletePayload = z.infer<typeof deleteSchema>;
 /**
  * Create a new character
  */
-export async function createCharacter(payload: unknown) {
+export async function createCharacter(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) throw new Error('Unauthorized');
+
   const validated = createCharacterSchema.parse(payload);
 
   logger.info({ name: validated.name }, 'Creating character');
@@ -54,7 +60,7 @@ export async function createCharacter(payload: unknown) {
       description: validated.description,
       stylePresets: validated.stylePresets || {},
       referenceImageUrls: validated.referenceImageUrls,
-      ownerId: validated.ownerId,
+      ownerId: userId,
     })
     .returning();
 
@@ -66,10 +72,19 @@ export async function createCharacter(payload: unknown) {
 /**
  * List all characters
  */
-export async function listCharacters() {
+export async function listCharacters(
+  _payload?: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) throw new Error('Unauthorized');
+
   logger.info('Listing all characters');
 
-  const allCharacters = await db.select().from(characters);
+  const allCharacters = await db
+    .select()
+    .from(characters)
+    .where(or(eq(characters.ownerId, userId), isNull(characters.ownerId)));
 
   logger.info({ count: allCharacters.length }, 'Characters retrieved');
 
@@ -79,7 +94,13 @@ export async function listCharacters() {
 /**
  * Get character by ID
  */
-export async function getCharacterById(payload: unknown) {
+export async function getCharacterById(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) throw new Error('Unauthorized');
+
   const validated = getByIdSchema.parse(payload);
 
   logger.info({ id: validated.id }, 'Getting character by ID');
@@ -87,7 +108,7 @@ export async function getCharacterById(payload: unknown) {
   const [character] = await db
     .select()
     .from(characters)
-    .where(eq(characters.id, validated.id));
+    .where(and(eq(characters.id, validated.id), eq(characters.ownerId, userId)));
 
   if (!character) {
     throw new Error(`Character with id ${validated.id} not found`);
@@ -101,7 +122,13 @@ export async function getCharacterById(payload: unknown) {
 /**
  * Update character
  */
-export async function updateCharacter(payload: unknown) {
+export async function updateCharacter(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) throw new Error('Unauthorized');
+
   const validated = updateCharacterSchema.parse(payload);
 
   logger.info({ id: validated.id }, 'Updating character');
@@ -116,12 +143,12 @@ export async function updateCharacter(payload: unknown) {
   if (validated.stylePresets !== undefined) updateData.stylePresets = validated.stylePresets;
   if (validated.referenceImageUrls !== undefined)
     updateData.referenceImageUrls = validated.referenceImageUrls;
-  if (validated.ownerId !== undefined) updateData.ownerId = validated.ownerId;
+  updateData.ownerId = userId;
 
   const [character] = await db
     .update(characters)
     .set(updateData)
-    .where(eq(characters.id, validated.id))
+    .where(and(eq(characters.id, validated.id), eq(characters.ownerId, userId)))
     .returning();
 
   if (!character) {
@@ -136,14 +163,20 @@ export async function updateCharacter(payload: unknown) {
 /**
  * Delete character
  */
-export async function deleteCharacter(payload: unknown) {
+export async function deleteCharacter(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) throw new Error('Unauthorized');
+
   const validated = deleteSchema.parse(payload);
 
   logger.info({ id: validated.id }, 'Deleting character');
 
   const [deleted] = await db
     .delete(characters)
-    .where(eq(characters.id, validated.id))
+    .where(and(eq(characters.id, validated.id), eq(characters.ownerId, userId)))
     .returning();
 
   if (!deleted) {

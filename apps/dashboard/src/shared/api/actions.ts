@@ -242,3 +242,22 @@ export interface ModelWithProvider {
 export async function listModels(type: ModelType): Promise<ModelWithProvider[]> {
   return callAction('models.list', { type });
 }
+
+// =============================================================================
+// BeamNG Channel Import Actions
+// =============================================================================
+
+export interface ImportChannelResult {
+  channelId: string;
+  channelTitle: string | null;
+  videosImported: number;
+  videosTotal: number;
+  importSessionId: string;
+}
+
+export async function importBeamngChannel(payload: {
+  input: string;
+  maxVideos?: number;
+}): Promise<ImportChannelResult> {
+  return callAction<ImportChannelResult>('beamng.importChannel', payload);
+}

@@ -16,7 +16,7 @@ export const startSearchPayloadSchema = z.object({
   order: z.enum(['date', 'rating', 'relevance', 'viewCount']).optional(),
   videoDuration: z.enum(['any', 'short', 'medium', 'long']).optional(),
   maxResults: z.number().min(1).max(50).optional(),
-  publishedAfter: z.string().optional(), // ISO date string
+  publishedAfter: z.string().datetime().optional(), // ISO date string
   safeSearch: z.enum(['none', 'moderate', 'strict']).optional(),
   videoDefinition: z.enum(['any', 'high', 'standard']).optional(),
   regionCode: z.string().optional(),

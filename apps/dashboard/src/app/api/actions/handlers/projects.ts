@@ -10,7 +10,15 @@ const logger = createLogger({ name: 'api-projects' });
  * Returns projects sorted by createdAt in descending order (newest first)
  * Selects only necessary fields for the project list: id, status, and meta (especially title)
  */
-export async function listProjects() {
+export async function listProjects(
+  _payload?: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   logger.info('Listing all generation projects');
 
   try {
@@ -37,7 +45,7 @@ export async function listProjects() {
           isNull(assets.deletedAt),
         ),
       )
-      .where(isNull(generationProjects.deletedAt))
+      .where(and(eq(generationProjects.ownerId, userId), isNull(generationProjects.deletedAt)))
       .groupBy(
         generationProjects.id,
         generationProjects.status,

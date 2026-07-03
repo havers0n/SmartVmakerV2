@@ -3,6 +3,7 @@ export const runtime = 'nodejs'; // 'edge' is the default
 import { NextRequest, NextResponse } from 'next/server';
 import { startSearch } from './handlers/ingest';
 import { startAnalysis } from './handlers/analysis';
+import { importChannel } from './handlers/beamng';
 import {
   createStoryTemplate,
   listStoryTemplates,
@@ -20,8 +21,10 @@ import {
 import { startProject, generateKeyframes, startAnimation } from './handlers/generation';
 import { listProjects } from './handlers/projects';
 import { listModels } from './handlers/models';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
-type ActionHandler = (payload: unknown) => Promise<unknown> | unknown;
+type ActionContext = { userId?: string };
+type ActionHandler = (payload: unknown, ctx?: ActionContext) => Promise<unknown> | unknown;
 
 const envFlag = (name: string, defaultValue: boolean) => {
   const value = process.env[name];
@@ -52,6 +55,7 @@ const baseRegistry = {
   'characters.delete': deleteCharacter,
   'projects.list': listProjects,
   'models.list': listModels,
+  'beamng.importChannel': importChannel,
 } satisfies Record<string, ActionHandler>;
 
 const actionRegistry = {
@@ -87,6 +91,11 @@ type ActionName = keyof typeof actionRegistry;
  */
 export async function POST(req: NextRequest) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) {
+      return unauthorizedResponse();
+    }
+
     const body = await req.json();
     const { action, payload } = body;
 
@@ -118,7 +127,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Execute handler with payload
-    const result = await handler(payload);
+    const result = await handler(payload, { userId });
 
     // Return success response
     return NextResponse.json(
