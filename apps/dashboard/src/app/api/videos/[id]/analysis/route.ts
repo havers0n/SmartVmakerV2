@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
 import { analysisResults, youtubeVideos } from '@/shared/lib/schema';
 import { eq, desc } from 'drizzle-orm';
+import {
+    forbiddenResponse,
+    getTrustedUserId,
+    isAdminUser,
+    unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -42,10 +48,14 @@ type VideoAnalysisResponse = {
 };
 
 export async function GET(
-    _request: Request,
+    request: Request,
     context: { params: { id: string } }
 ) {
     try {
+        const userId = getTrustedUserId(request);
+        if (!userId) return unauthorizedResponse();
+        if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
         const { id } = context.params;
 
         const result = await db
