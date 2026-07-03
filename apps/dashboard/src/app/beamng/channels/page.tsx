@@ -1,18 +1,54 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { Card, CardContent } from '@/shared/components/ui/card';
-import { Skeleton } from '@/shared/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import { useEffect, useState, useCallback } from "react";
+import { Button } from "@/shared/components/ui/button";
+import { Badge } from "@/shared/components/ui/badge";
+import { Card, CardContent } from "@/shared/components/ui/card";
+import { Skeleton } from "@/shared/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/shared/components/ui/table";
 import {
   Pagination,
   PaginationContent,
   PaginationItem,
   PaginationNext,
   PaginationPrevious,
-} from '@/shared/components/ui/pagination';
-import { Input } from '@/shared/components/ui/input';
-import { Users, Search, Eye, Film, BarChart3, Calendar } from 'lucide-react';
+} from "@/shared/components/ui/pagination";
+import { Input } from "@/shared/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/components/ui/dialog";
+import {
+  Users,
+  Search,
+  Eye,
+  Film,
+  BarChart3,
+  Calendar,
+  Plus,
+  Loader2,
+} from "lucide-react";
+import { useToast } from "@/shared/hooks/use-toast";
+import { importBeamngChannel } from "@/shared/api/actions";
 
 interface BeamngChannel {
   id: string;
@@ -26,6 +62,10 @@ interface BeamngChannel {
   viewCount: number | null;
   publishedAt: string | null;
   thumbnailUrl: string | null;
+  averageViewsPerDay: number | null;
+  medianViewsPerDay: number | null;
+  dominantPatterns: Array<{ id: string; label: string; videoCount: number }>;
+  bestOutlier: { title: string; outlierScore: number; url: string } | null;
   aggregates: {
     totalVideos: number;
     totalViews: number;
@@ -36,15 +76,19 @@ interface BeamngChannel {
 }
 
 function formatNumber(n: number): string {
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n.toLocaleString();
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export default function BeamngChannelsPage() {
@@ -52,18 +96,26 @@ export default function BeamngChannelsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [channelInput, setChannelInput] = useState("");
+  const [maxVideos, setMaxVideos] = useState("50");
+  const [importing, setImporting] = useState(false);
   const limit = 50;
   const totalPages = Math.ceil(total / limit);
+  const { toast } = useToast();
 
   const fetchChannels = useCallback(async () => {
     try {
       setLoading(true);
       const offset = (page - 1) * limit;
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-      if (search) params.set('search', search);
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (search) params.set("search", search);
       const res = await fetch(`/api/beamng/channels?${params}`);
-      if (!res.ok) throw new Error('Failed to load');
+      if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setChannels(data.channels || []);
       setTotal(data.total || 0);
@@ -75,7 +127,36 @@ export default function BeamngChannelsPage() {
     }
   }, [page, search]);
 
-  useEffect(() => { fetchChannels(); }, [fetchChannels]);
+  useEffect(() => {
+    fetchChannels();
+  }, [fetchChannels]);
+
+  const handleImport = async () => {
+    if (!channelInput.trim()) return;
+    setImporting(true);
+    try {
+      const result = await importBeamngChannel({
+        input: channelInput.trim(),
+        maxVideos: parseInt(maxVideos, 10),
+      });
+      toast({
+        title: "Channel imported",
+        description: `"${result.channelTitle || channelInput}" — ${result.videosImported} videos imported.`,
+      });
+      setDialogOpen(false);
+      setChannelInput("");
+      fetchChannels();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Import failed";
+      toast({
+        title: "Import failed",
+        description: msg,
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -89,14 +170,82 @@ export default function BeamngChannelsPage() {
             YouTube channels with aggregate video metrics.
           </p>
         </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search channels..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-9 h-9"
-          />
+        <div className="flex items-center gap-3">
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add YouTube Channel
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import YouTube Channel</DialogTitle>
+                <DialogDescription>
+                  Paste a channel URL, @handle, or channel ID to import its
+                  latest videos.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Channel URL / @handle / Channel ID
+                  </label>
+                  <Input
+                    placeholder="https://www.youtube.com/@beamngsundriver"
+                    value={channelInput}
+                    onChange={(e) => setChannelInput(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Max videos to import
+                  </label>
+                  <Select value={maxVideos} onValueChange={setMaxVideos}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={importing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleImport}
+                  disabled={!channelInput.trim() || importing}
+                >
+                  {importing && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  {importing ? "Importing..." : "Import"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search channels..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="pl-9 h-9"
+            />
+          </div>
         </div>
       </div>
 
@@ -104,7 +253,9 @@ export default function BeamngChannelsPage() {
         <CardContent className="p-0">
           {loading && (
             <div className="p-8 space-y-4">
-              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
             </div>
           )}
 
@@ -112,7 +263,9 @@ export default function BeamngChannelsPage() {
             <div className="py-16 text-center text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <p className="text-lg font-medium">No channels yet</p>
-              <p className="text-sm">Import channels to see aggregated data here.</p>
+              <p className="text-sm">
+                Import channels to see aggregated data here.
+              </p>
             </div>
           )}
 
@@ -122,58 +275,120 @@ export default function BeamngChannelsPage() {
                 <TableRow className="hover:bg-transparent border-border/50">
                   <TableHead>Channel</TableHead>
                   <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><Users className="h-3 w-3" /> Subscribers</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <Users className="h-3 w-3" /> Subscribers
+                    </div>
                   </TableHead>
                   <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><Eye className="h-3 w-3" /> Total Views</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <Eye className="h-3 w-3" /> Total Views
+                    </div>
                   </TableHead>
                   <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><Film className="h-3 w-3" /> Videos</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <Film className="h-3 w-3" /> Videos
+                    </div>
                   </TableHead>
                   <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><BarChart3 className="h-3 w-3" /> Avg Views/Video</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <BarChart3 className="h-3 w-3" /> Avg Views/Video
+                    </div>
                   </TableHead>
+                  <TableHead className="text-right">Avg Views/Day</TableHead>
+                  <TableHead className="text-right">Median Views/Day</TableHead>
+                  <TableHead>Dominant Patterns</TableHead>
+                  <TableHead>Best Outlier</TableHead>
                   <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><BarChart3 className="h-3 w-3" /> Avg Views/Day</div>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <div className="flex items-center justify-end gap-1"><Calendar className="h-3 w-3" /> Latest Video</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <Calendar className="h-3 w-3" /> Latest Video
+                    </div>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {channels.map((ch) => (
-                  <TableRow key={ch.id} className="border-border/50 hover:bg-muted/30">
+                  <TableRow
+                    key={ch.id}
+                    className="border-border/50 hover:bg-muted/30"
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         {ch.thumbnailUrl ? (
-                          <img src={ch.thumbnailUrl} alt="" className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                          <img
+                            src={ch.thumbnailUrl}
+                            alt=""
+                            className="w-10 h-10 rounded-full object-cover border border-white/10"
+                          />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
                             <Users className="h-4 w-4 opacity-30" />
                           </div>
                         )}
                         <div className="flex flex-col">
-                          <span className="font-medium text-sm text-foreground">{ch.title || ch.handle || ch.youtubeChannelId}</span>
-                          {ch.handle && <span className="text-xs text-muted-foreground">{ch.handle}</span>}
+                          <span className="font-medium text-sm text-foreground">
+                            {ch.title || ch.handle || ch.youtubeChannelId}
+                          </span>
+                          {ch.handle && (
+                            <span className="text-xs text-muted-foreground">
+                              {ch.handle}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {ch.subscriberCount != null ? formatNumber(ch.subscriberCount) : '-'}
+                      {ch.subscriberCount != null
+                        ? formatNumber(ch.subscriberCount)
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {ch.viewCount != null ? formatNumber(ch.viewCount) : formatNumber(ch.aggregates.totalViews)}
+                      {ch.viewCount != null
+                        ? formatNumber(ch.viewCount)
+                        : formatNumber(ch.aggregates.totalViews)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {ch.aggregates.totalVideos || '-'
-                      }
+                      {ch.aggregates.totalVideos || "-"}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                      {ch.aggregates.avgViewsPerVideo != null ? formatNumber(ch.aggregates.avgViewsPerVideo) : '-'}
+                      {ch.aggregates.avgViewsPerVideo != null
+                        ? formatNumber(ch.aggregates.avgViewsPerVideo)
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                      {ch.aggregates.avgViewsPerDay != null ? formatNumber(ch.aggregates.avgViewsPerDay) : '-'}
+                      {ch.averageViewsPerDay != null
+                        ? formatNumber(ch.averageViewsPerDay)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                      {ch.medianViewsPerDay != null
+                        ? formatNumber(ch.medianViewsPerDay)
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {ch.dominantPatterns.map((pattern) => (
+                          <Badge key={pattern.id} variant="secondary">
+                            {pattern.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-[240px]">
+                      {ch.bestOutlier ? (
+                        <a
+                          href={ch.bestOutlier.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm hover:text-primary line-clamp-2"
+                        >
+                          {ch.bestOutlier.title}{" "}
+                          <Badge variant="outline">
+                            {ch.bestOutlier.outlierScore.toFixed(1)}×
+                          </Badge>
+                        </a>
+                      ) : (
+                        "-"
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">
                       {formatDate(ch.aggregates.latestVideoDate)}
@@ -191,7 +406,13 @@ export default function BeamngChannelsPage() {
           <Pagination>
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }} />
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (page > 1) setPage(page - 1);
+                  }}
+                />
               </PaginationItem>
               <PaginationItem>
                 <span className="flex h-9 min-w-9 items-center justify-center text-xs text-muted-foreground">
@@ -199,7 +420,13 @@ export default function BeamngChannelsPage() {
                 </span>
               </PaginationItem>
               <PaginationItem>
-                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (page < totalPages) setPage(page + 1); }} />
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (page < totalPages) setPage(page + 1);
+                  }}
+                />
               </PaginationItem>
             </PaginationContent>
           </Pagination>
