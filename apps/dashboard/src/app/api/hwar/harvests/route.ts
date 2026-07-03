@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getDrizzleClient, desc } from '@scrimspec/db';
 import { ingestJobQueue } from '@scrimspec/db';
+import {
+    forbiddenResponse,
+    getTrustedUserId,
+    isAdminUser,
+    unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const userId = getTrustedUserId(request);
+    if (!userId) return unauthorizedResponse();
+    if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
     const db = getDrizzleClient();
 
     try {

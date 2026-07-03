@@ -2,13 +2,23 @@ import { NextResponse } from 'next/server';
 import { getDrizzleClient } from '@scrimspec/db';
 import { hwarWorkers } from '@scrimspec/db';
 import type { Worker } from '@scrimspec/shared-types';
+import {
+	forbiddenResponse,
+	getTrustedUserId,
+	isAdminUser,
+	unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // Worker is considered online if last heartbeat was within last 5 minutes
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function GET() {
+export async function GET(request: Request) {
+	const userId = getTrustedUserId(request);
+	if (!userId) return unauthorizedResponse();
+	if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
 	const db = getDrizzleClient();
 
 	try {

@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { getDrizzleClient, eq } from '@scrimspec/db';
 import { hwarWorkers } from '@scrimspec/db';
 import type { Worker } from '@scrimspec/shared-types';
+import {
+	forbiddenResponse,
+	getTrustedUserId,
+	isAdminUser,
+	unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +25,10 @@ export async function PATCH(
 	request: Request,
 	{ params }: { params: { id: string } }
 ) {
+	const userId = getTrustedUserId(request);
+	if (!userId) return unauthorizedResponse();
+	if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
 	const db = getDrizzleClient();
 	const workerId = params.id;
 

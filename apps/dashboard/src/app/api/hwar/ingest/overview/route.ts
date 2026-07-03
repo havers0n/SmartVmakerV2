@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDrizzleClient, schema } from '@scrimspec/db';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import {
+  forbiddenResponse,
+  getTrustedUserId,
+  isAdminUser,
+  unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +16,11 @@ type IngestOverview = {
   pendingAnalysis: number;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const userId = getTrustedUserId(request);
+  if (!userId) return unauthorizedResponse();
+  if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
   const db = getDrizzleClient();
 
   try {
