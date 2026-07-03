@@ -160,7 +160,8 @@ jobs:
       - name: Verify build artifacts
         run: |
           echo "Checking build outputs..."
-          test -d packages/orchestrator/dist && echo "✅ orchestrator built"
+          test -d packages/hwar-core/dist && echo "✅ hwar-core built"
+          test -d packages/workers/dist && echo "✅ workers built"
           test -d packages/db/dist && echo "✅ db built"
           test -d packages/shared-types/dist && echo "✅ shared-types built"
 
