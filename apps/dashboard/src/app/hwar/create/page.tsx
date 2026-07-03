@@ -1,19 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/shared/components/ui/button";
 import { Card } from "@/shared/components/ui/card";
-import { Plus, FolderOpen } from "lucide-react";
+import { Checkbox } from "@/shared/components/ui/checkbox";
+import { Plus, FolderOpen, Trash2 } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { StatusBadge } from "@/shared/components/ui/status-badge";
 import { ActionHttpError, listProjects } from "@/shared/api/actions";
 import { ProjectPreview } from "@scrimspec/shared-types";
 import { type ProjectTabId } from "@/shared/const/projectTabs";
+import { useToast } from "@/shared/hooks/use-toast";
 
 
 export default function CreateIndex() {
   const router = useRouter();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCardClick = (id: string, tab?: ProjectTabId) => {
     router.push(tab ? `/hwar/create/${id}?tab=${tab}` : `/hwar/create/${id}`);
@@ -29,6 +36,81 @@ export default function CreateIndex() {
   const isError = query.isError;
   const error = query.error;
 
+  const toggleProjectSelection = (projectId: string) => {
+    setSelectedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProjects.size === projects.length) {
+      setSelectedProjects(new Set());
+    } else {
+      setSelectedProjects(new Set(projects.map((p) => p.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProjects.size === 0) {
+      toast({
+        title: "No projects selected",
+        description: "Please select at least one project to delete.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const count = selectedProjects.size;
+    const confirmMessage = `Are you sure you want to delete ${count} project${count > 1 ? "s" : ""}? This action cannot be undone.`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch("/api/generation/projects/bulk-delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectIds: Array.from(selectedProjects),
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to delete projects");
+      }
+
+      const result = await res.json();
+      
+      toast({
+        title: "Projects deleted",
+        description: `Successfully deleted ${result.deletedCount} project${result.deletedCount > 1 ? "s" : ""}.`,
+      });
+
+      setSelectedProjects(new Set());
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete projects. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-screen-2xl mx-auto px-6 py-8">
@@ -37,10 +119,33 @@ export default function CreateIndex() {
             <h1 className="text-3xl font-semibold mb-2">Projects</h1>
             <p className="text-sm text-muted-foreground">Create and manage video projects</p>
           </div>
-          <Button onClick={() => router.push("/hwar/create/new")} data-testid="button-new-project">
-            <Plus className="w-4 h-4 mr-2" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-3">
+            {projects.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={toggleSelectAll}
+                  disabled={isDeleting}
+                >
+                  {selectedProjects.size === projects.length ? "Deselect All" : "Select All"}
+                </Button>
+                {selectedProjects.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleBulkDelete}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete {selectedProjects.size} {selectedProjects.size === 1 ? "Project" : "Projects"}
+                  </Button>
+                )}
+              </>
+            )}
+            <Button onClick={() => router.push("/hwar/create/new")} data-testid="button-new-project">
+              <Plus className="w-4 h-4 mr-2" />
+              New Project
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -107,14 +212,24 @@ export default function CreateIndex() {
             {projects.map((project) => (
               <Card
                 key={project.id}
-                className="p-6 hover-elevate cursor-pointer"
-                onClick={() => handleCardClick(project.id)}
+                className={`p-6 hover-elevate ${selectedProjects.has(project.id) ? "ring-2 ring-primary" : ""}`}
                 data-testid={`card-project-${project.id}`}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-1">{project.title}</h3>
-                    <div className="text-xs text-muted-foreground">{new Date(project.createdAt).toLocaleDateString()}</div>
+                  <div className="flex items-start gap-3 flex-1">
+                    <Checkbox
+                      checked={selectedProjects.has(project.id)}
+                      onCheckedChange={() => toggleProjectSelection(project.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1"
+                    />
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => handleCardClick(project.id)}
+                    >
+                      <h3 className="font-semibold mb-1">{project.title}</h3>
+                      <div className="text-xs text-muted-foreground">{new Date(project.createdAt).toLocaleDateString()}</div>
+                    </div>
                   </div>
                   <StatusBadge status={project.status} />
                 </div>
