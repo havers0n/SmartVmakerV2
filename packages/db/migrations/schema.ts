@@ -179,6 +179,7 @@ export const youtubeVideos = pgTable("youtube_videos", {
 	youtubeId: text("youtube_id"),
 	thumbnails: jsonb("thumbnails"),
 	liveBroadcastContent: text("live_broadcast_content"),
+	channelId: uuid("channel_id").references(() => youtubeChannels.id, { onDelete: 'set null' }),
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 },
 	(table) => {
@@ -190,6 +191,7 @@ export const youtubeVideos = pgTable("youtube_videos", {
 			publishedAtIdx: index("youtube_videos_published_at_idx").on(table.publishedAt),
 			channelTitleIdx: index("youtube_videos_channel_title_idx").on(table.channelTitle),
 			youtubeIdUidx: uniqueIndex("youtube_videos_youtube_id_uidx").on(table.youtubeId),
+			channelIdIdx: index("youtube_videos_channel_id_idx").on(table.channelId),
 		}
 	});
 
@@ -588,6 +590,50 @@ export const hwarWorkerStatus = pgEnum("hwar_worker_status", [
 	"paused",
 	"error",
 ]);
+
+// =================== BEAMNG ANALYTICS TABLES ===================
+
+export const youtubeChannels = pgTable("youtube_channels", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	youtubeChannelId: text("youtube_channel_id").notNull(),
+	handle: text("handle"),
+	title: text("title"),
+	description: text("description"),
+	country: text("country"),
+	subscriberCount: bigint("subscriber_count", { mode: "number" }).default(0),
+	videoCount: bigint("video_count", { mode: "number" }).default(0),
+	viewCount: bigint("view_count", { mode: "number" }).default(0),
+	publishedAt: timestamp("published_at", { withTimezone: true, mode: 'string' }),
+	thumbnailUrl: text("thumbnail_url"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+},
+	(table) => {
+		return {
+			youtubeChannelIdUidx: uniqueIndex("youtube_channels_channel_id_uidx").on(table.youtubeChannelId),
+			handleIdx: index("youtube_channels_handle_idx").on(table.handle),
+		}
+	});
+
+export const importSessions = pgTable("import_sessions", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	source: text("source").notNull(),
+	status: text("status").default('pending').notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'string' }),
+	totalChannels: integer("total_channels").default(0),
+	totalVideos: integer("total_videos").default(0),
+	errorMessage: text("error_message"),
+	meta: jsonb("meta").default({}),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+},
+	(table) => {
+		return {
+			sourceIdx: index("import_sessions_source_idx").on(table.source),
+			statusIdx: index("import_sessions_status_idx").on(table.status),
+		}
+	});
 
 export const hwarWorkers = pgTable(
 	"hwar_workers",

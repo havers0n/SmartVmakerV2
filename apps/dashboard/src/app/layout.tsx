@@ -5,7 +5,7 @@ import { AuthProvider } from '../shared/providers/auth-provider';
 import { TooltipProvider } from '../shared/components/ui/tooltip';
 import { Toaster } from '../shared/components/ui/toaster';
 import { Button } from '@/shared/components/ui/button';
-import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library } from 'lucide-react';
+import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library, TrendingUp, Users } from 'lucide-react';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -56,10 +56,26 @@ function AppSidebar() {
           </Button>
         </Link>
         
-        <Link href="/analysis">
+          <Link href="/analysis">
           <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">
             <Microscope className="h-4 w-4" />
             Analysis Lab
+          </Button>
+        </Link>
+
+        <div className="mt-6 text-xs font-medium text-muted-foreground mb-2 px-2 uppercase tracking-widest">BeamNG Analytics</div>
+
+        <Link href="/beamng/videos">
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">
+            <TrendingUp className="h-4 w-4" />
+            Videos
+          </Button>
+        </Link>
+
+        <Link href="/beamng/channels">
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">
+            <Users className="h-4 w-4" />
+            Channels
           </Button>
         </Link>
       </nav>

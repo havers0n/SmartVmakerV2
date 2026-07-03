@@ -34,3 +34,7 @@ export const characters = schema.characters;
 // AI Providers & Models - use tables mapping for consistency
 export const aiProviders = schema.aiProviders;
 export const aiModels = schema.aiModels;
+
+// BeamNG Analytics tables
+export const youtubeChannels = schema.youtubeChannels;
+export const importSessions = schema.importSessions;

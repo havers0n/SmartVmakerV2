@@ -78,6 +78,20 @@
       "when": 1765217001345,
       "tag": "0010_magical_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1722534400000,
+      "tag": "0011_hwar_workers_typed",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1722534500000,
+      "tag": "0012_beamng_analytics",
+      "breakpoints": true
     }
   ]
 }
