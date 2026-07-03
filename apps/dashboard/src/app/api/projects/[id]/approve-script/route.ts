@@ -1,20 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
 import { generationProjects, beats, assets, keyframeJobQueue } from '@/shared/lib/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 export async function POST(
-    _request: Request,
+    request: Request,
     { params }: { params: { id: string } }
 ) {
     try {
+        const userId = getTrustedUserId(request);
+        if (!userId) return unauthorizedResponse();
+
         const projectId = params.id;
 
         // 1. Fetch Project to get templateId
         const [project] = await db
             .select()
             .from(generationProjects)
-            .where(eq(generationProjects.id, projectId))
+            .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
             .limit(1);
 
         if (!project) {
@@ -61,7 +65,7 @@ export async function POST(
                     .values({
                         generationProjectId: projectId,
                         beatId: beat.id,
-                        assetType: 'image',
+                        assetType: 'keyframe',
                         status: 'pending',
                         storageUrl: '', // Placeholder
                     })

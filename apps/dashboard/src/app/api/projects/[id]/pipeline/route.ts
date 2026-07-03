@@ -9,7 +9,8 @@ import {
     youtubeVideos,
     analysisResults
 } from '@/shared/lib/schema';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, and } from 'drizzle-orm';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 interface PipelineStatus {
     projectId: string;
@@ -41,17 +42,20 @@ interface PipelineStatus {
 }
 
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
+        const userId = getTrustedUserId(request);
+        if (!userId) return unauthorizedResponse();
+
         const projectId = params.id;
 
         // 1. Fetch Project
         const [project] = await db
             .select()
             .from(generationProjects)
-            .where(eq(generationProjects.id, projectId))
+            .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
             .limit(1);
 
         if (!project) {
