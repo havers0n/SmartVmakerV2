@@ -59,14 +59,27 @@ export async function runJobTick<J extends JobRecord>(
                 await repo.markCompleted(job.id, latest.stage);
             }
         } catch (error: any) {
+            const latest = await repo.getById(job.id);
+            const stage = latest?.stage ?? job.stage;
+
+            // Check if it's a SuspendJobError (using name check for cross-package/module compatibility)
+            if (error?.name === 'SuspendJobError' || error.constructor?.name === 'SuspendJobError') {
+                const retryAt = error.retryAt || new Date(Date.now() + 60000);
+                if (logger?.warn) {
+                    logger.warn({ jobId: job.id, retryAt, reason: error.message }, 'Job suspended, will retry later');
+                }
+                // We don't decrement attempts here, but we mark it as failed (which resets status to 'failed' or similar)
+                // and sets the nextRetryAt.
+                await repo.markFailed(job.id, error.message, stage, retryAt);
+                return;
+            }
+
             const message = error?.message ?? String(error);
             if (logger?.error) {
                 logger.error({ jobId: job.id, error }, 'Job handler failed');
             }
 
-            const latest = await repo.getById(job.id);
             const attempts = latest?.attempts ?? (job.attempts + 1);
-            const stage = latest?.stage ?? job.stage;
 
             if (attempts >= maxAttempts) {
                 await repo.markFailedPermanently(job.id, message, 'failed_permanently');

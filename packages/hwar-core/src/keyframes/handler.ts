@@ -129,17 +129,62 @@ export function createKeyframeHandler(deps: HwarDeps): JobHandler<KeyframeJob> {
             .where(eq(schema.keyframeJobQueue.id, job.id));
 
         const key = `keyframes/${job.projectId}/scene-${job.sceneIndex}-${job.frameType}-${Date.now()}.png`;
+        
+        // Log storage key formation
+        logger.info({
+            tag: 'keyframe-storage-key',
+            assetId: job.assetId,
+            storageKey: key,
+            projectId: job.projectId,
+            scene: `${job.sceneIndex}`,
+            frameType: job.frameType,
+            jobId: job.id,
+            bytes: result.imageBuffer.length,
+        }, 'Storage key formed for keyframe upload');
+
         const stream = Readable.from(result.imageBuffer);
         await uploadLargeStream(key, stream, 'image/png');
 
+        // Log successful upload
+        logger.info({
+            tag: 'keyframe-uploaded',
+            assetId: job.assetId,
+            storageKey: key,
+            bytes: result.imageBuffer.length,
+        }, 'Keyframe uploaded to R2');
+
         // 7. Update Asset
-        await db.update(schema.assets)
+        // Use RETURNING to get affected rows count
+        const updateResult = await db.update(schema.assets)
             .set({
                 storageUrl: key,
                 status: 'completed',
                 updatedAt: new Date(),
             })
-            .where(eq(schema.assets.id, job.assetId));
+            .where(eq(schema.assets.id, job.assetId))
+            .returning({ id: schema.assets.id });
+
+        // Log DB update with rowsAffected
+        const rowsAffected = updateResult.length;
+        logger.info({
+            tag: 'keyframe-db-update',
+            assetId: job.assetId,
+            storageKey: key,
+            rowsAffected,
+        }, 'Asset DB update completed');
+
+        if (rowsAffected === 0) {
+            logger.warn({
+                tag: 'keyframe-db-update-missed',
+                assetId: job.assetId,
+                jobId: job.id,
+                projectId: job.projectId,
+                scene: `${job.sceneIndex}`,
+                frameType: job.frameType,
+                storageKey: key,
+                where: `assets.id = '${job.assetId}'`,
+            }, 'Asset DB update affected 0 rows - possible mismatch');
+        }
 
         // Job machine will mark as completed.
         // We don't need to return anything as JobHandler returns Promise<void>

@@ -18,3 +18,9 @@ export interface JobRecord {
     createdAt: Date;
     updatedAt: Date;
 }
+export class SuspendJobError extends Error {
+    constructor(message: string, public readonly retryAt: Date) {
+        super(message);
+        this.name = 'SuspendJobError';
+    }
+}

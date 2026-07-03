@@ -43,30 +43,41 @@ const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, 'shouldRetry'>> = {
 
 /**
  * Determines if an HTTP error should be retried
- * - 5xx errors: Server errors (always retry)
- * - 429: Rate limit (retry)
- * - 408: Request timeout (retry)
+ * - 5xx errors: Server errors (temporary, retry at AI layer 1 time)
+ * - 429: Rate limit (Only transient ones, move fatal quota to job layer)
  * - Network errors: ECONNRESET, ETIMEDOUT, etc. (retry)
  */
 function shouldRetryError(error: Error): boolean {
-    // Network errors
+    const msg = error.message.toLowerCase();
+
+    // Network errors - definitely retry
     if (
-        error.message.includes('ECONNRESET') ||
-        error.message.includes('ETIMEDOUT') ||
-        error.message.includes('ENOTFOUND') ||
-        error.message.includes('ENETUNREACH') ||
-        error.message.includes('fetch failed')
+        msg.includes('econnreset') ||
+        msg.includes('etimedout') ||
+        msg.includes('enotfound') ||
+        msg.includes('enetunreach') ||
+        msg.includes('fetch failed') ||
+        msg.includes('terminated')
     ) {
         return true;
     }
 
-    // HTTP errors - check if error message contains status code
-    const statusMatch = error.message.match(/\b(5\d{2}|429|408)\b/);
-    if (statusMatch) {
+    // HTTP 5xx: Server instability
+    if (msg.match(/\b(5\d{2})\b/)) {
         return true;
     }
 
-    // Default: don't retry
+    // HTTP 429/408:
+    // We only retry 408 (timeout) at AI layer.
+    // 429 is now handled carefully: if it's "RESOURCE_EXHAUSTED" or "quota", 
+    // we should NOT retry internally in p-retry to avoid amplification.
+    // We want the high-level router to see it and decide on fallback or suspend.
+    if (msg.includes('408')) {
+        return true;
+    }
+
+    // Explicitly do not retry 429 here to avoid amplification.
+    // DefaultAiRouter will handle it by throwing SuspendJobError.
     return false;
 }
 

@@ -10,7 +10,7 @@ import { runJobTick } from './jobs/processor';
 import { createAnalysisHandler, AnalysisJob } from './analysis/handler';
 import { createKeyframeHandler } from './keyframes/handler';
 import { KeyframeJob } from './keyframes/types';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 // --- ВАЖНО: убираем "export *" наружу ---
 // export * from './jobs';
@@ -242,7 +242,7 @@ export function createHwarCore(
                       .select()
                       .from(analysisResults)
                       .where(eq(analysisResults.videoId, videoId))
-                      .orderBy(analysisResults.createdAt) // TODO: desc?
+                      .orderBy(desc(analysisResults.createdAt))
                       .limit(1);
                   return result;
               },
