@@ -44,6 +44,20 @@ if (process.env.DRIZZLE_DATABASE_URL) {
   }
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
+  
+  // Log safe DB connection info (without password)
+  try {
+    const parsed = new URL(databaseUrl);
+    logger.info({
+      tag: 'keyframe-worker-db-connection',
+      host: parsed.hostname + (parsed.port ? `:${parsed.port}` : ''),
+      database: parsed.pathname.replace(/^\//, ''),
+      user: parsed.username || undefined,
+      sslmode: parsed.searchParams.get('sslmode') || undefined,
+    }, 'Keyframe worker DB connection info');
+  } catch (e) {
+    logger.warn({ err: e }, 'Failed to parse DB URL for logging');
+  }
 }
 
 async function main() {
