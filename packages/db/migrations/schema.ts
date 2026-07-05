@@ -631,6 +631,70 @@ export const nicheQueries = pgTable(
     ),
   }),
 );
+export const discoveryRuns = pgTable(
+  "discovery_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    nicheId: uuid("niche_id")
+      .notNull()
+      .references(() => niches.id),
+    status: text("status", {
+      enum: ["pending", "running", "completed", "failed"],
+    })
+      .default("pending")
+      .notNull(),
+    cutoffDate: timestamp("cutoff_date", {
+      withTimezone: true,
+      mode: "string",
+    }),
+    searchOrders: jsonb("search_orders")
+      .$type<string[]>()
+      .default(["relevance", "viewCount", "date"])
+      .notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+    finishedAt: timestamp("finished_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    nicheCreatedIdx: index("discovery_runs_niche_created_idx").on(
+      table.nicheId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const videoDiscoveries = pgTable(
+  "video_discoveries",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => discoveryRuns.id, { onDelete: "cascade" }),
+    videoId: uuid("video_id")
+      .notNull()
+      .references(() => youtubeVideos.id, { onDelete: "cascade" }),
+    queryId: uuid("query_id")
+      .notNull()
+      .references(() => nicheQueries.id, { onDelete: "cascade" }),
+    searchOrder: text("search_order").notNull(),
+    resultPosition: integer("result_position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.runId, table.videoId, table.queryId, table.searchOrder],
+      name: "video_discoveries_pk",
+    }),
+    runIdx: index("video_discoveries_run_idx").on(table.runId),
+  }),
+);
 
 export const youtubeChannels = pgTable("youtube_channels", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),

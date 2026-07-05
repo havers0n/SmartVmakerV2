@@ -28,6 +28,64 @@ export interface YouTubeSearchResult {
   totalResults: number;
 }
 
+export type YouTubeSearchOrder = "relevance" | "viewCount" | "date";
+
+export interface DiscoverySearchHit {
+  video: NewYoutubeVideos;
+  youtubeChannelId: string;
+  channelTitle: string | null;
+  channelThumbnailUrl: string | null;
+  resultPosition: number;
+}
+
+/** Search once and retain the result order and channel evidence. */
+export async function searchYouTubeForDiscovery(params: {
+  query: string;
+  order: YouTubeSearchOrder;
+  publishedAfter?: Date;
+  maxResults: number;
+}): Promise<DiscoverySearchHit[]> {
+  if (!process.env.YOUTUBE_API_KEY) {
+    throw new Error("YOUTUBE_API_KEY environment variable is not set");
+  }
+
+  const searchResponse = await youtube.search.list({
+    part: ["snippet"],
+    q: params.query,
+    type: ["video"],
+    publishedAfter: params.publishedAfter?.toISOString(),
+    maxResults: Math.min(50, params.maxResults),
+    order: params.order,
+  });
+  const searchItems = searchResponse.data.items ?? [];
+  const videoIds = searchItems
+    .map((item) => item.id?.videoId)
+    .filter((id): id is string => Boolean(id));
+  if (!videoIds.length) return [];
+
+  const videos = await getYouTubeVideosByIds(videoIds);
+  const videosById = new Map(videos.map((video) => [video.youtubeId, video]));
+
+  return searchItems.flatMap((item, index) => {
+    const videoId = item.id?.videoId;
+    const channelId = item.snippet?.channelId;
+    const video = videoId ? videosById.get(videoId) : undefined;
+    if (!video || !channelId) return [];
+    return [
+      {
+        video,
+        youtubeChannelId: channelId,
+        channelTitle: item.snippet?.channelTitle ?? null,
+        channelThumbnailUrl:
+          item.snippet?.thumbnails?.medium?.url ??
+          item.snippet?.thumbnails?.default?.url ??
+          null,
+        resultPosition: index + 1,
+      },
+    ];
+  });
+}
+
 /**
  * Map YouTube API duration to our duration filter
  * short: < 4 minutes

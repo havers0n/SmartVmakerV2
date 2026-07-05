@@ -3,7 +3,7 @@
  * Using specific imports to avoid name conflicts
  */
 
-import * as schema from '@scrimspec/db';
+import * as schema from "@scrimspec/db";
 
 // Job queue tables - use tables mapping for consistency
 export const ingestJobQueue = schema.ingestJobQueue;
@@ -38,5 +38,7 @@ export const aiModels = schema.aiModels;
 // BeamNG Analytics tables
 export const niches = schema.niches;
 export const nicheQueries = schema.nicheQueries;
+export const discoveryRuns = schema.discoveryRuns;
+export const videoDiscoveries = schema.videoDiscoveries;
 export const youtubeChannels = schema.youtubeChannels;
 export const importSessions = schema.importSessions;
