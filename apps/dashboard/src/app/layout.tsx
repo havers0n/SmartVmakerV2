@@ -5,7 +5,7 @@ import { AuthProvider } from '../shared/providers/auth-provider';
 import { TooltipProvider } from '../shared/components/ui/tooltip';
 import { Toaster } from '../shared/components/ui/toaster';
 import { Button } from '@/shared/components/ui/button';
-import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library, TrendingUp, Users, Search } from 'lucide-react';
+import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library, TrendingUp, Users, Search, BookOpen } from 'lucide-react';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -69,6 +69,13 @@ function AppSidebar() {
           <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">
             <Search className="h-4 w-4" />
             Niches
+          </Button>
+        </Link>
+
+        <Link href="/discovery/sources">
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">
+            <BookOpen className="h-4 w-4" />
+            Sources
           </Button>
         </Link>
 

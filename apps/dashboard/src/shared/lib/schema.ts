@@ -38,6 +38,8 @@ export const aiModels = schema.aiModels;
 // BeamNG Analytics tables
 export const niches = schema.niches;
 export const nicheQueries = schema.nicheQueries;
+export const seedSources = schema.seedSources;
+export const nicheCandidates = schema.nicheCandidates;
 export const discoveryRuns = schema.discoveryRuns;
 export const videoDiscoveries = schema.videoDiscoveries;
 export const youtubeChannels = schema.youtubeChannels;

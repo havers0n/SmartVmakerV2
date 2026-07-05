@@ -1,4 +1,5 @@
 import { pgTable, pgEnum, uuid, text, timestamp, integer, index, jsonb, numeric, bigint, unique, uniqueIndex, inet, primaryKey, boolean, pgSchema } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 // =================== SCHEMAS ===================
 export const aesCore = pgSchema("aes_core");
@@ -629,6 +630,34 @@ export const nicheQueries = pgTable(
       table.nicheId,
       table.query,
     ),
+  }),
+);
+
+export const seedSources = pgTable("seed_sources", {
+  id: uuid("id").defaultRandom().primaryKey().notNull(),
+  type: text("type", { enum: ["youtube_video", "youtube_channel", "manual"] }).notNull(),
+  url: text("url"),
+  title: text("title").notNull(),
+  notes: text("notes"),
+  status: text("status", { enum: ["new", "processed"] }).default("new").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+});
+
+export const nicheCandidates = pgTable(
+  "niche_candidates",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    seedSourceId: uuid("seed_source_id").notNull().references(() => seedSources.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status", { enum: ["candidate", "approved", "rejected"] }).default("candidate").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    seedSourceIdIdx: index("niche_candidates_seed_source_id_idx").on(table.seedSourceId),
+    sourceNameUnique: uniqueIndex("niche_candidates_source_name_unique").on(table.seedSourceId, sql`lower(${table.name})`),
   }),
 );
 export const discoveryRuns = pgTable(
