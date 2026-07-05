@@ -7,6 +7,11 @@ import {
   niches,
   seedSources,
 } from "@/shared/lib/schema";
+import {
+  nicheExtractionProvider,
+  type NicheExtractionProvider,
+} from "./niche-extraction-provider";
+
 export const entityIdSchema = z.string().uuid();
 const nullableText = (max: number) =>
   z.string().trim().max(max).nullable().optional();
@@ -169,3 +174,134 @@ export async function approveCandidate(id: string) {
 
 export class CandidateStateError extends Error {}
 export class InvalidCandidateNameError extends Error {}
+
+const extractedCandidateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(2000),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+const extractionResponseSchema = z.union([
+  z.array(extractedCandidateSchema).min(5).max(20),
+  z
+    .object({ candidates: z.array(extractedCandidateSchema).min(5).max(20) })
+    .transform((value) => value.candidates),
+]);
+
+export type ExtractedCandidate = z.infer<typeof extractedCandidateSchema>;
+
+export class EmptySourceContentError extends Error {}
+export class InvalidModelResponseError extends Error {}
+export class NicheExtractionProviderError extends Error {}
+
+export function buildNicheExtractionPrompt(source: {
+  title: string;
+  notes: string | null;
+  type: string;
+  url: string | null;
+}) {
+  return `You are extracting YouTube business niche candidates from a seed source.
+
+Return 5 to 20 concrete, testable YouTube niches.
+
+Good niche examples:
+- AI tools for students
+- History documentaries
+- BeamNG police chase shorts
+- Personal finance explainers
+- True crime court case breakdowns
+- Coding tutorials for beginners
+- Luxury watch shorts
+- Minecraft civilization experiments
+
+Bad examples:
+- Business
+- Entertainment
+- Motivation
+- Technology
+- Education
+
+A good niche should usually include:
+- topic
+- audience or format
+- optional video length/style if implied
+
+Return JSON only as {"candidates":[{"name":"...","description":"...","confidence":0.0}]}.
+Confidence must be between 0 and 1.
+
+Seed source:
+Type: ${source.type}
+Title: ${source.title}
+Notes: ${source.notes ?? ""}
+URL (context only; do not fetch it): ${source.url ?? ""}`;
+}
+
+export function parseExtractedCandidates(raw: string): ExtractedCandidate[] {
+  try {
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+    const parsed = JSON.parse((fenced ?? raw).trim());
+    return extractionResponseSchema.parse(parsed);
+  } catch {
+    throw new InvalidModelResponseError(
+      "The AI provider returned invalid candidate JSON",
+    );
+  }
+}
+
+export async function extractCandidates(
+  id: string,
+  provider: NicheExtractionProvider = nicheExtractionProvider,
+) {
+  const validId = entityIdSchema.parse(id);
+  const [source] = await db
+    .select()
+    .from(seedSources)
+    .where(eq(seedSources.id, validId))
+    .limit(1);
+  if (!source) return null;
+  if (!source.title.trim() && !source.notes?.trim())
+    throw new EmptySourceContentError("Source title and notes are empty");
+
+  let raw: string;
+  try {
+    raw = await provider.generate(buildNicheExtractionPrompt(source));
+  } catch (error) {
+    throw new NicheExtractionProviderError(
+      error instanceof Error ? error.message : "AI provider failed",
+    );
+  }
+  const extracted = parseExtractedCandidates(raw);
+  const existing = await db
+    .select({ name: nicheCandidates.name })
+    .from(nicheCandidates)
+    .where(eq(nicheCandidates.seedSourceId, validId));
+  const seen = new Set(
+    existing.map((item) => item.name.trim().toLocaleLowerCase()),
+  );
+  const created: Array<
+    typeof nicheCandidates.$inferSelect & { confidence?: number }
+  > = [];
+  const skipped: ExtractedCandidate[] = [];
+
+  for (const candidate of extracted) {
+    const key = candidate.name.toLocaleLowerCase();
+    if (seen.has(key)) {
+      skipped.push(candidate);
+      continue;
+    }
+    seen.add(key);
+    const [saved] = await db
+      .insert(nicheCandidates)
+      .values({
+        seedSourceId: validId,
+        name: candidate.name,
+        description: candidate.description,
+        status: "candidate",
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (saved) created.push({ ...saved, confidence: candidate.confidence });
+    else skipped.push(candidate);
+  }
+  return { created, skipped };
+}

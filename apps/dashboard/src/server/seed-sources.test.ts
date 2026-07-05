@@ -20,6 +20,42 @@ import {
   updateCandidateSchema,
 } from "./seed-sources";
 
+describe("AI niche extraction", () => {
+  it("builds a prompt from source fields without requesting remote content", () => {
+    const prompt = buildNicheExtractionPrompt({
+      type: "youtube_video",
+      title: "AI study workflows",
+      notes: "Tools used by university students",
+      url: "https://youtube.com/watch?v=test",
+    });
+    expect(prompt).toContain("AI study workflows");
+    expect(prompt).toContain("Tools used by university students");
+    expect(prompt).toContain("URL (context only; do not fetch it)");
+    expect(prompt).toContain("AI tools for students");
+    expect(prompt).toContain("Return JSON only");
+  });
+
+  it("parses 5-20 candidates and preserves response-only confidence", () => {
+    const candidates = Array.from({ length: 5 }, (_, index) => ({
+      name: `Niche ${index}`,
+      description: `Description ${index}`,
+      confidence: 0.8,
+    }));
+    expect(parseExtractedCandidates(JSON.stringify({ candidates }))).toEqual(
+      candidates,
+    );
+  });
+
+  it("handles invalid model JSON safely", () => {
+    expect(() => parseExtractedCandidates("not json")).toThrow(
+      InvalidModelResponseError,
+    );
+    expect(() =>
+      parseExtractedCandidates(JSON.stringify({ candidates: [] })),
+    ).toThrow(InvalidModelResponseError);
+  });
+});
+
 describe("seed source validation", () => {
   it("requires URLs for YouTube sources", () => {
     expect(

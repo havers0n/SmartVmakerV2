@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Pencil, X } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Sparkles, X } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import {
@@ -43,6 +43,10 @@ type Source = {
   status: string;
   candidates: Candidate[];
 };
+type ExtractionResult = {
+  created: Array<Candidate & { confidence?: number }>;
+  skipped: Array<{ name: string; description: string; confidence?: number }>;
+};
 
 export default function SourceDetailPage({
   params,
@@ -55,6 +59,7 @@ export default function SourceDetailPage({
   const [editing, setEditing] = useState<string>();
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [extractionResult, setExtractionResult] = useState<ExtractionResult>();
   const source = useQuery<Source>({
     queryKey: ["seed-sources", params.id],
     queryFn: () => api<Source>(`/api/seed-sources/${params.id}`),
@@ -95,6 +100,19 @@ export default function SourceDetailPage({
       api(`/api/niche-candidates/${id}/approve`, { method: "POST" }),
     onSuccess: refresh,
   });
+  const extract = useMutation({
+    mutationFn: () =>
+      api<ExtractionResult>(
+        `/api/seed-sources/${params.id}/extract-candidates`,
+        {
+          method: "POST",
+        },
+      ),
+    onSuccess: (result) => {
+      setExtractionResult(result);
+      refresh();
+    },
+  });
   function submit(event: FormEvent) {
     event.preventDefault();
     add.mutate();
@@ -118,7 +136,7 @@ export default function SourceDetailPage({
       </div>
     );
   const data = source.data!;
-  const error = add.error ?? update.error ?? approve.error;
+  const error = add.error ?? update.error ?? approve.error ?? extract.error;
   return (
     <div className="space-y-6">
       <Link href="/discovery/sources">
@@ -148,6 +166,30 @@ export default function SourceDetailPage({
             </a>
           )}
           {data.notes && <p className="whitespace-pre-wrap">{data.notes}</p>}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>AI candidate extraction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button disabled={extract.isPending} onClick={() => extract.mutate()}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            {extract.isPending
+              ? "Extracting candidates…"
+              : "Extract candidates with AI"}
+          </Button>
+          {extractionResult && (
+            <div className="space-y-1 text-sm">
+              <p>Created {extractionResult.created.length} candidates.</p>
+              {extractionResult.skipped.length > 0 && (
+                <p className="text-muted-foreground">
+                  Skipped duplicates:{" "}
+                  {extractionResult.skipped.map((item) => item.name).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
       <Card>

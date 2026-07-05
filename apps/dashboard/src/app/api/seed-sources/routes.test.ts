@@ -4,6 +4,7 @@ import { GET as getSource, PATCH as patchSource } from "./[id]/route";
 import { POST as createCandidateRoute } from "../niche-candidates/route";
 import { PATCH as patchCandidateRoute } from "../niche-candidates/[id]/route";
 import { POST as approveCandidateRoute } from "../niche-candidates/[id]/approve/route";
+import { POST as extractCandidatesRoute } from "./[id]/extract-candidates/route";
 import * as service from "@/server/seed-sources";
 
 vi.mock("@/server/seed-sources", () => ({
@@ -14,6 +15,10 @@ vi.mock("@/server/seed-sources", () => ({
   createCandidate: vi.fn(),
   updateCandidate: vi.fn(),
   approveCandidate: vi.fn(),
+  extractCandidates: vi.fn(),
+  EmptySourceContentError: class EmptySourceContentError extends Error {},
+  InvalidModelResponseError: class InvalidModelResponseError extends Error {},
+  NicheExtractionProviderError: class NicheExtractionProviderError extends Error {},
   CandidateStateError: class CandidateStateError extends Error {},
   InvalidCandidateNameError: class InvalidCandidateNameError extends Error {},
 }));
@@ -134,4 +139,48 @@ describe("seed source and candidate API", () => {
     ).toBe(409);
   });
 
+  it("returns created and skipped AI candidates without approving anything", async () => {
+    vi.mocked(service.extractCandidates).mockResolvedValue({
+      created: [
+        { id: "candidate", name: "AI tools for students", status: "candidate" },
+      ],
+      skipped: [{ name: "History documentaries", description: "Existing" }],
+    } as never);
+    const response = await extractCandidatesRoute(
+      new Request("http://localhost", { method: "POST" }),
+      context,
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      created: [{ status: "candidate" }],
+      skipped: [{ name: "History documentaries" }],
+    });
+    expect(service.approveCandidate).not.toHaveBeenCalled();
+  });
+
+  it("handles a missing source during extraction", async () => {
+    vi.mocked(service.extractCandidates).mockResolvedValue(null);
+    const response = await extractCandidatesRoute(
+      new Request("http://localhost", { method: "POST" }),
+      context,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("handles empty content and invalid model responses", async () => {
+    vi.mocked(service.extractCandidates).mockRejectedValueOnce(
+      new service.EmptySourceContentError("Source title and notes are empty"),
+    );
+    expect(
+      (await extractCandidatesRoute(new Request("http://localhost"), context))
+        .status,
+    ).toBe(400);
+    vi.mocked(service.extractCandidates).mockRejectedValueOnce(
+      new service.InvalidModelResponseError("Invalid response"),
+    );
+    expect(
+      (await extractCandidatesRoute(new Request("http://localhost"), context))
+        .status,
+    ).toBe(502);
+  });
 });
