@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as list, POST as create } from "./route";
 import { GET as getRun } from "./[id]/route";
 import { GET as getVideos } from "./[id]/videos/route";
+import { GET as getChannels } from "./[id]/channels/route";
 import {
   createDiscoveryRun,
   getDiscoveryRun,
   listDiscoveryRuns,
   listDiscoveryRunVideos,
+  listDiscoveryRunChannels,
 } from "@/server/discovery-runs";
 
 vi.mock("@/server/discovery-runs", () => ({
@@ -22,6 +24,10 @@ vi.mock("@/server/discovery-runs", () => ({
   getDiscoveryRun: vi.fn(),
   listDiscoveryRuns: vi.fn(),
   listDiscoveryRunVideos: vi.fn(),
+  listDiscoveryRunChannels: vi.fn(),
+  discoveryChannelFiltersSchema: {
+    parse: vi.fn((value) => value),
+  },
 }));
 
 const id = "550e8400-e29b-41d4-a716-446655440000";
@@ -71,5 +77,29 @@ describe("discovery run API", () => {
       context,
     );
     expect(await videosResponse.json()).toHaveLength(1);
+  });
+
+  it("returns channels and rejects an unknown run", async () => {
+    vi.mocked(getDiscoveryRun).mockResolvedValue({ id } as never);
+    vi.mocked(listDiscoveryRunChannels).mockResolvedValue([
+      { channelId: "UC-one" },
+    ] as never);
+    const response = await getChannels(
+      new Request(
+        `http://localhost/api/discovery-runs/${id}/channels?minMatchedVideos=2`,
+      ),
+      context,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toHaveLength(1);
+    expect(listDiscoveryRunChannels).toHaveBeenCalledWith(
+      id,
+      expect.objectContaining({ minMatchedVideos: "2" }),
+    );
+
+    vi.mocked(getDiscoveryRun).mockResolvedValue(null);
+    expect(
+      (await getChannels(new Request("http://localhost"), context)).status,
+    ).toBe(404);
   });
 });

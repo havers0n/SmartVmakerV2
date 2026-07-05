@@ -16,6 +16,126 @@ import {
 
 const searchOrderSchema = z.enum(["relevance", "viewCount", "date"]);
 
+export const discoveryChannelFiltersSchema = z.object({
+  maxChannelAgeMonths: z.coerce.number().nonnegative().optional(),
+  minMatchedVideos: z.coerce.number().int().nonnegative().optional(),
+  minSubscribers: z.coerce.number().nonnegative().optional(),
+  maxSubscribers: z.coerce.number().nonnegative().optional(),
+  minMedianViews: z.coerce.number().nonnegative().optional(),
+});
+
+export type DiscoveryChannelFilters = z.infer<
+  typeof discoveryChannelFiltersSchema
+>;
+
+export type DiscoveryChannelEvidenceRow = {
+  channelId: string;
+  channelTitle: string | null;
+  channelPublishedAt: string | null;
+  subscriberCount: number | null;
+  totalViewCount: number | null;
+  channelVideoCount: number | null;
+  internalVideoId: string;
+  youtubeVideoId: string | null;
+  title: string;
+  publishedAt: string | null;
+  viewCount: number | null;
+  queryId: string;
+  query: string;
+  searchOrder: string;
+  resultPosition: number;
+};
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+export function aggregateDiscoveryChannels(
+  rows: DiscoveryChannelEvidenceRow[],
+  filters: DiscoveryChannelFilters = {},
+  now = new Date(),
+) {
+  const channels = new Map<string, DiscoveryChannelEvidenceRow[]>();
+  for (const row of rows) {
+    const existing = channels.get(row.channelId) ?? [];
+    existing.push(row);
+    channels.set(row.channelId, existing);
+  }
+
+  return Array.from(channels.values(), (channelRows) => {
+    const channel = channelRows[0];
+    const videos = new Map<string, DiscoveryChannelEvidenceRow>();
+    for (const row of channelRows) videos.set(row.internalVideoId, row);
+    const uniqueVideos = [...videos.values()];
+    const views = uniqueVideos.map((video) => Number(video.viewCount ?? 0));
+    const subscribers = Number(channel.subscriberCount ?? 0);
+    const channelAgeDays = channel.channelPublishedAt
+      ? Math.max(
+          0,
+          Math.floor(
+            (now.getTime() - new Date(channel.channelPublishedAt).getTime()) /
+              86_400_000,
+          ),
+        )
+      : null;
+
+    return {
+      channelId: channel.channelId,
+      channelTitle: channel.channelTitle,
+      channelPublishedAt: channel.channelPublishedAt,
+      channelAgeDays,
+      subscriberCount: channel.subscriberCount,
+      totalViewCount: channel.totalViewCount,
+      channelVideoCount: channel.channelVideoCount,
+      matchedVideoCount: uniqueVideos.length,
+      latestMatchedVideoAt:
+        uniqueVideos
+          .map((video) => video.publishedAt)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null,
+      medianMatchedVideoViews: median(views),
+      bestMatchedVideoViews: views.length ? Math.max(...views) : 0,
+      viewsPerSubscriber: subscribers > 0 ? median(views) / subscribers : null,
+      evidenceVideos: channelRows.map((video) => ({
+        videoId: video.youtubeVideoId ?? video.internalVideoId,
+        title: video.title,
+        publishedAt: video.publishedAt,
+        viewCount: video.viewCount,
+        queryId: video.queryId,
+        query: video.query,
+        searchOrder: video.searchOrder,
+        resultPosition: video.resultPosition,
+      })),
+    };
+  })
+    .filter(
+      (channel) =>
+        (filters.maxChannelAgeMonths === undefined ||
+          (channel.channelAgeDays !== null &&
+            channel.channelAgeDays <= filters.maxChannelAgeMonths * 30.4375)) &&
+        (filters.minMatchedVideos === undefined ||
+          channel.matchedVideoCount >= filters.minMatchedVideos) &&
+        (filters.minSubscribers === undefined ||
+          Number(channel.subscriberCount ?? 0) >= filters.minSubscribers) &&
+        (filters.maxSubscribers === undefined ||
+          Number(channel.subscriberCount ?? 0) <= filters.maxSubscribers) &&
+        (filters.minMedianViews === undefined ||
+          channel.medianMatchedVideoViews >= filters.minMedianViews),
+    )
+    .sort(
+      (a, b) =>
+        b.matchedVideoCount - a.matchedVideoCount ||
+        b.medianMatchedVideoViews - a.medianMatchedVideoViews ||
+        Date.parse(b.latestMatchedVideoAt ?? "1970-01-01") -
+          Date.parse(a.latestMatchedVideoAt ?? "1970-01-01"),
+    );
+}
+
 export const createDiscoveryRunSchema = z.object({
   nicheId: z.string().uuid(),
   searchOrders: z
@@ -104,6 +224,40 @@ export async function listDiscoveryRunVideos(id: string) {
       asc(videoDiscoveries.searchOrder),
       asc(videoDiscoveries.resultPosition),
     );
+}
+
+export async function listDiscoveryRunChannels(
+  id: string,
+  input: DiscoveryChannelFilters = {},
+) {
+  const validId = z.string().uuid().parse(id);
+  const filters = discoveryChannelFiltersSchema.parse(input);
+  const rows = await db
+    .select({
+      channelId: youtubeChannels.youtubeChannelId,
+      channelTitle: youtubeChannels.title,
+      channelPublishedAt: youtubeChannels.publishedAt,
+      subscriberCount: youtubeChannels.subscriberCount,
+      totalViewCount: youtubeChannels.viewCount,
+      channelVideoCount: youtubeChannels.videoCount,
+      internalVideoId: youtubeVideos.id,
+      youtubeVideoId: youtubeVideos.youtubeId,
+      title: youtubeVideos.title,
+      publishedAt: youtubeVideos.publishedAt,
+      viewCount: youtubeVideos.viewCount,
+      queryId: nicheQueries.id,
+      query: nicheQueries.query,
+      searchOrder: videoDiscoveries.searchOrder,
+      resultPosition: videoDiscoveries.resultPosition,
+    })
+    .from(videoDiscoveries)
+    .innerJoin(youtubeVideos, eq(videoDiscoveries.videoId, youtubeVideos.id))
+    .innerJoin(youtubeChannels, eq(youtubeVideos.channelId, youtubeChannels.id))
+    .innerJoin(nicheQueries, eq(videoDiscoveries.queryId, nicheQueries.id))
+    .where(eq(videoDiscoveries.runId, validId))
+    .orderBy(asc(videoDiscoveries.createdAt));
+
+  return aggregateDiscoveryChannels(rows, filters);
 }
 
 export async function createDiscoveryRun(input: unknown) {
