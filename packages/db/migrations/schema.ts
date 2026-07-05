@@ -593,6 +593,45 @@ export const hwarWorkerStatus = pgEnum("hwar_worker_status", [
 
 // =================== BEAMNG ANALYTICS TABLES ===================
 
+export const niches = pgTable("niches", {
+  id: uuid("id").defaultRandom().primaryKey().notNull(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  language: text("language").default("en").notNull(),
+  maxChannelAgeMonths: integer("max_channel_age_months").default(24).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+});
+
+export const nicheQueries = pgTable(
+  "niche_queries",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    nicheId: uuid("niche_id")
+      .notNull()
+      .references(() => niches.id, { onDelete: "cascade" }),
+    query: text("query").notNull(),
+    isEnabled: boolean("is_enabled").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    nicheIdIdx: index("niche_queries_niche_id_idx").on(table.nicheId),
+    nicheQueryUnique: unique("niche_queries_niche_query_unique").on(
+      table.nicheId,
+      table.query,
+    ),
+  }),
+);
+
 export const youtubeChannels = pgTable("youtube_channels", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	youtubeChannelId: text("youtube_channel_id").notNull(),

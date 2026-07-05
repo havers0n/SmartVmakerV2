@@ -36,5 +36,7 @@ export const aiProviders = schema.aiProviders;
 export const aiModels = schema.aiModels;
 
 // BeamNG Analytics tables
+export const niches = schema.niches;
+export const nicheQueries = schema.nicheQueries;
 export const youtubeChannels = schema.youtubeChannels;
 export const importSessions = schema.importSessions;

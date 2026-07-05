@@ -92,6 +92,13 @@
       "when": 1722534500000,
       "tag": "0012_beamng_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783252800000,
+      "tag": "0013_generalized_niches",
+      "breakpoints": true
     }
   ]
 }
