@@ -22,6 +22,9 @@ export const discoveryChannelFiltersSchema = z.object({
   minSubscribers: z.coerce.number().nonnegative().optional(),
   maxSubscribers: z.coerce.number().nonnegative().optional(),
   minMedianViews: z.coerce.number().nonnegative().optional(),
+  minRelevanceScore: z.coerce.number().min(0).max(1).optional(),
+  minQueryCoverage: z.coerce.number().int().nonnegative().optional(),
+  minMedianViewsPerDay: z.coerce.number().nonnegative().optional(),
 });
 
 export type DiscoveryChannelFilters = z.infer<
@@ -55,6 +58,15 @@ function median(values: number[]) {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+export function calculateRecencyScore(uploadRecencyDays: number | null) {
+  if (uploadRecencyDays === null) return 0;
+  if (uploadRecencyDays <= 7) return 1;
+  if (uploadRecencyDays <= 30) return 0.75;
+  if (uploadRecencyDays <= 90) return 0.5;
+  if (uploadRecencyDays <= 180) return 0.25;
+  return 0;
+}
+
 export function aggregateDiscoveryChannels(
   rows: DiscoveryChannelEvidenceRow[],
   filters: DiscoveryChannelFilters = {},
@@ -74,6 +86,44 @@ export function aggregateDiscoveryChannels(
     const uniqueVideos = [...videos.values()];
     const views = uniqueVideos.map((video) => Number(video.viewCount ?? 0));
     const subscribers = Number(channel.subscriberCount ?? 0);
+    const latestMatchedVideoAt =
+      uniqueVideos
+        .map((video) => video.publishedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+    const viewsPerDay = uniqueVideos.map((video) => {
+      const videoAgeDays = video.publishedAt
+        ? Math.max(
+            1,
+            (now.getTime() - new Date(video.publishedAt).getTime()) /
+              86_400_000,
+          )
+        : 1;
+      return Number(video.viewCount ?? 0) / videoAgeDays;
+    });
+    const queryCoverage = new Set(channelRows.map((row) => row.queryId)).size;
+    const medianViewsPerDay = median(viewsPerDay);
+    const bestViewsPerDay = viewsPerDay.length ? Math.max(...viewsPerDay) : 0;
+    const uploadRecencyDays = latestMatchedVideoAt
+      ? Math.max(
+          0,
+          Math.floor(
+            (now.getTime() - new Date(latestMatchedVideoAt).getTime()) /
+              86_400_000,
+          ),
+        )
+      : null;
+    const recencyScore = calculateRecencyScore(uploadRecencyDays);
+    const viewsPerSubscriber =
+      subscribers > 0 ? median(views) / subscribers : null;
+    const viewsPerSubscriberScore =
+      viewsPerSubscriber === null ? 0 : Math.min(viewsPerSubscriber / 10, 1);
+    const relevanceScore =
+      Math.min(uniqueVideos.length / 10, 1) * 0.3 +
+      Math.min(queryCoverage / 3, 1) * 0.2 +
+      Math.min(medianViewsPerDay / 10_000, 1) * 0.25 +
+      recencyScore * 0.15 +
+      viewsPerSubscriberScore * 0.1;
     const channelAgeDays = channel.channelPublishedAt
       ? Math.max(
           0,
@@ -93,14 +143,17 @@ export function aggregateDiscoveryChannels(
       totalViewCount: channel.totalViewCount,
       channelVideoCount: channel.channelVideoCount,
       matchedVideoCount: uniqueVideos.length,
-      latestMatchedVideoAt:
-        uniqueVideos
-          .map((video) => video.publishedAt)
-          .filter((value): value is string => Boolean(value))
-          .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null,
+      queryCoverage,
+      latestMatchedVideoAt,
       medianMatchedVideoViews: median(views),
       bestMatchedVideoViews: views.length ? Math.max(...views) : 0,
-      viewsPerSubscriber: subscribers > 0 ? median(views) / subscribers : null,
+      medianViewsPerDay,
+      bestViewsPerDay,
+      uploadRecencyDays,
+      recencyScore,
+      viewsPerSubscriber,
+      viewsPerSubscriberScore,
+      relevanceScore,
       evidenceVideos: channelRows.map((video) => ({
         videoId: video.youtubeVideoId ?? video.internalVideoId,
         title: video.title,
@@ -125,10 +178,17 @@ export function aggregateDiscoveryChannels(
         (filters.maxSubscribers === undefined ||
           Number(channel.subscriberCount ?? 0) <= filters.maxSubscribers) &&
         (filters.minMedianViews === undefined ||
-          channel.medianMatchedVideoViews >= filters.minMedianViews),
+          channel.medianMatchedVideoViews >= filters.minMedianViews) &&
+        (filters.minRelevanceScore === undefined ||
+          channel.relevanceScore >= filters.minRelevanceScore) &&
+        (filters.minQueryCoverage === undefined ||
+          channel.queryCoverage >= filters.minQueryCoverage) &&
+        (filters.minMedianViewsPerDay === undefined ||
+          channel.medianViewsPerDay >= filters.minMedianViewsPerDay),
     )
     .sort(
       (a, b) =>
+        b.relevanceScore - a.relevanceScore ||
         b.matchedVideoCount - a.matchedVideoCount ||
         b.medianMatchedVideoViews - a.medianMatchedVideoViews ||
         Date.parse(b.latestMatchedVideoAt ?? "1970-01-01") -

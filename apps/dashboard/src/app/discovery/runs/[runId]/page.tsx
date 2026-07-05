@@ -67,10 +67,17 @@ type Channel = {
   totalViewCount: number | null;
   channelVideoCount: number | null;
   matchedVideoCount: number;
+  queryCoverage: number;
   latestMatchedVideoAt: string | null;
   medianMatchedVideoViews: number;
   bestMatchedVideoViews: number;
+  medianViewsPerDay: number;
+  bestViewsPerDay: number;
+  uploadRecencyDays: number | null;
+  recencyScore: number;
   viewsPerSubscriber: number | null;
+  viewsPerSubscriberScore: number;
+  relevanceScore: number;
   evidenceVideos: Evidence[];
 };
 type SortKey = keyof Pick<
@@ -80,10 +87,14 @@ type SortKey = keyof Pick<
   | "subscriberCount"
   | "totalViewCount"
   | "matchedVideoCount"
+  | "queryCoverage"
   | "latestMatchedVideoAt"
   | "medianMatchedVideoViews"
   | "bestMatchedVideoViews"
+  | "medianViewsPerDay"
+  | "bestViewsPerDay"
   | "viewsPerSubscriber"
+  | "relevanceScore"
 >;
 
 async function api<T>(url: string): Promise<T> {
@@ -142,9 +153,12 @@ export default function DiscoveryRunPage({
     minSubs: "",
     maxSubs: "",
     minMedian: "",
+    minScore: "",
+    minCoverage: "",
+    minMedianPerDay: "",
   });
   const [sort, setSort] = useState<{ key: SortKey; direction: 1 | -1 }>({
-    key: "matchedVideoCount",
+    key: "relevanceScore",
     direction: -1,
   });
   const channels = useMemo(() => {
@@ -162,7 +176,13 @@ export default function DiscoveryRunPage({
           (n(filters.maxSubs) === null ||
             Number(channel.subscriberCount ?? 0) <= n(filters.maxSubs)!) &&
           (n(filters.minMedian) === null ||
-            channel.medianMatchedVideoViews >= n(filters.minMedian)!),
+            channel.medianMatchedVideoViews >= n(filters.minMedian)!) &&
+          (n(filters.minScore) === null ||
+            channel.relevanceScore >= n(filters.minScore)!) &&
+          (n(filters.minCoverage) === null ||
+            channel.queryCoverage >= n(filters.minCoverage)!) &&
+          (n(filters.minMedianPerDay) === null ||
+            channel.medianViewsPerDay >= n(filters.minMedianPerDay)!),
       )
       .sort((a, b) => {
         const left = a[sort.key],
@@ -303,13 +323,16 @@ export default function DiscoveryRunPage({
             <CardHeader>
               <CardTitle>Channel filters</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 ["maxAge", "Max age (months)"],
                 ["minMatched", "Min matched videos"],
                 ["minSubs", "Min subscribers"],
                 ["maxSubs", "Max subscribers"],
                 ["minMedian", "Min median views"],
+                ["minScore", "Min score (0-1)"],
+                ["minCoverage", "Min query coverage"],
+                ["minMedianPerDay", "Min median views/day"],
               ].map(([key, label]) => (
                 <div className="space-y-1" key={key}>
                   <Label htmlFor={key}>{label}</Label>
@@ -338,6 +361,11 @@ export default function DiscoveryRunPage({
                 <TableHeader>
                   <TableRow>
                     <SortHead
+                      label="Score"
+                      column="relevanceScore"
+                      onSort={changeSort}
+                    />
+                    <SortHead
                       label="Channel"
                       column="channelTitle"
                       onSort={changeSort}
@@ -363,6 +391,11 @@ export default function DiscoveryRunPage({
                       onSort={changeSort}
                     />
                     <SortHead
+                      label="Queries"
+                      column="queryCoverage"
+                      onSort={changeSort}
+                    />
+                    <SortHead
                       label="Latest matched video"
                       column="latestMatchedVideoAt"
                       onSort={changeSort}
@@ -378,6 +411,16 @@ export default function DiscoveryRunPage({
                       onSort={changeSort}
                     />
                     <SortHead
+                      label="Median/day"
+                      column="medianViewsPerDay"
+                      onSort={changeSort}
+                    />
+                    <SortHead
+                      label="Best/day"
+                      column="bestViewsPerDay"
+                      onSort={changeSort}
+                    />
+                    <SortHead
                       label="Views/sub"
                       column="viewsPerSubscriber"
                       onSort={changeSort}
@@ -388,6 +431,45 @@ export default function DiscoveryRunPage({
                 <TableBody>
                   {channels.map((channel) => (
                     <TableRow key={channel.channelId}>
+                      <TableCell className="min-w-40 align-top">
+                        <details>
+                          <summary className="cursor-pointer font-semibold">
+                            {channel.relevanceScore.toFixed(3)}
+                          </summary>
+                          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            <div>
+                              Matched:{" "}
+                              {Math.min(
+                                channel.matchedVideoCount / 10,
+                                1,
+                              ).toFixed(2)}{" "}
+                              × 30%
+                            </div>
+                            <div>
+                              Coverage:{" "}
+                              {Math.min(channel.queryCoverage / 3, 1).toFixed(
+                                2,
+                              )}{" "}
+                              × 20%
+                            </div>
+                            <div>
+                              Velocity:{" "}
+                              {Math.min(
+                                channel.medianViewsPerDay / 10_000,
+                                1,
+                              ).toFixed(2)}{" "}
+                              × 25%
+                            </div>
+                            <div>
+                              Recency: {channel.recencyScore.toFixed(2)} × 15%
+                            </div>
+                            <div>
+                              Views/sub:{" "}
+                              {channel.viewsPerSubscriberScore.toFixed(2)} × 10%
+                            </div>
+                          </div>
+                        </details>
+                      </TableCell>
                       <TableCell className="min-w-48 font-medium">
                         <a
                           className="hover:underline"
@@ -410,6 +492,7 @@ export default function DiscoveryRunPage({
                         {formatNumber(channel.totalViewCount)}
                       </TableCell>
                       <TableCell>{channel.matchedVideoCount}</TableCell>
+                      <TableCell>{channel.queryCoverage}</TableCell>
                       <TableCell>
                         {formatDate(channel.latestMatchedVideoAt)}
                       </TableCell>
@@ -418,6 +501,12 @@ export default function DiscoveryRunPage({
                       </TableCell>
                       <TableCell>
                         {formatNumber(channel.bestMatchedVideoViews)}
+                      </TableCell>
+                      <TableCell>
+                        {formatNumber(Math.round(channel.medianViewsPerDay))}
+                      </TableCell>
+                      <TableCell>
+                        {formatNumber(Math.round(channel.bestViewsPerDay))}
                       </TableCell>
                       <TableCell>
                         {channel.viewsPerSubscriber?.toFixed(2) ?? "—"}

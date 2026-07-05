@@ -13,6 +13,7 @@ vi.mock("@/shared/lib/youtube", () => ({ searchYouTubeForDiscovery: vi.fn() }));
 
 import {
   aggregateDiscoveryChannels,
+  calculateRecencyScore,
   createDiscoveryRunSchema,
 } from "./discovery-runs";
 
@@ -138,5 +139,113 @@ describe("discovery channel aggregation", () => {
         new Date("2026-07-01T00:00:00Z"),
       ),
     ).toHaveLength(0);
+  });
+
+  it("calculates distinct query coverage and views velocity", () => {
+    const velocityRows = [
+      {
+        ...base,
+        internalVideoId: "velocity-1",
+        youtubeVideoId: "velocity-1",
+        title: "One day old",
+        publishedAt: "2026-06-30T00:00:00Z",
+        viewCount: 100,
+      },
+      {
+        ...base,
+        internalVideoId: "velocity-1",
+        youtubeVideoId: "velocity-1",
+        title: "Duplicate discovery",
+        publishedAt: "2026-06-30T00:00:00Z",
+        viewCount: 100,
+        searchOrder: "date",
+      },
+      {
+        ...base,
+        internalVideoId: "velocity-2",
+        youtubeVideoId: "velocity-2",
+        title: "Three days old",
+        publishedAt: "2026-06-28T00:00:00Z",
+        viewCount: 300,
+        queryId: "query-2",
+        query: "second query",
+      },
+    ];
+    const [channel] = aggregateDiscoveryChannels(
+      velocityRows,
+      {},
+      new Date("2026-07-01T00:00:00Z"),
+    );
+
+    expect(channel).toMatchObject({
+      queryCoverage: 2,
+      medianViewsPerDay: 100,
+      bestViewsPerDay: 100,
+      uploadRecencyDays: 1,
+      recencyScore: 1,
+      viewsPerSubscriberScore: 0.2,
+    });
+    expect(channel.relevanceScore).toBeCloseTo(0.3658333333, 10);
+    expect(
+      aggregateDiscoveryChannels(
+        velocityRows,
+        {
+          minRelevanceScore: 0.36,
+          minQueryCoverage: 2,
+          minMedianViewsPerDay: 100,
+        },
+        new Date("2026-07-01T00:00:00Z"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      aggregateDiscoveryChannels(
+        velocityRows,
+        { minRelevanceScore: 0.37 },
+        new Date("2026-07-01T00:00:00Z"),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("sorts channels by deterministic relevance score", () => {
+    const channels = aggregateDiscoveryChannels(
+      rows,
+      {},
+      new Date("2026-07-01T00:00:00Z"),
+    );
+    expect(channels[0].relevanceScore).toBeGreaterThanOrEqual(
+      channels[1].relevanceScore,
+    );
+    expect(
+      aggregateDiscoveryChannels(rows, {}, new Date("2026-07-01T00:00:00Z")),
+    ).toEqual(channels);
+  });
+
+  it("uses zero views-per-subscriber score for zero or hidden subscribers", () => {
+    for (const subscriberCount of [0, null]) {
+      const [channel] = aggregateDiscoveryChannels(
+        [{ ...rows[0], subscriberCount }],
+        {},
+        new Date("2026-07-01T00:00:00Z"),
+      );
+      expect(channel.viewsPerSubscriber).toBeNull();
+      expect(channel.viewsPerSubscriberScore).toBe(0);
+    }
+  });
+});
+
+describe("discovery channel recency scoring", () => {
+  it.each([
+    [0, 1],
+    [7, 1],
+    [8, 0.75],
+    [30, 0.75],
+    [31, 0.5],
+    [90, 0.5],
+    [91, 0.25],
+    [180, 0.25],
+    [181, 0],
+    [null, 0],
+  ])("scores %s days as %s", (days, expected) => {
+    expect(calculateRecencyScore(days)).toBe(expected);
   });
 });

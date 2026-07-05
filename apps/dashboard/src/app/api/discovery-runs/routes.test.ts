@@ -86,7 +86,7 @@ describe("discovery run API", () => {
     ] as never);
     const response = await getChannels(
       new Request(
-        `http://localhost/api/discovery-runs/${id}/channels?minMatchedVideos=2`,
+        `http://localhost/api/discovery-runs/${id}/channels?minMatchedVideos=2&minRelevanceScore=0.4&minQueryCoverage=2&minMedianViewsPerDay=100`,
       ),
       context,
     );
@@ -94,7 +94,12 @@ describe("discovery run API", () => {
     expect(await response.json()).toHaveLength(1);
     expect(listDiscoveryRunChannels).toHaveBeenCalledWith(
       id,
-      expect.objectContaining({ minMatchedVideos: "2" }),
+      expect.objectContaining({
+        minMatchedVideos: "2",
+        minRelevanceScore: "0.4",
+        minQueryCoverage: "2",
+        minMedianViewsPerDay: "100",
+      }),
     );
 
     vi.mocked(getDiscoveryRun).mockResolvedValue(null);

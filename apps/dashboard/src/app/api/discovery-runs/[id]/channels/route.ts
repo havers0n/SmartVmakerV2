@@ -25,6 +25,9 @@ export async function GET(
       minSubscribers: search.get("minSubscribers") ?? undefined,
       maxSubscribers: search.get("maxSubscribers") ?? undefined,
       minMedianViews: search.get("minMedianViews") ?? undefined,
+      minRelevanceScore: search.get("minRelevanceScore") ?? undefined,
+      minQueryCoverage: search.get("minQueryCoverage") ?? undefined,
+      minMedianViewsPerDay: search.get("minMedianViewsPerDay") ?? undefined,
     });
     return NextResponse.json(
       await listDiscoveryRunChannels(params.id, filters),
