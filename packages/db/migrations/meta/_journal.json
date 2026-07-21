@@ -169,6 +169,13 @@
       "when": 1785168700000,
       "tag": "0023_discovery_cluster_curation",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785168800000,
+      "tag": "0024_reconcile_ai_provider_model_seeds",
+      "breakpoints": true
     }
   ]
 }
