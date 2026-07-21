@@ -1,6 +1,6 @@
 import { db } from '@/shared/lib/db';
 import { createLogger } from '@aec/logger';
-import { generationProjects, assets, keyframeJobQueue } from '@/shared/lib/schema';
+import { generationProjects, assets, keyframeJobQueue, contentFormats, storyTemplates } from '@/shared/lib/schema';
 import { desc, isNull, eq, and, sql } from 'drizzle-orm';
 
 const logger = createLogger({ name: 'api-projects' });
@@ -29,6 +29,12 @@ export async function listProjects(
         status: generationProjects.status,
         meta: generationProjects.meta,
         createdAt: generationProjects.createdAt,
+        contentFormatId: contentFormats.id,
+        contentFormatName: contentFormats.name,
+        contentFormatSlug: contentFormats.slug,
+        contentFormatStatus: contentFormats.status,
+        storyTemplateId: storyTemplates.id,
+        storyTemplateName: storyTemplates.name,
         scenesCount: sql<number>`COUNT(DISTINCT ${keyframeJobQueue.sceneIndex})`,
         keyframesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${assets.assetType} = 'keyframe' THEN ${assets.id} END)`,
         hasFinalVideo: sql<boolean>`
@@ -37,6 +43,8 @@ export async function listProjects(
         `,
       })
       .from(generationProjects)
+      .leftJoin(contentFormats, eq(contentFormats.id, generationProjects.contentFormatId))
+      .leftJoin(storyTemplates, eq(storyTemplates.id, generationProjects.templateId))
       .leftJoin(keyframeJobQueue, eq(keyframeJobQueue.projectId, generationProjects.id))
       .leftJoin(
         assets,
@@ -52,6 +60,12 @@ export async function listProjects(
         generationProjects.meta,
         generationProjects.createdAt,
         generationProjects.finalVideoUrl,
+        contentFormats.id,
+        contentFormats.name,
+        contentFormats.slug,
+        contentFormats.status,
+        storyTemplates.id,
+        storyTemplates.name,
       )
       .orderBy(desc(generationProjects.createdAt));
 
@@ -69,6 +83,10 @@ export async function listProjects(
       scenesCount: Number(project.scenesCount ?? 0),
       keyframesCount: Number(project.keyframesCount ?? 0),
       hasFinalVideo: Boolean(project.hasFinalVideo),
+      contentFormat: project.contentFormatId ? {
+        id: project.contentFormatId, name: project.contentFormatName!, slug: project.contentFormatSlug!, status: project.contentFormatStatus!,
+      } : null,
+      storyTemplate: project.storyTemplateId ? { id: project.storyTemplateId, name: project.storyTemplateName! } : null,
     }));
   } catch (error) {
     logger.error('Failed to list projects', { error });

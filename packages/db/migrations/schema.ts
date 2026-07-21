@@ -360,6 +360,7 @@ export const generationProjects = generationPipeline.table("generation_projects"
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	ownerId: uuid("owner_id"), // Ссылку на auth.users добавим позже, если понадобится
 	templateId: uuid("template_id").references(() => storyTemplates.id, { onDelete: 'set null' }),
+	contentFormatId: uuid("content_format_id").references(() => contentFormats.id, { onDelete: 'restrict' }),
 	status: appJobStatus("status").default('pending').notNull(),
 	stage: text("stage").default('init').notNull(),
 	finalVideoUrl: text("final_video_url"),

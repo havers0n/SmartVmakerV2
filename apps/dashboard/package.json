@@ -13,6 +13,7 @@
     "type-check": "pnpm --filter @scrimspec/hwar-core run build && tsc --noEmit",
     "test": "vitest run",
     "test:discovery-integration": "vitest run --config vitest.discovery-integration.config.ts",
+    "test:project-integration": "vitest run --config vitest.project-integration.config.ts",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:generation": "node e2e/generation.run.ts",
