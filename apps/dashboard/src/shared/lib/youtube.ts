@@ -6,6 +6,11 @@
 import { google, type youtube_v3 } from 'googleapis';
 import { schema } from '@scrimspec/db';
 import type { InferInsertModel } from 'drizzle-orm';
+import {
+  DiscoveryConfigurationError,
+  YouTubeDiscoveryApiError,
+  YouTubeQuotaExhaustedError,
+} from "@/server/discovery-execution-errors";
 
 // Define the type for NewYoutubeVideos using the schema
 type NewYoutubeVideos = InferInsertModel<typeof schema.youtubeVideos>;
@@ -38,35 +43,51 @@ export interface DiscoverySearchHit {
   resultPosition: number;
 }
 
-/** Search once and retain the result order and channel evidence. */
-export async function searchYouTubeForDiscovery(params: {
+/** One durable Discovery page. Pagination is intentionally owned by the caller. */
+export interface YouTubeDiscoverySearchPageInput {
   query: string;
   order: YouTubeSearchOrder;
   publishedAfter?: Date;
+  pageToken?: string | null;
   maxResults: number;
-}): Promise<DiscoverySearchHit[]> {
+}
+
+export interface YouTubeDiscoverySearchPage {
+  items: DiscoverySearchHit[];
+  nextPageToken: string | null;
+  requestCount: number;
+  estimatedQuotaUnits: number;
+}
+
+/** Search once and retain the result order and channel evidence. */
+export async function searchYouTubeDiscoveryPage(params: YouTubeDiscoverySearchPageInput): Promise<YouTubeDiscoverySearchPage> {
   if (!process.env.YOUTUBE_API_KEY) {
-    throw new Error("YOUTUBE_API_KEY environment variable is not set");
+    throw new DiscoveryConfigurationError();
   }
 
-  const searchResponse = await youtube.search.list({
+  let searchResponse;
+  try { searchResponse = await youtube.search.list({
     part: ["snippet"],
     q: params.query,
     type: ["video"],
     publishedAfter: params.publishedAfter?.toISOString(),
     maxResults: Math.min(50, params.maxResults),
     order: params.order,
-  });
+    pageToken: params.pageToken ?? undefined,
+    });
+  } catch (error) { throw normalizeYouTubeDiscoveryError(error); }
   const searchItems = searchResponse.data.items ?? [];
   const videoIds = searchItems
     .map((item) => item.id?.videoId)
     .filter((id): id is string => Boolean(id));
-  if (!videoIds.length) return [];
+  if (!videoIds.length) return { items: [], nextPageToken: searchResponse.data.nextPageToken ?? null, requestCount: 1, estimatedQuotaUnits: 100 };
 
-  const videos = await getYouTubeVideosByIds(videoIds);
+  let videos;
+  try { videos = await getYouTubeVideosByIds(videoIds); }
+  catch (error) { throw normalizeYouTubeDiscoveryError(error); }
   const videosById = new Map(videos.map((video) => [video.youtubeId, video]));
 
-  return searchItems.flatMap((item, index) => {
+  const items = searchItems.flatMap((item, index) => {
     const videoId = item.id?.videoId;
     const channelId = item.snippet?.channelId;
     const video = videoId ? videosById.get(videoId) : undefined;
@@ -84,6 +105,26 @@ export async function searchYouTubeForDiscovery(params: {
       },
     ];
   });
+  return { items, nextPageToken: searchResponse.data.nextPageToken ?? null, requestCount: 2, estimatedQuotaUnits: 101 };
+}
+
+export function normalizeYouTubeDiscoveryError(error: unknown): Error {
+  const candidate = error as { code?: string; response?: { status?: number; data?: { error?: { errors?: Array<{ reason?: string }> } } } };
+  const status = candidate?.response?.status;
+  const code = candidate?.code;
+  const reason = candidate?.response?.data?.error?.errors?.[0]?.reason;
+  if (reason === "dailyLimitExceeded" || reason === "quotaExceeded") return new YouTubeQuotaExhaustedError();
+  return new YouTubeDiscoveryApiError({ status, code, networkCode: code });
+}
+
+/** Compatibility helper for existing one-page callers. */
+export async function searchYouTubeForDiscovery(params: {
+  query: string;
+  order: YouTubeSearchOrder;
+  publishedAfter?: Date;
+  maxResults: number;
+}): Promise<DiscoverySearchHit[]> {
+  return (await searchYouTubeDiscoveryPage(params)).items;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { getDiscoveryRun } from "@/server/discovery-runs";
+import { getDiscoveryRunProgress } from "@/server/discovery-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const run = await getDiscoveryRun(params.id);
+    const run = await getDiscoveryRunProgress(params.id);
     return run
       ? NextResponse.json(run)
       : NextResponse.json(

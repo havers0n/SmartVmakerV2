@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowUpDown, Clipboard, Download } from "lucide-react";
 import {
   Card,
@@ -46,6 +46,10 @@ type Run = {
   videoCount: number;
   uniqueChannelCount: number;
   aiSummary: string | null;
+  cancelRequestedAt: string | null;
+  requestBudget: number;
+  externalRequestCount: number;
+  progress?: { totalSteps: number; completed: number; pending: number; processing: number; retry_wait: number; failed: number; cancelled: number; blocked_quota: number; pagesCompleted: number; lastError: string | null };
 };
 type ResearchCandidate = {
   id: string;
@@ -285,8 +289,8 @@ type OpportunityData = {
   nicheBranches?: NicheBranchSuggestion[];
 };
 
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
   const body = await response.json();
   if (!response.ok) throw new Error(body.error ?? "Request failed");
   return body;
@@ -414,26 +418,27 @@ export default function DiscoveryRunPage({
 }: {
   params: { runId: string };
 }) {
+  const queryClient = useQueryClient();
   const runQuery = useQuery<Run>({
     queryKey: ["discovery-run", params.runId],
     queryFn: () => api(`/api/discovery-runs/${params.runId}`),
     refetchInterval: (query) =>
-      query.state.data?.status === "running" ? 3000 : false,
+      ["queued", "running", "blocked"].includes(query.state.data?.status ?? "") ? 3000 : false,
   });
   const videosQuery = useQuery<Video[]>({
     queryKey: ["discovery-run", params.runId, "videos"],
     queryFn: () => api(`/api/discovery-runs/${params.runId}/videos`),
-    refetchInterval: runQuery.data?.status === "running" ? 3000 : false,
+    refetchInterval: ["queued", "running", "blocked"].includes(runQuery.data?.status ?? "") ? 3000 : false,
   });
   const channelsQuery = useQuery<Channel[]>({
     queryKey: ["discovery-run", params.runId, "channels"],
     queryFn: () => api(`/api/discovery-runs/${params.runId}/channels`),
-    refetchInterval: runQuery.data?.status === "running" ? 3000 : false,
+    refetchInterval: ["queued", "running", "blocked"].includes(runQuery.data?.status ?? "") ? 3000 : false,
   });
   const opportunityQuery = useQuery<OpportunityData>({
     queryKey: ["discovery-run", params.runId, "opportunity"],
     queryFn: () => api(`/api/discovery-runs/${params.runId}/opportunity`),
-    refetchInterval: runQuery.data?.status === "running" ? 3000 : false,
+    refetchInterval: ["queued", "running", "blocked"].includes(runQuery.data?.status ?? "") ? 3000 : false,
   });
   const candidatesQuery = useQuery<ResearchCandidate[]>({
     queryKey: ["discovery-run", params.runId, "candidates"],
@@ -506,6 +511,9 @@ export default function DiscoveryRunPage({
         current.key === key ? ((current.direction * -1) as 1 | -1) : -1,
     }));
   const run = runQuery.data;
+  const refreshRun = () => queryClient.invalidateQueries({ queryKey: ["discovery-run", params.runId] });
+  const cancelRun = useMutation({ mutationFn: () => api(`/api/discovery-runs/${params.runId}/cancel`, { method: "POST" }), onSuccess: refreshRun });
+  const resumeRun = useMutation({ mutationFn: () => api(`/api/discovery-runs/${params.runId}/resume`, { method: "POST" }), onSuccess: refreshRun });
   const error =
     runQuery.error ??
     videosQuery.error ??
@@ -555,6 +563,20 @@ export default function DiscoveryRunPage({
               </CardContent>
             </Card>
           </div>
+          {run.progress && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Execution progress</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p>{run.progress.completed} of {run.progress.totalSteps} planned steps completed; {run.progress.pagesCompleted} pages saved.</p>
+                <p>Requests: {run.externalRequestCount} / {run.requestBudget}. Pending: {run.progress.pending}; processing: {run.progress.processing}; retrying: {run.progress.retry_wait}.</p>
+                {run.progress.lastError && <p className="text-destructive">Latest error: {run.progress.lastError}</p>}
+                <div className="flex gap-2">
+                  {!["completed", "completed_with_errors", "failed", "cancelled"].includes(run.status) && <Button variant="destructive" onClick={() => cancelRun.mutate()} disabled={cancelRun.isPending}>Cancel</Button>}
+                  {["failed", "cancelled", "blocked", "completed_with_errors"].includes(run.status) && <Button onClick={() => resumeRun.mutate()} disabled={resumeRun.isPending}>Resume / Retry</Button>}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {run.errorMessage && (
             <p className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
               {run.errorMessage}

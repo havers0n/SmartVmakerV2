@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "test:e2e:generation": "node e2e/generation.run.ts",
     "discovery:backfill-content-formats": "tsx --tsconfig tsconfig.json scripts/rebuild-discovery-content-formats.ts",
+    "discovery:worker": "tsx --tsconfig tsconfig.json scripts/discovery-worker.ts",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "clean": "rimraf .next"

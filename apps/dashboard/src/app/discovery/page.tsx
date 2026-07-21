@@ -97,7 +97,7 @@ export default function DiscoveryPage() {
     queryFn: () => api(`/api/discovery-runs?nicheId=${selectedId}`),
     enabled: Boolean(selectedId),
     refetchInterval: (query) =>
-      query.state.data?.some((run) => run.status === "running") ? 3000 : false,
+      query.state.data?.some((run) => ["queued", "running", "blocked"].includes(run.status)) ? 3000 : false,
   });
 
   const createNiche = useMutation({

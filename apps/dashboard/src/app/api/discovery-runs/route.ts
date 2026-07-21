@@ -33,8 +33,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    return NextResponse.json(await createDiscoveryRun(await request.json()), {
-      status: 201,
+    return NextResponse.json(await createDiscoveryRun(await request.json(), request.headers.get("idempotency-key")), {
+      status: 202,
     });
   } catch (error) {
     if (error instanceof ZodError)

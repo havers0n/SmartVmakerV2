@@ -668,7 +668,7 @@ export const discoveryRuns = pgTable(
       .notNull()
       .references(() => niches.id),
     status: text("status", {
-      enum: ["pending", "running", "completed", "failed"],
+      enum: ["pending", "queued", "running", "blocked", "completed", "completed_with_errors", "failed", "cancelled"],
     })
       .default("pending")
       .notNull(),
@@ -687,6 +687,14 @@ export const discoveryRuns = pgTable(
     }),
     errorMessage: text("error_message"),
     aiSummary: text("ai_summary"),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true, mode: "string" }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true, mode: "string" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+    totalSteps: integer("total_steps").default(0).notNull(),
+    requestBudget: integer("request_budget").default(50).notNull(),
+    externalRequestCount: integer("external_request_count").default(0).notNull(),
+    estimatedQuotaUnitsUsed: integer("estimated_quota_units_used").default(0).notNull(),
+    idempotencyKey: text("idempotency_key"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -696,6 +704,36 @@ export const discoveryRuns = pgTable(
       table.nicheId,
       table.createdAt,
     ),
+  }),
+);
+
+export const discoveryRunSteps = pgTable(
+  "discovery_run_steps",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id").notNull().references(() => discoveryRuns.id, { onDelete: "cascade" }),
+    stepKey: text("step_key").notNull(),
+    stepType: text("step_type", { enum: ["search", "finalize"] }).default("search").notNull(),
+    queryId: uuid("query_id").references(() => nicheQueries.id, { onDelete: "set null" }),
+    querySnapshot: jsonb("query_snapshot").$type<Record<string, unknown>>().notNull(),
+    searchOrder: text("search_order", { enum: ["relevance", "viewCount", "date"] }),
+    status: text("status", { enum: ["pending", "processing", "retry_wait", "completed", "failed", "cancelled", "blocked_quota"] }).default("pending").notNull(),
+    checkpoint: jsonb("checkpoint").$type<Record<string, unknown>>().default({}).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(4).notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+    lockedBy: text("locked_by"), lockedAt: timestamp("locked_at", { withTimezone: true, mode: "string" }), lockExpiresAt: timestamp("lock_expires_at", { withTimezone: true, mode: "string" }), heartbeatAt: timestamp("heartbeat_at", { withTimezone: true, mode: "string" }),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }), completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+    lastErrorCode: text("last_error_code"), lastErrorMessage: text("last_error_message"),
+    externalRequestCount: integer("external_request_count").default(0).notNull(), estimatedQuotaUnitsUsed: integer("estimated_quota_units_used").default(0).notNull(),
+    resultCounters: jsonb("result_counters").$type<Record<string, number>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueKey: uniqueIndex("discovery_run_steps_unique_key").on(table.runId, table.stepKey),
+    claimIdx: index("discovery_run_steps_claim_idx").on(table.availableAt, table.createdAt),
+    leaseIdx: index("discovery_run_steps_lease_idx").on(table.lockExpiresAt),
+    runStatusIdx: index("discovery_run_steps_run_status_idx").on(table.runId, table.status),
   }),
 );
 

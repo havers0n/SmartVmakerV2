@@ -6,6 +6,7 @@ import { GET as getChannels } from "./[id]/channels/route";
 import {
   createDiscoveryRun,
   getDiscoveryRun,
+  getDiscoveryRunProgress,
   listDiscoveryRuns,
   listDiscoveryRunVideos,
   listDiscoveryRunChannels,
@@ -22,6 +23,7 @@ vi.mock("@/server/discovery-runs", () => ({
     }
   },
   getDiscoveryRun: vi.fn(),
+  getDiscoveryRunProgress: vi.fn(),
   listDiscoveryRuns: vi.fn(),
   listDiscoveryRunVideos: vi.fn(),
   listDiscoveryRunChannels: vi.fn(),
@@ -47,7 +49,7 @@ describe("discovery run API", () => {
         body: JSON.stringify({ nicheId: id }),
       }),
     );
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
     expect(await response.json()).toMatchObject({ id, status: "completed" });
   });
 
@@ -61,11 +63,12 @@ describe("discovery run API", () => {
   });
 
   it("returns run counts and evidence videos", async () => {
-    vi.mocked(getDiscoveryRun).mockResolvedValue({
+    vi.mocked(getDiscoveryRunProgress).mockResolvedValue({
       id,
       videoCount: 2,
       uniqueChannelCount: 1,
     } as never);
+    vi.mocked(getDiscoveryRun).mockResolvedValue({ id } as never);
     vi.mocked(listDiscoveryRunVideos).mockResolvedValue([
       { videoId: "video-1" },
     ] as never);

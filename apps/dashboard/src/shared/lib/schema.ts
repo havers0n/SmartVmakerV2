@@ -41,6 +41,7 @@ export const nicheQueries = schema.nicheQueries;
 export const seedSources = schema.seedSources;
 export const nicheCandidates = schema.nicheCandidates;
 export const discoveryRuns = schema.discoveryRuns;
+export const discoveryRunSteps = schema.discoveryRunSteps;
 export const discoveryClusters = schema.discoveryClusters;
 export const discoveryClusterVideos = schema.discoveryClusterVideos;
 export const discoveryVideoEmbeddings = schema.discoveryVideoEmbeddings;

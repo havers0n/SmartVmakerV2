@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/shared/lib/db";
 import {
   discoveryRuns,
+  discoveryRunSteps,
   discoveryClusters,
   discoveryClusterVideos,
   discoveryVideoEmbeddings,
@@ -37,9 +38,16 @@ import {
 import { createLogger } from "@aec/logger";
 import {
   getYouTubeChannelsByIds,
+  searchYouTubeDiscoveryPage,
   searchYouTubeForDiscovery,
   type YouTubeSearchOrder,
 } from "@/shared/lib/youtube";
+import {
+  calculateDiscoveryRetryDelay,
+  classifyDiscoveryExecutionError,
+  DiscoveryLeaseLostError,
+  DiscoveryMalformedCheckpointError,
+} from "./discovery-execution-errors";
 
 const logger = createLogger({ name: "discovery-runs" });
 
@@ -631,6 +639,9 @@ export function aggregateDiscoveryChannels(
     );
 }
 
+export const DEFAULT_DISCOVERY_REQUEST_BUDGET = 50;
+export const MAX_DISCOVERY_REQUEST_BUDGET = 50;
+
 export const createDiscoveryRunSchema = z.object({
   nicheId: z.string().uuid(),
   searchOrders: z
@@ -644,6 +655,7 @@ export const createDiscoveryRunSchema = z.object({
     .default(["relevance", "viewCount", "date"]),
   maxResultsPerQuery: z.coerce.number().int().min(1).max(50).default(25),
   publishedAfter: z.string().datetime({ offset: true }).optional(),
+  requestBudget: z.number().int().min(1).max(MAX_DISCOVERY_REQUEST_BUDGET).default(DEFAULT_DISCOVERY_REQUEST_BUDGET),
 });
 
 export class DiscoveryRunError extends Error {
@@ -654,10 +666,6 @@ export class DiscoveryRunError extends Error {
     super(message);
     this.name = "DiscoveryRunError";
   }
-}
-
-function readableError(error: unknown) {
-  return error instanceof Error ? error.message : "Unknown discovery error";
 }
 
 export async function listDiscoveryRuns(nicheId: string) {
@@ -1422,8 +1430,8 @@ export async function hydrateDiscoveryRunChannels(
   }
 }
 
-export async function rebuildDiscoveryRunIntelligence(runId: string) {
-  const rows = await db
+export async function rebuildDiscoveryRunIntelligence(runId: string, persistenceDb: typeof db = db) {
+  const rows = await persistenceDb
     .select({
       videoId: youtubeVideos.id,
       title: youtubeVideos.title,
@@ -1440,7 +1448,7 @@ export async function rebuildDiscoveryRunIntelligence(runId: string) {
     .innerJoin(youtubeChannels, eq(youtubeVideos.channelId, youtubeChannels.id))
     .innerJoin(nicheQueries, eq(videoDiscoveries.queryId, nicheQueries.id))
     .where(eq(videoDiscoveries.runId, runId));
-  const [run] = await db
+  const [run] = await persistenceDb
     .select({ nicheLanguage: niches.language, nicheName: niches.name })
     .from(discoveryRuns)
     .innerJoin(niches, eq(discoveryRuns.nicheId, niches.id))
@@ -1454,11 +1462,11 @@ export async function rebuildDiscoveryRunIntelligence(runId: string) {
     else byVideo.set(row.videoId, { ...row, queryEvidence: [row.query] });
   }
   const videos = [...byVideo.values()];
-  const cached = videos.length ? await db.select().from(discoveryVideoEmbeddings).where(inArray(discoveryVideoEmbeddings.videoId, videos.map(v => v.videoId))) : [];
+  const cached = videos.length ? await persistenceDb.select().from(discoveryVideoEmbeddings).where(inArray(discoveryVideoEmbeddings.videoId, videos.map(v => v.videoId))) : [];
   const cachedByVideo = new Map(cached.map(row => [row.videoId, row]));
   const saveEmbedding = async (video: DiscoveryIntelligenceVideo, hash: string, generated: { embedding: number[]; provider: string; model: string }) => {
     video.embedding = generated.embedding; video.embeddingProvider = generated.provider;
-    await db.insert(discoveryVideoEmbeddings).values({ videoId: video.videoId, contentHash: hash, provider: generated.provider, model: generated.model, embedding: generated.embedding, updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: discoveryVideoEmbeddings.videoId, set: { contentHash: hash, provider: generated.provider, model: generated.model, embedding: generated.embedding, updatedAt: new Date().toISOString() } });
+    await persistenceDb.insert(discoveryVideoEmbeddings).values({ videoId: video.videoId, contentHash: hash, provider: generated.provider, model: generated.model, embedding: generated.embedding, updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: discoveryVideoEmbeddings.videoId, set: { contentHash: hash, provider: generated.provider, model: generated.model, embedding: generated.embedding, updatedAt: new Date().toISOString() } });
   };
   const needsEmbedding: Array<{ video: DiscoveryIntelligenceVideo; hash: string }> = [];
   for (const video of videos) {
@@ -1491,12 +1499,17 @@ export async function rebuildDiscoveryRunIntelligence(runId: string) {
     cluster.formatDetails = format;
   }));
 
-  await db
+  const existingMemberships = await persistenceDb
+    .select({ videoId: discoveryClusterVideos.videoId, isExcluded: discoveryClusterVideos.isExcluded })
+    .from(discoveryClusterVideos)
+    .where(eq(discoveryClusterVideos.runId, runId));
+  const curatedByVideo = new Map(existingMemberships.map((membership: { videoId: string; isExcluded: boolean }) => [membership.videoId, membership.isExcluded]));
+  await persistenceDb
     .delete(discoveryClusterVideos)
     .where(eq(discoveryClusterVideos.runId, runId));
-  await db.delete(discoveryClusters).where(eq(discoveryClusters.runId, runId));
+  await persistenceDb.delete(discoveryClusters).where(eq(discoveryClusters.runId, runId));
   if (clusters.length) {
-    const saved = await db
+    const saved = await persistenceDb
       .insert(discoveryClusters)
       .values(
         clusters.map((cluster) => ({
@@ -1535,12 +1548,13 @@ export async function rebuildDiscoveryRunIntelligence(runId: string) {
         })),
       )
       .returning({ id: discoveryClusters.id });
-    await db.insert(discoveryClusterVideos).values(
+    await persistenceDb.insert(discoveryClusterVideos).values(
       saved.flatMap((cluster, index) =>
         clusters[index].videoIds.map((videoId) => ({
           runId,
           videoId,
           clusterId: cluster.id,
+          isExcluded: curatedByVideo.get(videoId) ?? false,
         })),
       ),
     );
@@ -1548,159 +1562,284 @@ export async function rebuildDiscoveryRunIntelligence(runId: string) {
   return generateDiscoveryRunSummary(clusters);
 }
 
-export async function createDiscoveryRun(input: unknown) {
+type DiscoverySnapshot = {
+  query: string;
+  maxResults: number;
+  publishedAfter?: string;
+};
+type DiscoveryCheckpoint = {
+  version: 1;
+  nextPageToken: string | null;
+  pagesCompleted: number;
+  externalRequestCount: number;
+  paginationComplete: boolean;
+  resultCounters: { videos: number; channels: number };
+};
+
+const LEASE_MS = 60_000;
+
+/** Creates immutable work; no external API is called from this function. */
+export async function createDiscoveryRun(
+  input: unknown,
+  idempotencyKey?: string | null,
+) {
   const values = createDiscoveryRunSchema.parse(input);
-  const [niche] = await db
-    .select({ id: niches.id })
-    .from(niches)
-    .where(eq(niches.id, values.nicheId))
-    .limit(1);
-  if (!niche) throw new Error("Niche not found");
-
-  const queries = await db
-    .select({ id: nicheQueries.id, query: nicheQueries.query })
-    .from(nicheQueries)
-    .where(
-      and(
-        eq(nicheQueries.nicheId, values.nicheId),
-        eq(nicheQueries.isEnabled, true),
-      ),
-    )
-    .orderBy(asc(nicheQueries.createdAt));
-  if (!queries.length)
-    throw new Error("The niche has no enabled discovery queries");
-
-  const now = new Date().toISOString();
-  const [run] = await db
-    .insert(discoveryRuns)
-    .values({
-      nicheId: values.nicheId,
-      status: "running",
-      cutoffDate: values.publishedAfter ?? null,
-      searchOrders: values.searchOrders,
-      startedAt: now,
-    })
-    .returning();
-
-  try {
-    for (const query of queries) {
-      for (const order of values.searchOrders as YouTubeSearchOrder[]) {
-        const hits = await searchYouTubeForDiscovery({
-          query: query.query,
-          order,
-          maxResults: values.maxResultsPerQuery,
-          publishedAfter: values.publishedAfter
-            ? new Date(values.publishedAfter)
-            : undefined,
-        });
-        if (!hits.length) continue;
-
-        const channelValues = Array.from(
-          new Map(hits.map((hit) => [hit.youtubeChannelId, hit])).values(),
-          (hit) => ({
-            youtubeChannelId: hit.youtubeChannelId,
-            title: hit.channelTitle,
-            subscriberCount: null,
-          }),
-        );
-        const persistedChannels = await db
-          .insert(youtubeChannels)
-          .values(channelValues)
-          .onConflictDoUpdate({
-            target: youtubeChannels.youtubeChannelId,
-            set: { title: sql`excluded.title`, updatedAt: now },
-          })
-          .returning({
-            id: youtubeChannels.id,
-            youtubeChannelId: youtubeChannels.youtubeChannelId,
-          });
-        const channelIds = new Map(
-          persistedChannels.map((channel) => [
-            channel.youtubeChannelId,
-            channel.id,
-          ]),
-        );
-
-        const videos = hits.map((hit) => ({
-          ...hit.video,
-          channelId: channelIds.get(hit.youtubeChannelId),
-          updatedAt: now,
-        }));
-        const persistedVideos = await db
-          .insert(youtubeVideos)
-          .values(videos)
-          .onConflictDoUpdate({
-            target: youtubeVideos.youtubeId,
-            set: {
-              url: sql`excluded.url`,
-              title: sql`excluded.title`,
-              description: sql`excluded.description`,
-              publishedAt: sql`excluded.published_at`,
-              channelTitle: sql`excluded.channel_title`,
-              durationSeconds: sql`excluded.duration_seconds`,
-              viewCount: sql`excluded.view_count`,
-              likeCount: sql`excluded.like_count`,
-              commentCount: sql`excluded.comment_count`,
-              tags: sql`excluded.tags`,
-              thumbnails: sql`excluded.thumbnails`,
-              channelId: sql`excluded.channel_id`,
-              updatedAt: now,
-            },
-          })
-          .returning({
-            id: youtubeVideos.id,
-            youtubeId: youtubeVideos.youtubeId,
-          });
-        const videoIds = new Map(
-          persistedVideos.map((video) => [video.youtubeId, video.id]),
-        );
-
-        await db
-          .insert(videoDiscoveries)
-          .values(
-            hits.map((hit) => ({
-              runId: run.id,
-              videoId: videoIds.get(hit.video.youtubeId!)!,
-              queryId: query.id,
-              searchOrder: order,
-              resultPosition: hit.resultPosition,
-            })),
-          )
-          .onConflictDoUpdate({
-            target: [
-              videoDiscoveries.runId,
-              videoDiscoveries.videoId,
-              videoDiscoveries.queryId,
-              videoDiscoveries.searchOrder,
-            ],
-            set: { resultPosition: sql`excluded.result_position` },
-          });
-      }
-    }
-
-    await hydrateDiscoveryRunChannels(run.id);
-    const aiSummary = await rebuildDiscoveryRunIntelligence(run.id);
-
-    const [completed] = await db
-      .update(discoveryRuns)
-      .set({
-        status: "completed",
-        finishedAt: new Date().toISOString(),
-        aiSummary,
-      })
-      .where(eq(discoveryRuns.id, run.id))
-      .returning();
-    return completed;
-  } catch (error) {
-    const message = readableError(error);
-    await db
-      .update(discoveryRuns)
-      .set({
-        status: "failed",
-        finishedAt: new Date().toISOString(),
-        errorMessage: message,
-      })
-      .where(eq(discoveryRuns.id, run.id));
-    throw new DiscoveryRunError(message, run.id);
+  const existingKey = idempotencyKey?.trim() || null;
+  if (existingKey) {
+    const [existing] = await db.select().from(discoveryRuns)
+      .where(eq(discoveryRuns.idempotencyKey, existingKey)).limit(1);
+    if (existing) return existing;
   }
+  const queries = await db.select({ id: nicheQueries.id, query: nicheQueries.query })
+    .from(nicheQueries).where(and(eq(nicheQueries.nicheId, values.nicheId), eq(nicheQueries.isEnabled, true)))
+    .orderBy(asc(nicheQueries.createdAt));
+  if (!queries.length) throw new Error("The niche has no enabled discovery queries");
+  const [niche] = await db.select({ id: niches.id }).from(niches).where(eq(niches.id, values.nicheId)).limit(1);
+  if (!niche) throw new Error("Niche not found");
+  const now = new Date().toISOString();
+  return db.transaction(async (tx) => {
+    const stepCount = queries.length * values.searchOrders.length + 1;
+    const [run] = await tx.insert(discoveryRuns).values({
+      nicheId: values.nicheId, status: "queued", cutoffDate: values.publishedAfter ?? null,
+      searchOrders: values.searchOrders, totalSteps: stepCount, requestBudget: values.requestBudget,
+      idempotencyKey: existingKey, updatedAt: now,
+    }).returning();
+    const snapshotBase = { maxResults: values.maxResultsPerQuery, publishedAfter: values.publishedAfter };
+    await tx.insert(discoveryRunSteps).values([
+      ...queries.flatMap((query) => values.searchOrders.map((order) => ({
+        runId: run.id, stepKey: `search:${query.id}:${order}`, stepType: "search" as const,
+        queryId: query.id, querySnapshot: { ...snapshotBase, query: query.query }, searchOrder: order,
+      }))),
+      { runId: run.id, stepKey: "finalize", stepType: "finalize" as const, querySnapshot: {} },
+    ]);
+    logger.info({ runId: run.id, totalSteps: stepCount }, "discovery run planned");
+    return run;
+  });
+}
+
+async function persistDiscoverySearchHits(
+  persistenceDb: typeof db, runId: string, queryId: string, order: YouTubeSearchOrder, hits: Awaited<ReturnType<typeof searchYouTubeForDiscovery>>,
+  afterPersisted: (tx: any, saved: { videos: number; channels: number }) => Promise<boolean>,
+) {
+  const now = new Date().toISOString();
+  return persistenceDb.transaction(async (tx) => {
+    if (!hits.length) {
+      const owned = await afterPersisted(tx, { videos: 0, channels: 0 });
+      if (!owned) throw new DiscoveryLeaseLostError();
+      return { videos: 0, channels: 0 };
+    }
+    const channels = await tx.insert(youtubeChannels).values(Array.from(new Map(hits.map((hit) => [hit.youtubeChannelId, hit])).values(), (hit) => ({ youtubeChannelId: hit.youtubeChannelId, title: hit.channelTitle, subscriberCount: null })))
+      .onConflictDoUpdate({ target: youtubeChannels.youtubeChannelId, set: { title: sql`excluded.title`, updatedAt: now } })
+      .returning({ id: youtubeChannels.id, youtubeChannelId: youtubeChannels.youtubeChannelId });
+    const channelIds = new Map(channels.map((channel) => [channel.youtubeChannelId, channel.id]));
+    const videos = await tx.insert(youtubeVideos).values(hits.map((hit) => ({ ...hit.video, channelId: channelIds.get(hit.youtubeChannelId), updatedAt: now })))
+      .onConflictDoUpdate({ target: youtubeVideos.youtubeId, set: { url: sql`excluded.url`, title: sql`excluded.title`, description: sql`excluded.description`, publishedAt: sql`excluded.published_at`, channelTitle: sql`excluded.channel_title`, durationSeconds: sql`excluded.duration_seconds`, viewCount: sql`excluded.view_count`, likeCount: sql`excluded.like_count`, commentCount: sql`excluded.comment_count`, tags: sql`excluded.tags`, thumbnails: sql`excluded.thumbnails`, channelId: sql`excluded.channel_id`, updatedAt: now } })
+      .returning({ id: youtubeVideos.id, youtubeId: youtubeVideos.youtubeId });
+    const videoIds = new Map(videos.map((video) => [video.youtubeId, video.id]));
+    await tx.insert(videoDiscoveries).values(hits.map((hit) => ({ runId, videoId: videoIds.get(hit.video.youtubeId!)!, queryId, searchOrder: order, resultPosition: hit.resultPosition })))
+      .onConflictDoUpdate({ target: [videoDiscoveries.runId, videoDiscoveries.videoId, videoDiscoveries.queryId, videoDiscoveries.searchOrder], set: { resultPosition: sql`excluded.result_position` } });
+    const saved = { videos: videos.length, channels: channels.length };
+    const owned = await afterPersisted(tx, saved);
+    if (!owned) throw new DiscoveryLeaseLostError();
+    return saved;
+  });
+}
+
+export { calculateDiscoveryRetryDelay, classifyDiscoveryExecutionError, DiscoveryLeaseLostError } from "./discovery-execution-errors";
+
+export type DiscoveryWorkerDependencies = {
+  database?: typeof db;
+  searchPage?: typeof searchYouTubeDiscoveryPage;
+  beforePageExecution?: () => void | Promise<void>;
+  afterPageUpserts?: () => void | Promise<void>;
+  /** Test seam for failures at the finalization transaction boundary. */
+  beforeFinalizationCommit?: () => void | Promise<void>;
+};
+
+/** Atomically reserves search.list + videos.list before a page call. */
+export async function reserveDiscoveryPageBudget(reservationDb: typeof db, runId: string) {
+  const [reserved] = await reservationDb.update(discoveryRuns).set({
+    externalRequestCount: sql`${discoveryRuns.externalRequestCount} + 2`,
+    updatedAt: new Date().toISOString(), status: "running",
+    startedAt: sql`coalesce(${discoveryRuns.startedAt}, now())`,
+  }).where(and(eq(discoveryRuns.id, runId), sql`${discoveryRuns.cancelRequestedAt} is null`, sql`${discoveryRuns.externalRequestCount} + 2 <= ${discoveryRuns.requestBudget}`)).returning();
+  return reserved;
+}
+
+/** Atomically leases one runnable discovery step for a worker. */
+export async function claimDiscoveryStep(claimDb: typeof db, workerId: string) {
+  // Selection and lease creation are one PostgreSQL statement. SKIP LOCKED lets
+  // concurrent workers claim different runnable steps without waiting on a lease.
+  // Expired processing rows are candidates directly; they must not pass through
+  // retry_wait because now() is fixed for the duration of this transaction.
+  const [step] = await claimDb.update(discoveryRunSteps).set({
+    status: "processing",
+    lockedBy: workerId,
+    lockedAt: sql`now()`,
+    heartbeatAt: sql`now()`,
+    lockExpiresAt: sql`now() + (${LEASE_MS} * interval '1 millisecond')`,
+    // available_at is NOT NULL in migration 0025. Expired processing rows are
+    // made immediately runnable without changing the existing pending/retry
+    // scheduling contract.
+    availableAt: sql`case when ${discoveryRunSteps.status} = 'processing' then now() else ${discoveryRunSteps.availableAt} end`,
+    startedAt: sql`coalesce(${discoveryRunSteps.startedAt}, now())`,
+    attemptCount: sql`${discoveryRunSteps.attemptCount} + 1`,
+    lastErrorCode: sql`case when ${discoveryRunSteps.status} = 'processing' then null else ${discoveryRunSteps.lastErrorCode} end`,
+    lastErrorMessage: sql`case when ${discoveryRunSteps.status} = 'processing' then null else ${discoveryRunSteps.lastErrorMessage} end`,
+    updatedAt: sql`now()`,
+  }).where(and(
+    eq(discoveryRunSteps.id, sql`(
+      with candidate as (
+        select candidate.id
+        from discovery_run_steps as candidate
+        inner join discovery_runs as candidate_run on candidate_run.id = candidate.run_id
+        where (
+          candidate.status = 'pending'
+          or (candidate.status = 'retry_wait' and (candidate.available_at is null or candidate.available_at <= now()))
+          or (candidate.status = 'processing' and candidate.lock_expires_at is not null and candidate.lock_expires_at <= now() and candidate.attempt_count < candidate.max_attempts)
+        )
+        and candidate_run.cancel_requested_at is null
+        and candidate_run.status not in ('completed', 'completed_with_errors', 'cancelled', 'failed')
+        and (
+          candidate.step_type <> 'finalize'
+          or not exists (
+            select 1 from discovery_run_steps as search_step
+            where search_step.run_id = candidate.run_id
+              and search_step.step_type = 'search'
+              and search_step.status not in ('completed', 'failed', 'cancelled')
+          )
+        )
+        order by candidate.available_at asc nulls first, candidate.created_at asc
+        for update of candidate skip locked
+        limit 1
+      )
+      select id from candidate
+    )`),
+    sql`(
+      ${discoveryRunSteps.status} = 'pending'
+      or (${discoveryRunSteps.status} = 'retry_wait' and (${discoveryRunSteps.availableAt} is null or ${discoveryRunSteps.availableAt} <= now()))
+      or (${discoveryRunSteps.status} = 'processing' and ${discoveryRunSteps.lockExpiresAt} is not null and ${discoveryRunSteps.lockExpiresAt} <= now() and ${discoveryRunSteps.attemptCount} < ${discoveryRunSteps.maxAttempts})
+    )`,
+  )).returning();
+  return step;
+}
+
+/** Safely claims and executes at most one step. Suitable for `worker --once`. */
+export async function runDiscoveryWorkerOnce(
+  workerId = `discovery-${process.pid}`,
+  dependencies: DiscoveryWorkerDependencies = {},
+) {
+  const workerDb = dependencies.database ?? db;
+  const step = await claimDiscoveryStep(workerDb, workerId);
+  if (!step) return { processed: false };
+  logger.info({ runId: step.runId, stepId: step.id, stepType: step.stepType, attempt: step.attemptCount, workerId }, "discovery step claimed");
+  const [run] = await workerDb.select().from(discoveryRuns).where(eq(discoveryRuns.id, step.runId)).limit(1);
+  if (!run || run.cancelRequestedAt) return cancelClaimedStep(step.id, step.runId, workerDb);
+  try {
+    if (step.stepType === "finalize") return await finalizeDiscoveryStep(step, run, workerId, workerDb, dependencies.beforeFinalizationCommit);
+    await dependencies.beforePageExecution?.();
+    const [beforePageRun] = await workerDb.select({ cancelRequestedAt: discoveryRuns.cancelRequestedAt }).from(discoveryRuns).where(eq(discoveryRuns.id, run.id)).limit(1);
+    if (beforePageRun?.cancelRequestedAt) return cancelClaimedStep(step.id, step.runId, workerDb);
+    // A page may issue search.list + videos.list. Reserve both conservatively before any external call.
+    const reserved = await reserveDiscoveryPageBudget(workerDb, run.id);
+    if (!reserved) {
+      const [latestRun] = await workerDb.select({ cancelRequestedAt: discoveryRuns.cancelRequestedAt }).from(discoveryRuns).where(eq(discoveryRuns.id, run.id)).limit(1);
+      if (latestRun?.cancelRequestedAt) return cancelClaimedStep(step.id, step.runId, workerDb);
+      await workerDb.update(discoveryRunSteps).set({ status: "blocked_quota", lockedBy: null, lockedAt: null, lockExpiresAt: null, lastErrorCode: "quota_budget_exhausted", lastErrorMessage: "The run request budget has been exhausted", updatedAt: new Date().toISOString() }).where(eq(discoveryRunSteps.id, step.id));
+      await workerDb.update(discoveryRuns).set({ status: "blocked", updatedAt: new Date().toISOString() }).where(eq(discoveryRuns.id, run.id));
+      return { processed: true, blocked: true };
+    }
+    const snapshot = step.querySnapshot as DiscoverySnapshot;
+    const prior = step.checkpoint as Partial<DiscoveryCheckpoint>;
+    if (!prior || typeof prior !== "object" || Array.isArray(prior) || (prior.pagesCompleted !== undefined && (!Number.isInteger(prior.pagesCompleted) || prior.pagesCompleted < 0))) throw new DiscoveryMalformedCheckpointError();
+    const page = await (dependencies.searchPage ?? searchYouTubeDiscoveryPage)({ query: snapshot.query, order: step.searchOrder as YouTubeSearchOrder, maxResults: snapshot.maxResults, publishedAfter: snapshot.publishedAfter ? new Date(snapshot.publishedAfter) : undefined, pageToken: prior.nextPageToken });
+    const checkpoint: DiscoveryCheckpoint = {
+      version: 1, nextPageToken: page.nextPageToken, pagesCompleted: Number(prior.pagesCompleted ?? 0) + 1,
+      externalRequestCount: Number(prior.externalRequestCount ?? 0) + page.requestCount,
+      paginationComplete: page.nextPageToken === null,
+      resultCounters: { videos: Number(prior.resultCounters?.videos ?? 0), channels: Number(prior.resultCounters?.channels ?? 0) },
+    };
+    await persistDiscoverySearchHits(workerDb, step.runId, step.queryId!, step.searchOrder as YouTubeSearchOrder, page.items, async (tx, persisted) => {
+      await dependencies.afterPageUpserts?.();
+      checkpoint.resultCounters = { videos: checkpoint.resultCounters.videos + persisted.videos, channels: checkpoint.resultCounters.channels + persisted.channels };
+      const [currentRun] = await tx.select({ cancelRequestedAt: discoveryRuns.cancelRequestedAt }).from(discoveryRuns).where(eq(discoveryRuns.id, step.runId)).limit(1);
+      const cancelled = Boolean(currentRun?.cancelRequestedAt);
+      const [owned] = await tx.update(discoveryRunSteps).set({ status: cancelled ? "cancelled" : checkpoint.paginationComplete ? "completed" : "pending", checkpoint, completedAt: cancelled || checkpoint.paginationComplete ? new Date().toISOString() : null, lockedBy: null, lockedAt: null, lockExpiresAt: null, externalRequestCount: checkpoint.externalRequestCount, estimatedQuotaUnitsUsed: sql`${discoveryRunSteps.estimatedQuotaUnitsUsed} + ${page.estimatedQuotaUnits}`, resultCounters: checkpoint.resultCounters, updatedAt: new Date().toISOString() }).where(and(eq(discoveryRunSteps.id, step.id), eq(discoveryRunSteps.status, "processing"), eq(discoveryRunSteps.lockedBy, workerId), sql`${discoveryRunSteps.lockExpiresAt} > now()`)).returning();
+      if (!owned) return false;
+      await tx.update(discoveryRuns).set({ estimatedQuotaUnitsUsed: sql`${discoveryRuns.estimatedQuotaUnitsUsed} + ${page.estimatedQuotaUnits}`, updatedAt: new Date().toISOString() }).where(eq(discoveryRuns.id, step.runId));
+      if (cancelled) await tx.update(discoveryRuns).set({ status: "cancelled", cancelledAt: new Date().toISOString(), updatedAt: new Date().toISOString() }).where(eq(discoveryRuns.id, step.runId));
+      return true;
+    });
+    logger.info({ runId: step.runId, stepId: step.id, workerId, page: checkpoint.pagesCompleted, externalRequestCount: page.requestCount }, "discovery page persisted");
+    return { processed: true, stepId: step.id };
+  } catch (error) {
+    const result = classifyDiscoveryExecutionError(error);
+    if (result.lostLease) return { processed: true, ownershipLost: true };
+    const retry = result.retryable && step.attemptCount < step.maxAttempts;
+    const availableAt = retry ? new Date(Date.now() + calculateDiscoveryRetryDelay({ attempt: step.attemptCount, baseDelayMs: 1_000, maxDelayMs: 60_000 })).toISOString() : new Date().toISOString();
+    const status = result.quotaBlocked ? "blocked_quota" : retry ? "retry_wait" : "failed";
+    const [owned] = await workerDb.update(discoveryRunSteps).set({ status, availableAt, lockedBy: null, lockedAt: null, lockExpiresAt: null, lastErrorCode: result.code, lastErrorMessage: result.sanitizedMessage, updatedAt: new Date().toISOString() }).where(and(eq(discoveryRunSteps.id, step.id), eq(discoveryRunSteps.status, "processing"), eq(discoveryRunSteps.lockedBy, workerId), sql`${discoveryRunSteps.lockExpiresAt} > now()`)).returning();
+    if (!owned) return { processed: true, ownershipLost: true };
+    if (result.quotaBlocked) await workerDb.update(discoveryRuns).set({ status: "blocked", updatedAt: new Date().toISOString() }).where(eq(discoveryRuns.id, step.runId));
+    logger.error({ runId: step.runId, stepId: step.id, workerId, errorCode: result.code }, "discovery step failed");
+    return { processed: true, failed: !retry && !result.quotaBlocked, blocked: result.quotaBlocked };
+  }
+}
+
+async function cancelClaimedStep(stepId: string, runId: string, workerDb: typeof db = db) {
+  const now = new Date().toISOString();
+  await workerDb.transaction(async (tx) => {
+    await tx.update(discoveryRunSteps).set({ status: "cancelled", lockedBy: null, lockedAt: null, lockExpiresAt: null, completedAt: now, updatedAt: now }).where(eq(discoveryRunSteps.id, stepId));
+    await tx.update(discoveryRuns).set({ status: "cancelled", cancelledAt: now, updatedAt: now }).where(and(eq(discoveryRuns.id, runId), sql`not exists (select 1 from discovery_run_steps where run_id = ${runId} and status = 'processing')`));
+  });
+  return { processed: true, cancelled: true };
+}
+
+export async function finalizeDiscoveryStep(step: typeof discoveryRunSteps.$inferSelect, run: typeof discoveryRuns.$inferSelect, workerId: string, workerDb: typeof db = db, beforeCommit?: () => void | Promise<void>) {
+  const searches = await workerDb.select({ status: discoveryRunSteps.status }).from(discoveryRunSteps).where(and(eq(discoveryRunSteps.runId, run.id), eq(discoveryRunSteps.stepType, "search")));
+  if (searches.some((item) => !["completed", "failed", "cancelled"].includes(item.status))) {
+    await workerDb.update(discoveryRunSteps).set({ status: "retry_wait", availableAt: new Date(Date.now() + 1_000).toISOString(), lockedBy: null, lockedAt: null, lockExpiresAt: null, updatedAt: new Date().toISOString() }).where(eq(discoveryRunSteps.id, step.id));
+    return { processed: true, deferred: true };
+  }
+  await hydrateDiscoveryRunChannels(run.id);
+  const hasErrors = searches.some((item) => item.status !== "completed");
+  await workerDb.transaction(async (tx) => {
+    const aiSummary = await rebuildDiscoveryRunIntelligence(run.id, tx as unknown as typeof db);
+    await beforeCommit?.();
+    await tx.update(discoveryRunSteps).set({ status: "completed", completedAt: new Date().toISOString(), lockedBy: null, lockedAt: null, lockExpiresAt: null, updatedAt: new Date().toISOString() }).where(eq(discoveryRunSteps.id, step.id));
+    await tx.update(discoveryRuns).set({ status: hasErrors ? "completed_with_errors" : "completed", aiSummary, finishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }).where(eq(discoveryRuns.id, run.id));
+  });
+  logger.info({ runId: run.id, stepId: step.id, workerId }, "discovery run completed");
+  return { processed: true, finalized: true };
+}
+
+export async function cancelDiscoveryRun(id: string) {
+  const runId = z.string().uuid().parse(id); const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    await tx.update(discoveryRuns).set({ cancelRequestedAt: sql`coalesce(${discoveryRuns.cancelRequestedAt}, ${now})`, updatedAt: now }).where(eq(discoveryRuns.id, runId));
+    await tx.update(discoveryRunSteps).set({ status: "cancelled", completedAt: now, updatedAt: now }).where(and(eq(discoveryRunSteps.runId, runId), sql`${discoveryRunSteps.status} in ('pending', 'retry_wait', 'blocked_quota')`));
+    await tx.update(discoveryRuns).set({ status: "cancelled", cancelledAt: sql`coalesce(${discoveryRuns.cancelledAt}, ${now})`, updatedAt: now }).where(and(eq(discoveryRuns.id, runId), sql`not exists (select 1 from discovery_run_steps where run_id = ${runId} and status = 'processing')`));
+  });
+  return getDiscoveryRun(runId);
+}
+
+export async function resumeDiscoveryRun(id: string) {
+  const runId = z.string().uuid().parse(id); const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    const [run] = await tx.select().from(discoveryRuns).where(eq(discoveryRuns.id, runId)).limit(1);
+    if (!run || run.status !== "cancelled") return;
+    await tx.update(discoveryRunSteps).set({ status: "pending", availableAt: now, lockedBy: null, lockedAt: null, lockExpiresAt: null, completedAt: null, updatedAt: now }).where(and(eq(discoveryRunSteps.runId, runId), sql`${discoveryRunSteps.status} = 'cancelled'`));
+    await tx.update(discoveryRunSteps).set({ status: "pending", availableAt: now, lockedBy: null, lockedAt: null, lockExpiresAt: null, completedAt: null, updatedAt: now }).where(and(eq(discoveryRunSteps.runId, runId), eq(discoveryRunSteps.status, "failed"), sql`${discoveryRunSteps.attemptCount} < ${discoveryRunSteps.maxAttempts}`, sql`${discoveryRunSteps.lastErrorCode} in ('upstream_5xx', 'upstream_timeout', 'rate_limited')`));
+    const [runnable] = await tx.select({ id: discoveryRunSteps.id }).from(discoveryRunSteps).where(and(eq(discoveryRunSteps.runId, runId), eq(discoveryRunSteps.status, "pending"))).limit(1);
+    if (runnable) await tx.update(discoveryRuns).set({ status: "queued", cancelRequestedAt: null, cancelledAt: null, errorMessage: null, updatedAt: now }).where(eq(discoveryRuns.id, runId));
+  });
+  return getDiscoveryRun(runId);
+}
+
+export async function getDiscoveryRunProgress(id: string) {
+  const run = await getDiscoveryRun(id); if (!run) return null;
+  const steps = await db.select().from(discoveryRunSteps).where(eq(discoveryRunSteps.runId, id));
+  const statuses = Object.fromEntries(["pending", "processing", "retry_wait", "completed", "failed", "cancelled", "blocked_quota"].map((status) => [status, steps.filter((step) => step.status === status).length]));
+  const blockedStep = steps.find((step) => step.status === "blocked_quota");
+  return { ...run, progress: { totalSteps: run.totalSteps, ...statuses, pagesCompleted: steps.reduce((n, step) => n + Number((step.checkpoint as { pagesCompleted?: number }).pagesCompleted ?? 0), 0), requestsUsed: run.externalRequestCount, requestsRemaining: Math.max(run.requestBudget - run.externalRequestCount, 0), requestBudget: run.requestBudget, blockReason: blockedStep?.lastErrorCode ?? null, estimatedQuotaUnitsUsed: run.estimatedQuotaUnitsUsed, lastError: steps.find((step) => step.lastErrorMessage)?.lastErrorMessage ?? run.errorMessage } };
 }
