@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getPgClient } from "@scrimspec/db";
 import { db } from "@/shared/lib/db";
-import { discoveryRuns, discoveryRunSteps, nicheQueries, niches, videoDiscoveries, youtubeVideos } from "@/shared/lib/schema";
-import { cancelDiscoveryRun, claimDiscoveryStep, resumeDiscoveryRun, runDiscoveryWorkerOnce } from "./discovery-runs";
+import { discoveryRuns, discoveryRunSteps, nicheQueries, niches, videoDiscoveries, youtubeChannels, youtubeVideos } from "@/shared/lib/schema";
+import { cancelDiscoveryRun, resumeDiscoveryRun, runDiscoveryWorkerOnce } from "./discovery-runs";
 
 const databaseUrl = process.env.DRIZZLE_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
 if (!/@(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(databaseUrl)) throw new Error("cancel/resume integration tests require a loopback Supabase database");
 
-const fixtures: Array<{ nicheId: string; runId: string }> = [];
+const fixtures: Array<{ nicheId: string; queryId: string; runId: string; suffix: string }> = [];
 const past = "2000-01-01T00:00:00.000Z";
 
 async function fixture(options: { status?: "queued" | "cancelled" | "completed" | "blocked"; budget?: number; used?: number; checkpoint?: Record<string, unknown>; stepStatus?: "pending" | "processing" | "retry_wait" | "completed" | "failed" | "cancelled" | "blocked_quota"; attempts?: number; maxAttempts?: number; error?: string | null; final?: boolean } = {}) {
@@ -21,14 +21,27 @@ async function fixture(options: { status?: "queued" | "cancelled" | "completed" 
   const [{ id: stepId }] = await db.insert(discoveryRunSteps).values({ runId, stepKey: `search:${queryId}:relevance`, stepType: "search", queryId, querySnapshot: { query: `cancel query ${suffix}`, maxResults: 1, publishedAfter: null }, searchOrder: "relevance", status: options.stepStatus ?? "pending", checkpoint: options.checkpoint ?? {}, resultCounters: (options.checkpoint as { resultCounters?: Record<string, number> } | undefined)?.resultCounters ?? {}, attemptCount: options.attempts ?? 0, maxAttempts: options.maxAttempts ?? 4, lastErrorCode: options.error ?? null, availableAt: past, lockedBy: options.stepStatus === "processing" ? "active-worker" : null, lockedAt: options.stepStatus === "processing" ? now : null, lockExpiresAt: options.stepStatus === "processing" ? new Date(Date.now() + 60_000).toISOString() : null, updatedAt: now }).returning({ id: discoveryRunSteps.id });
   let finalId: string | undefined;
   if (options.final) [{ id: finalId }] = await db.insert(discoveryRunSteps).values({ runId, stepKey: "finalize", stepType: "finalize", querySnapshot: {}, checkpoint: {}, resultCounters: {}, availableAt: past, updatedAt: now }).returning({ id: discoveryRunSteps.id });
-  fixtures.push({ nicheId, runId }); return { nicheId, queryId, runId, stepId, finalId, suffix };
+  fixtures.push({ nicheId, queryId, runId, suffix }); return { nicheId, queryId, runId, stepId, finalId, suffix };
 }
 
 function page(suffix: string, name: string, token: string | null) {
   const videoId = `cancel-${name}-${suffix}`; return { items: [{ youtubeChannelId: `UC${suffix.replace(/-/g, "").slice(0, 22)}`, channelTitle: `channel ${suffix}`, channelThumbnailUrl: null, resultPosition: 1, video: { youtubeId: videoId, url: `https://youtube.test/${videoId}`, title: name, description: null, publishedAt: null, channelTitle: `channel ${suffix}`, durationSeconds: null, viewCount: 1, likeCount: 0, commentCount: 0, tags: [], thumbnails: null } }], nextPageToken: token, requestCount: 2, estimatedQuotaUnits: 101 };
 }
 
-afterEach(async () => { while (fixtures.length) { const item = fixtures.pop()!; await db.delete(discoveryRuns).where(eq(discoveryRuns.id, item.runId)); await db.delete(niches).where(eq(niches.id, item.nicheId)); } });
+afterEach(async () => {
+  while (fixtures.length) {
+    const item = fixtures.pop()!;
+    const videoIds = [`cancel-A-${item.suffix}`, `cancel-B-${item.suffix}`];
+    const channelId = `UC${item.suffix.replace(/-/g, "").slice(0, 22)}`;
+    await db.delete(videoDiscoveries).where(eq(videoDiscoveries.runId, item.runId));
+    await db.delete(discoveryRunSteps).where(eq(discoveryRunSteps.runId, item.runId));
+    await db.delete(discoveryRuns).where(eq(discoveryRuns.id, item.runId));
+    await db.delete(youtubeVideos).where(inArray(youtubeVideos.youtubeId, videoIds));
+    await db.delete(youtubeChannels).where(eq(youtubeChannels.youtubeChannelId, channelId));
+    await db.delete(nicheQueries).where(eq(nicheQueries.id, item.queryId));
+    await db.delete(niches).where(eq(niches.id, item.nicheId));
+  }
+});
 afterAll(async () => { await getPgClient().end(); });
 
 describe("discovery run cancellation and resume", () => {
@@ -41,7 +54,7 @@ describe("discovery run cancellation and resume", () => {
     expect(first?.cancelRequestedAt).toBeTruthy(); expect(second?.cancelRequestedAt).toBe(first?.cancelRequestedAt);
     expect(steps.find((s) => s.id === ids.stepId)?.status).toBe("cancelled"); expect(steps.find((s) => s.id === retryId)).toMatchObject({ status: "cancelled", checkpoint: { nextPageToken: "retry-token", pagesCompleted: 2 } });
     expect(steps.find((s) => s.id === doneId)).toMatchObject({ status: "completed", resultCounters: { videos: 1, channels: 1 } }); expect(steps.find((s) => s.id === ids.finalId)?.status).toBe("cancelled");
-    expect(await claimDiscoveryStep(db, "no-work")).toBeUndefined();
+    expect(steps.every((step) => ["cancelled", "completed"].includes(step.status))).toBe(true);
   });
 
   it("observes cancellation before an external call without reserving budget", async () => {

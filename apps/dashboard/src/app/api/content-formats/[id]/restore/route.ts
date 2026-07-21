@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { ContentFormatConflictError, restoreContentFormat } from "@/server/content-formats";
+export async function POST(_: Request, { params }: { params: { id: string } }) { try { return NextResponse.json(await restoreContentFormat(params.id)); } catch (e) { return NextResponse.json({ error: e instanceof ContentFormatConflictError ? e.message : "Internal Server Error" }, { status: e instanceof ContentFormatConflictError ? 404 : 500 }); } }

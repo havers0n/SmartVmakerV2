@@ -29,7 +29,7 @@ import {
 
 const databaseUrl = process.env.DRIZZLE_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
 if (!/@(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(databaseUrl)) throw new Error("discovery finalization integration tests require a loopback Supabase database");
-type CreatedItem = { runId: string; nicheId: string; videoIds: string[]; channelIds: string[] };
+type CreatedItem = { runId: string; nicheId: string; queryId: string; videoIds: string[]; channelIds: string[] };
 const created: CreatedItem[] = [];
 const past = "2000-01-01T00:00:00.000Z";
 
@@ -40,7 +40,7 @@ async function fixture(searchStatuses: Array<"pending" | "processing" | "retry_w
   const [{ id: runId }] = await db.insert(discoveryRuns).values({ nicheId, status: status as "running", searchOrders: ["relevance"], totalSteps: searchStatuses.length + 1, requestBudget: 50, updatedAt: now }).returning({ id: discoveryRuns.id });
   const search = await db.insert(discoveryRunSteps).values(searchStatuses.map((stepStatus, index) => ({ runId, stepKey: `search:${queryId}:relevance:${index}`, stepType: "search" as const, queryId, querySnapshot: { query: suffix, maxResults: 1 }, searchOrder: "relevance" as const, status: stepStatus, checkpoint: {}, resultCounters: {}, availableAt: past, lockedBy: stepStatus === "processing" ? "search-worker" : null, lockExpiresAt: stepStatus === "processing" ? new Date(Date.now() + 60_000).toISOString() : null, updatedAt: now })) ).returning({ id: discoveryRunSteps.id });
   const [{ id: finalizeId }] = await db.insert(discoveryRunSteps).values({ runId, stepKey: "finalize", stepType: "finalize", querySnapshot: {}, checkpoint: {}, resultCounters: {}, availableAt: past, updatedAt: now }).returning({ id: discoveryRunSteps.id });
-  const item: CreatedItem = { runId, nicheId, videoIds: [], channelIds: [] }; created.push(item);
+  const item: CreatedItem = { runId, nicheId, queryId, videoIds: [], channelIds: [] }; created.push(item);
   return { runId, nicheId, queryId, searchIds: search.map(x => x.id), finalizeId, created: item };
 }
 
@@ -63,7 +63,20 @@ async function addNonEmptyResults(ids: Awaited<ReturnType<typeof fixture>>) {
 async function workers() { const a = new Client({ connectionString: databaseUrl }); const b = new Client({ connectionString: databaseUrl }); await Promise.all([a.connect(), b.connect()]); return { a, b, dbA: drizzle(a) as typeof db, dbB: drizzle(b) as typeof db }; }
 async function derived(runId: string) { return { clusters: await db.select().from(discoveryClusters).where(eq(discoveryClusters.runId, runId)), memberships: await db.select().from(discoveryClusterVideos).where(eq(discoveryClusterVideos.runId, runId)) }; }
 
-afterEach(async () => { while (created.length) { const item = created.pop()!; await db.delete(discoveryRuns).where(eq(discoveryRuns.id, item.runId)); if (item.videoIds.length) await db.delete(youtubeVideos).where(eq(youtubeVideos.id, item.videoIds[0])); for (const videoId of item.videoIds.slice(1)) await db.delete(youtubeVideos).where(eq(youtubeVideos.id, videoId)); for (const channelId of item.channelIds) await db.delete(youtubeChannels).where(eq(youtubeChannels.id, channelId)); await db.delete(niches).where(eq(niches.id, item.nicheId)); } });
+afterEach(async () => {
+  while (created.length) {
+    const item = created.pop()!;
+    await db.delete(discoveryClusterVideos).where(eq(discoveryClusterVideos.runId, item.runId));
+    await db.delete(discoveryClusters).where(eq(discoveryClusters.runId, item.runId));
+    await db.delete(videoDiscoveries).where(eq(videoDiscoveries.runId, item.runId));
+    await db.delete(discoveryRunSteps).where(eq(discoveryRunSteps.runId, item.runId));
+    await db.delete(discoveryRuns).where(eq(discoveryRuns.id, item.runId));
+    for (const videoId of item.videoIds) await db.delete(youtubeVideos).where(eq(youtubeVideos.id, videoId));
+    for (const channelId of item.channelIds) await db.delete(youtubeChannels).where(eq(youtubeChannels.id, channelId));
+    await db.delete(nicheQueries).where(eq(nicheQueries.id, item.queryId));
+    await db.delete(niches).where(eq(niches.id, item.nicheId));
+  }
+});
 afterAll(async () => { await getPgClient().end(); });
 
 describe("discovery finalization", { timeout: 30_000 }, () => {
@@ -93,7 +106,9 @@ describe("discovery finalization", { timeout: 30_000 }, () => {
     expect(second.memberships.filter(m => m.videoId === curatedVideoId)).toHaveLength(1);
     expect(second.memberships.find(m => m.videoId === curatedVideoId)?.isExcluded).toBe(true);
     expect((await db.query.discoveryRuns.findFirst({ where: eq(discoveryRuns.id, ids.runId) }))?.status).toBe("completed");
-    expect(await claimDiscoveryStep(db, "after-completion")).toBeUndefined();
+    // claimDiscoveryStep is intentionally a global worker operation.  Do not
+    // claim arbitrary work from another fixture just to prove this run is terminal.
+    expect((await db.query.discoveryRunSteps.findFirst({ where: eq(discoveryRunSteps.id, ids.finalizeId) }))?.status).toBe("completed");
     expect(await getDiscoveryRunProgress(ids.runId)).toMatchObject({ status: "completed" });
   });
 

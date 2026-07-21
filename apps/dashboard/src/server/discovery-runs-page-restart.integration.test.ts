@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getPgClient } from "@scrimspec/db";
 import { db } from "@/shared/lib/db";
 import {
@@ -105,7 +105,14 @@ describe("discovery page restart", () => {
   });
 
   afterAll(async () => {
+    // The run cascade owns steps/discoveries, but YouTube entities are shared
+    // production tables and must be removed explicitly by their fixture IDs.
+    await db.delete(videoDiscoveries).where(eq(videoDiscoveries.runId, runId));
+    await db.delete(discoveryRunSteps).where(eq(discoveryRunSteps.runId, runId));
     await db.delete(discoveryRuns).where(eq(discoveryRuns.id, runId));
+    await db.delete(youtubeVideos).where(inArray(youtubeVideos.youtubeId, [videoAYoutubeId, videoBYoutubeId]));
+    await db.delete(youtubeChannels).where(eq(youtubeChannels.youtubeChannelId, channelYoutubeId));
+    await db.delete(nicheQueries).where(eq(nicheQueries.id, queryId));
     await db.delete(niches).where(eq(niches.id, nicheId));
     await getPgClient().end();
   });
@@ -159,7 +166,9 @@ describe("discovery page restart", () => {
     expect(new Set(evidence.map((item) => item.videoId)).size).toBe(2);
     expect(evidence.map((item) => item.videoId).sort()).toEqual(videos.map((video) => video.id).sort());
 
-    await runDiscoveryWorkerOnce("worker-B", { searchPage: pageAdapter });
+    // A completed fixture step must remain terminal; do not invoke the global
+    // worker again, because another concurrent fixture may legitimately be runnable.
+    expect((await db.query.discoveryRunSteps.findFirst({ where: eq(discoveryRunSteps.id, stepId) }))?.status).toBe("completed");
     expect(pageTokens).toEqual([undefined, "token-B"]);
   });
 });

@@ -888,6 +888,77 @@ export const youtubeChannels = pgTable("youtube_channels", {
 		}
 	});
 
+// A reusable, topic-independent description of how a video is packaged.
+// Discovery cluster fields remain computed metadata and are intentionally separate.
+export const contentFormats = pgTable("content_formats", {
+  id: uuid("id").defaultRandom().primaryKey().notNull(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  status: text("status", { enum: ["draft", "active", "archived"] }).default("draft").notNull(),
+  formatType: text("format_type", { enum: ["long_form", "short_form", "mixed"] }).default("mixed").notNull(),
+  hookPattern: text("hook_pattern"),
+  structurePattern: text("structure_pattern"),
+  visualPattern: text("visual_pattern"),
+  pacingPattern: text("pacing_pattern"),
+  targetDurationMinSeconds: integer("target_duration_min_seconds"),
+  targetDurationMaxSeconds: integer("target_duration_max_seconds"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  statusIdx: index("content_formats_status_idx").on(table.status),
+  updatedAtIdx: index("content_formats_updated_at_idx").on(table.updatedAt),
+}));
+
+export const contentFormatVideos = pgTable("content_format_videos", {
+  contentFormatId: uuid("content_format_id").notNull().references(() => contentFormats.id, { onDelete: "cascade" }),
+  videoId: uuid("video_id").notNull().references(() => youtubeVideos.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["exemplar", "supporting", "counterexample"] }).default("supporting").notNull(),
+  source: text("source", { enum: ["manual", "discovery", "transcript", "ai", "import"] }).default("manual").notNull(),
+  confidence: numeric("confidence", { precision: 3, scale: 2 }),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.contentFormatId, table.videoId], name: "content_format_videos_pk" }),
+  formatIdx: index("content_format_videos_format_idx").on(table.contentFormatId),
+  videoIdx: index("content_format_videos_video_idx").on(table.videoId),
+}));
+
+export const contentFormatChannels = pgTable("content_format_channels", {
+  contentFormatId: uuid("content_format_id").notNull().references(() => contentFormats.id, { onDelete: "cascade" }),
+  channelId: uuid("channel_id").notNull().references(() => youtubeChannels.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["primary", "frequent", "occasional", "reference"] }).default("occasional").notNull(),
+  source: text("source", { enum: ["manual", "discovery", "transcript", "ai", "import"] }).default("manual").notNull(),
+  confidence: numeric("confidence", { precision: 3, scale: 2 }),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.contentFormatId, table.channelId], name: "content_format_channels_pk" }),
+  formatIdx: index("content_format_channels_format_idx").on(table.contentFormatId),
+  channelIdx: index("content_format_channels_channel_idx").on(table.channelId),
+}));
+
+export const contentFormatEvidence = pgTable("content_format_evidence", {
+  id: uuid("id").defaultRandom().primaryKey().notNull(),
+  contentFormatId: uuid("content_format_id").notNull().references(() => contentFormats.id, { onDelete: "cascade" }),
+  videoId: uuid("video_id").references(() => youtubeVideos.id, { onDelete: "set null" }),
+  channelId: uuid("channel_id").references(() => youtubeChannels.id, { onDelete: "set null" }),
+  evidenceType: text("evidence_type", { enum: ["title_pattern", "thumbnail_pattern", "hook", "structure", "visual_style", "pacing", "audience_promise", "topic_independence", "performance", "other"] }).notNull(),
+  statement: text("statement").notNull(),
+  source: text("source", { enum: ["manual", "metadata", "discovery", "transcript", "ai"] }).default("manual").notNull(),
+  confidence: numeric("confidence", { precision: 3, scale: 2 }),
+  provenance: jsonb("provenance").$type<Record<string, string>>(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  formatIdx: index("content_format_evidence_format_idx").on(table.contentFormatId),
+  videoIdx: index("content_format_evidence_video_idx").on(table.videoId),
+  channelIdx: index("content_format_evidence_channel_idx").on(table.channelId),
+}));
+
 export const importSessions = pgTable("import_sessions", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	source: text("source").notNull(),

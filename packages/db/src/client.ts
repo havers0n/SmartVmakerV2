@@ -24,23 +24,18 @@ interface ExtendedPoolConfig extends PoolConfig {
   family?: number;
 }
 
-/**
- * Safely parse and log database URL without exposing password
- * Returns: { host, database, user, sslmode } (no password)
- */
-function parseDatabaseUrlSafe(url: string): { host?: string; database?: string; user?: string; sslmode?: string } {
-  try {
-    const parsed = new URL(url);
-    return {
-      host: parsed.hostname + (parsed.port ? `:${parsed.port}` : ''),
-      database: parsed.pathname.replace(/^\//, ''),
-      user: parsed.username || undefined,
-      sslmode: parsed.searchParams.get('sslmode') || undefined,
-    };
-  } catch {
-    // If URL parsing fails, return minimal info
-    return {};
+export function resolveDatabaseSsl(url: string, nodeEnv = process.env.NODE_ENV, mode = process.env.SCRIMSPEC_DB_SSL): PoolConfig["ssl"] {
+  const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+  const local = ["localhost", "127.0.0.1", "::1"].includes(host);
+  if (local || mode === "disable") {
+    if (!local && nodeEnv === "production") throw new Error("SCRIMSPEC_DB_SSL=disable is forbidden for remote production databases");
+    return false;
   }
+  if (mode === "allow-self-signed") {
+    if (nodeEnv === "production") throw new Error("Self-signed database TLS is forbidden in production");
+    return { rejectUnauthorized: false };
+  }
+  return { rejectUnauthorized: true };
 }
 
 // Use globalThis to preserve pool and drizzle across hot reloads in development
@@ -60,9 +55,6 @@ export function getPgClient(): Pool {
   const envChanged = globalThis.__pgPoolEnv && globalThis.__pgPoolEnv !== currentEnv;
 
   if (envChanged && globalThis.__pgPool) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`🔄 Environment changed from ${globalThis.__pgPoolEnv} to ${currentEnv}, recreating pool...`);
-    }
     globalThis.__pgPool.end().catch(() => {});
     globalThis.__pgPool = undefined;
     globalThis.__drizzle = undefined; // Invalidate drizzle when pool is recreated
@@ -90,25 +82,10 @@ export function getPgClient(): Pool {
       );
     }
 
-    const isProduction = process.env.NODE_ENV === 'production';
-
-    // Log process info to prove different processes
-    const dbInfo = parseDatabaseUrlSafe(databaseUrl);
-    console.log("DB INIT", {
-      pid: process.pid,
-      ppid: process.ppid,
-      argv: process.argv,
-      cwd: process.cwd(),
-      nodeEnv: process.env.NODE_ENV,
-      database: dbInfo,
-    });
-
     // Cast to ExtendedPoolConfig to include the family property
     const poolConfig: ExtendedPoolConfig = {
       connectionString: databaseUrl,
-      ssl: isProduction
-        ? { rejectUnauthorized: true }  // Production: strict SSL validation
-        : { rejectUnauthorized: false }, // Development: allow self-signed certs
+      ssl: resolveDatabaseSsl(databaseUrl),
       family: 4, // Force IPv4 to avoid DNS resolution issues
 
       // Connection Pool Configuration (Production-Ready)
@@ -131,17 +108,6 @@ export function getPgClient(): Pool {
     globalThis.__pgPool = pool;
     globalThis.__pgPoolEnv = currentEnv;
 
-    // Log only once when pool is actually created
-    if (!isProduction) {
-      console.warn('⚠️  WARNING: SSL certificate validation is disabled in development mode');
-      console.log(`✅ Database pool initialized (pid=${process.pid})`);
-      console.log('📊 Pool config:', {
-        max: poolConfig.max,
-        connectionTimeout: `${poolConfig.connectionTimeoutMillis}ms`,
-        idleTimeout: `${poolConfig.idleTimeoutMillis}ms`,
-        statementTimeout: `${poolConfig.statement_timeout}ms`,
-      });
-    }
   }
   return globalThis.__pgPool;
 }
@@ -161,10 +127,6 @@ export function getDrizzleClient() {
 
     globalThis.__drizzle = drizzle(client, { schema: tablesOnly });
 
-    // Log only once when drizzle is actually created
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`✅ Drizzle initialized (pid=${process.pid})`);
-    }
   }
   return globalThis.__drizzle;
 }
