@@ -45,8 +45,8 @@ export async function GET(request: Request) {
 				isPaused: worker.isPaused,
 				concurrency: Number(worker.concurrency),
 				dailyLimitUsd: Number(worker.dailyLimitUsd),
-				lastSeenAt: worker.lastSeenAt || null,
-				updatedAt: worker.updatedAt,
+				lastSeenAt: worker.lastSeenAt?.toISOString() ?? null,
+				updatedAt: worker.updatedAt.toISOString(),
 				// stats can be added later if needed
 			};
 		});

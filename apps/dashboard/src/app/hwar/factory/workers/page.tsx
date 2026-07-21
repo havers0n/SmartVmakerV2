@@ -113,7 +113,10 @@ export default function Workers() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {workers.map((worker) => {
-            const stats = worker.stats || { processed: 0, failed: 0, costToday: 0 };
+            const stats = worker.stats ?? {};
+            const processed = typeof stats.processed === "number" ? stats.processed : 0;
+            const failed = typeof stats.failed === "number" ? stats.failed : 0;
+            const costToday = typeof stats.costToday === "number" ? stats.costToday : 0;
             
             return (
               <Card key={worker.id} className="p-6">
@@ -172,15 +175,15 @@ export default function Workers() {
 
                   <div className="pt-4 border-t grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <div className="text-lg font-bold tabular-nums">{stats.processed || 0}</div>
+                      <div className="text-lg font-bold tabular-nums">{processed}</div>
                       <div className="text-xs text-muted-foreground">Processed</div>
                     </div>
                     <div>
-                      <div className="text-lg font-bold tabular-nums">{stats.failed || 0}</div>
+                      <div className="text-lg font-bold tabular-nums">{failed}</div>
                       <div className="text-xs text-muted-foreground">Failed</div>
                     </div>
                     <div>
-                      <div className="text-lg font-bold tabular-nums">${(stats.costToday || 0).toFixed(2)}</div>
+                      <div className="text-lg font-bold tabular-nums">${costToday.toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground">Today</div>
                     </div>
                   </div>

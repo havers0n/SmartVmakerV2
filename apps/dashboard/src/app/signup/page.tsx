@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/providers/auth-provider';
 import { Button } from '@/shared/components/ui/button';
@@ -9,7 +9,7 @@ import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { sanitizeRedirectPath } from '@/shared/lib/redirect';
 
-export default function SignupPage() {
+function SignupForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -155,5 +155,13 @@ export default function SignupPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

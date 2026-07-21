@@ -96,7 +96,7 @@ export async function PATCH(
 			.update(hwarWorkers)
 			.set({
 				...updateData,
-				updatedAt: new Date().toISOString(),
+				updatedAt: new Date(),
 			})
 			.where(eq(hwarWorkers.id, workerId))
 			.returning();
@@ -118,8 +118,8 @@ export async function PATCH(
 			isPaused: updatedWorker.isPaused,
 			concurrency: Number(updatedWorker.concurrency),
 			dailyLimitUsd: Number(updatedWorker.dailyLimitUsd),
-			lastSeenAt: updatedWorker.lastSeenAt || null,
-			updatedAt: updatedWorker.updatedAt,
+			lastSeenAt: updatedWorker.lastSeenAt?.toISOString() ?? null,
+			updatedAt: updatedWorker.updatedAt.toISOString(),
 		};
 
 		return NextResponse.json(workerResponse);

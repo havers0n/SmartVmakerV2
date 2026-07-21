@@ -78,6 +78,7 @@ importers:
       '@scrimspec/core-domain': workspace:*
       '@scrimspec/db': workspace:*
       '@scrimspec/halu-client': workspace:^0.1.0
+      '@scrimspec/hwar-core': workspace:*
       '@scrimspec/shared-types': workspace:*
       '@supabase/auth-helpers-nextjs': ^0.10.0
       '@supabase/ssr': ^0.7.0
@@ -164,6 +165,7 @@ importers:
       '@scrimspec/core-domain': link:../../packages/core-domain
       '@scrimspec/db': link:../../packages/db
       '@scrimspec/halu-client': link:../../packages/halu-client
+      '@scrimspec/hwar-core': link:../../packages/hwar-core
       '@scrimspec/shared-types': link:../../packages/shared-types
       '@supabase/auth-helpers-nextjs': 0.10.0_6lf2jm6ecg5r52pzf4xycjwytu
       '@supabase/ssr': 0.7.0_6lf2jm6ecg5r52pzf4xycjwytu

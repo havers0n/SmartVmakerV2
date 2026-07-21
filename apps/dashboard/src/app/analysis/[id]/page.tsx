@@ -33,8 +33,8 @@ type VideoAnalysisResponse = {
     analysis: {
         id: string;
         analyzer: string;
-        createdAt: string;
-        updatedAt: string;
+        createdAt: string | null;
+        updatedAt: string | null;
         aesBreakdown: AesBreakdown | null;
         overallScore: string | null;
         emotionalTags: string[] | null;
@@ -46,8 +46,8 @@ type VideoAnalysisResponse = {
         id: string;
         status: string;
         analyzer: string | null;
-        createdAt: string;
-        updatedAt: string;
+        createdAt: string | null;
+        updatedAt: string | null;
         errorMessage: string | null;
     } | null;
 };

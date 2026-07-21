@@ -6,6 +6,15 @@ import { PgTable } from 'drizzle-orm/pg-core';
 
 import * as schema from '../migrations/schema';
 
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
+) {
+  throw new Error(
+    'NODE_TLS_REJECT_UNAUTHORIZED=0 is forbidden in production. Use a valid CA certificate instead.',
+  );
+}
+
 // ============================================================================
 // Database Connection Factory with Hot Reload Support
 // ============================================================================

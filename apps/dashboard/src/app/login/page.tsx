@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/providers/auth-provider';
 import { Button } from '@/shared/components/ui/button';
@@ -9,7 +9,7 @@ import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { sanitizeRedirectPath } from '@/shared/lib/redirect';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -110,5 +110,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

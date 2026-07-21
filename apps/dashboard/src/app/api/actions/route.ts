@@ -22,6 +22,10 @@ import { startProject, generateKeyframes, startAnimation } from './handlers/gene
 import { listProjects } from './handlers/projects';
 import { listModels } from './handlers/models';
 import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
+import {
+  FEATURE_NOT_AVAILABLE,
+  FeatureNotAvailableError,
+} from '@/server/generation-availability';
 
 type ActionContext = { userId?: string };
 type ActionHandler = (payload: unknown, ctx?: ActionContext) => Promise<unknown> | unknown;
@@ -150,6 +154,13 @@ export async function POST(req: NextRequest) {
           details: error,
         },
         { status: 400 }
+      );
+    }
+
+    if (error instanceof FeatureNotAvailableError) {
+      return NextResponse.json(
+        { success: false, error: error.message, code: FEATURE_NOT_AVAILABLE },
+        { status: 503 },
       );
     }
 

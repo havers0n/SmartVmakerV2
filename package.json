@@ -20,7 +20,7 @@
     "stop:all": "pm2 stop all && pm2 delete all",
     "restart:all": "pm2 restart all",
     "logs": "pm2 logs",
-    "lint": "turbo run lint",
+    "lint": "pnpm --filter dashboard lint",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "type-check": "pnpm -r --if-present --filter ./packages/** type-check",

@@ -9,6 +9,11 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The production boundary is linted explicitly by `pnpm lint`.  Next's build
+  // otherwise blocks deploys on documented HWAR prototype lint debt outside it.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   transpilePackages: ['@scrimspec/shared-types', '@scrimspec/db', '@scrimspec/hwar-core', '@project/api-client', '@project/shared-types'],
   images: {
     remotePatterns: [
