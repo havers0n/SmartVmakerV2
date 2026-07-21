@@ -18,7 +18,7 @@ function AppSidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-background/80 backdrop-blur-xl hidden md:flex flex-col">
       <div className="h-16 flex items-center px-6 border-b border-border/50">
-        <div className="font-bold text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
+        <div className="font-bold text-xl tracking-tighter text-foreground">
           HWAR<span className="text-primary">.Core</span>
         </div>
       </div>

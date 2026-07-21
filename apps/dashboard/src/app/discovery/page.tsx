@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Play, Plus, Search } from "lucide-react";
+import { Play, Plus, Search, Sparkles, Upload } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import {
   Card,
@@ -16,6 +16,7 @@ import {
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
+import { Textarea } from "@/shared/components/ui/textarea";
 
 type Niche = {
   id: string;
@@ -38,6 +39,10 @@ type DiscoveryRun = {
   createdAt: string;
   errorMessage: string | null;
 };
+type QueryGenerationResult = {
+  created: NicheQuery[];
+  skipped: Array<{ query: string }>;
+};
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -56,6 +61,16 @@ export default function DiscoveryPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [newQuery, setNewQuery] = useState("");
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkSummary, setBulkSummary] =
+    useState<{
+      added: number;
+      skippedDuplicates: number;
+      skippedEmpty: number;
+      errors: number;
+    }>();
+  const [generationResult, setGenerationResult] =
+    useState<QueryGenerationResult>();
 
   const nichesQuery = useQuery<Niche[]>({
     queryKey: ["niches"],
@@ -113,6 +128,31 @@ export default function DiscoveryPage() {
     },
   });
 
+  const addBulkQueries = useMutation({
+    mutationFn: (queries: string[]) =>
+      api<{
+        added: NicheQuery[];
+        skippedDuplicates: string[];
+        skippedEmpty: number;
+        errors: Array<{ query: string; reason: string }>;
+      }>(`/api/niches/${selectedId}/queries/bulk`, {
+        method: "POST",
+        body: JSON.stringify({ queries }),
+      }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ["niches", selectedId, "queries"],
+      });
+      setBulkSummary({
+        added: result.added.length,
+        skippedDuplicates: result.skippedDuplicates.length,
+        skippedEmpty: result.skippedEmpty,
+        errors: result.errors.length,
+      });
+      setBulkInput("");
+    },
+  });
+
   const toggleQuery = useMutation({
     mutationFn: ({ id, isEnabled }: Pick<NicheQuery, "id" | "isEnabled">) =>
       api<NicheQuery>(`/api/niche-queries/${id}`, {
@@ -123,6 +163,19 @@ export default function DiscoveryPage() {
       queryClient.invalidateQueries({
         queryKey: ["niches", selectedId, "queries"],
       }),
+  });
+
+  const generateQueries = useMutation({
+    mutationFn: () =>
+      api<QueryGenerationResult>(`/api/niches/${selectedId}/generate-queries`, {
+        method: "POST",
+      }),
+    onSuccess: (result) => {
+      setGenerationResult(result);
+      queryClient.invalidateQueries({
+        queryKey: ["niches", selectedId, "queries"],
+      });
+    },
   });
 
   const runDiscovery = useMutation({
@@ -153,6 +206,15 @@ export default function DiscoveryPage() {
     if (selectedId) addQuery.mutate(newQuery);
   }
 
+  function submitBulkQueries() {
+    if (!selectedId || !bulkInput.trim()) return;
+    const lines = bulkInput
+      .split(/\n/)
+      .map((l) => l.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    addBulkQueries.mutate(lines);
+  }
+
   const selectedNiche = selectedNicheQuery.data;
   const error =
     nichesQuery.error ??
@@ -160,7 +222,8 @@ export default function DiscoveryPage() {
     queriesQuery.error ??
     addQuery.error ??
     toggleQuery.error;
-  const pageError = error ?? runsQuery.error ?? runDiscovery.error;
+  const queryError = error ?? generateQueries.error;
+  const pageError = queryError ?? runsQuery.error ?? runDiscovery.error;
 
   return (
     <div className="space-y-6">
@@ -266,19 +329,108 @@ export default function DiscoveryPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             {selectedNiche && (
-              <form className="flex gap-2" onSubmit={submitQuery}>
-                <Input
-                  aria-label="New discovery query"
-                  value={newQuery}
-                  onChange={(e) => setNewQuery(e.target.value)}
-                  placeholder="Add a discovery query"
-                  required
-                />
-                <Button disabled={addQuery.isPending}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add
+              <div className="space-y-3">
+                <form className="flex gap-2" onSubmit={submitQuery}>
+                  <Input
+                    aria-label="New discovery query"
+                    value={newQuery}
+                    onChange={(e) => setNewQuery(e.target.value)}
+                    placeholder="Add a discovery query"
+                    required
+                  />
+                  <Button disabled={addQuery.isPending}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                </form>
+
+                <div className="space-y-2">
+                  <Textarea
+                    aria-label="Bulk queries"
+                    value={bulkInput}
+                    onChange={(e) => setBulkInput(e.target.value)}
+                    placeholder={
+                      "Paste queries, one per line:\nearth stopped spinning shorts\ngravity disappeared shorts\nhumans disappeared animation"
+                    }
+                    rows={4}
+                    className="resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={addBulkQueries.isPending || !bulkInput.trim()}
+                      onClick={submitBulkQueries}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {addBulkQueries.isPending
+                        ? "Adding…"
+                        : "Add queries"}
+                    </Button>
+                    {bulkInput && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setBulkInput("");
+                          setBulkSummary(undefined);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {bulkSummary && (
+                    <div className="text-sm space-y-0.5">
+                      <p className="text-green-600 dark:text-green-400">
+                        Added {bulkSummary.added} quer{bulkSummary.added === 1 ? "y" : "ies"}
+                      </p>
+                      {bulkSummary.skippedDuplicates > 0 && (
+                        <p className="text-muted-foreground">
+                          Skipped {bulkSummary.skippedDuplicates} duplicate{bulkSummary.skippedDuplicates === 1 ? "" : "s"}
+                        </p>
+                      )}
+                      {bulkSummary.skippedEmpty > 0 && (
+                        <p className="text-muted-foreground">
+                          Skipped {bulkSummary.skippedEmpty} empty line{bulkSummary.skippedEmpty === 1 ? "" : "s"}
+                        </p>
+                      )}
+                      {bulkSummary.errors > 0 && (
+                        <p className="text-destructive">
+                          {bulkSummary.errors} error{bulkSummary.errors === 1 ? "" : "s"}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  disabled={generateQueries.isPending}
+                  onClick={() => generateQueries.mutate()}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {generateQueries.isPending
+                    ? "Generating queries…"
+                    : "Generate queries"}
                 </Button>
-              </form>
+                {generationResult && (
+                  <div className="text-sm">
+                    <p>
+                      Created:{" "}
+                      {generationResult.created
+                        .map((item) => item.query)
+                        .join(", ") || "none"}
+                    </p>
+                    {generationResult.skipped.length > 0 && (
+                      <p className="text-muted-foreground">
+                        Skipped duplicates:{" "}
+                        {generationResult.skipped
+                          .map((item) => item.query)
+                          .join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             <div className="divide-y rounded-md border">
               {(queriesQuery.data ?? []).map((query) => (

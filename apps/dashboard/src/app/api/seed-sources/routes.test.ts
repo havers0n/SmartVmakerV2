@@ -65,6 +65,8 @@ describe("seed source and candidate API", () => {
       candidate: { id, status: "approved" },
       niche: { id: "niche" },
       query: { query: "Racing" },
+      generatedQueries: [{ query: "sim racing videos" }],
+      skippedQueries: [],
     } as never);
     expect(
       (
@@ -92,6 +94,7 @@ describe("seed source and candidate API", () => {
       candidate: { status: "approved" },
       niche: { id: "niche" },
       query: { query: "Racing" },
+      generatedQueries: [{ query: "sim racing videos" }],
     });
   });
 

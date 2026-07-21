@@ -151,6 +151,10 @@ describe("seed source validation", () => {
       niche: { slug: "racing" },
       query: { nicheId: "niche-1", query: "Racing" },
       candidate: { status: "approved" },
+      generatedQueries: [],
+    });
+    expect(result).toMatchObject({
+      warning: expect.stringContaining("Niche approved, but query generation failed"),
     });
     expect(tx.update).toHaveBeenCalledWith(nicheCandidates);
   });

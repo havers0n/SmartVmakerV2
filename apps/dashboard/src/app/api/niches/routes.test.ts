@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as list, POST as create } from "./route";
 import { GET as listQueries, POST as createQuery } from "./[id]/queries/route";
 import { PATCH as updateQuery } from "../niche-queries/[id]/route";
+import { POST as generateQueries } from "./[id]/generate-queries/route";
 import {
   createNiche,
   createNicheQuery,
@@ -9,6 +10,7 @@ import {
   listNicheQueries,
   listNiches,
   updateNicheQuery,
+  generateNicheQueries,
 } from "@/server/niches";
 
 vi.mock("@/server/niches", () => ({
@@ -18,6 +20,9 @@ vi.mock("@/server/niches", () => ({
   listNicheQueries: vi.fn(),
   listNiches: vi.fn(),
   updateNicheQuery: vi.fn(),
+  generateNicheQueries: vi.fn(),
+  InvalidQueryGenerationResponseError: class InvalidQueryGenerationResponseError extends Error {},
+  QueryGenerationProviderError: class QueryGenerationProviderError extends Error {},
 }));
 
 const context = { params: { id: "550e8400-e29b-41d4-a716-446655440000" } };
@@ -89,5 +94,29 @@ describe("niche API", () => {
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ isEnabled: false });
+  });
+
+  it("generates queries and returns 404 for an unknown niche", async () => {
+    vi.mocked(generateNicheQueries).mockResolvedValueOnce({
+      created: [{ query: "BeamNG shorts" }],
+      skipped: [],
+    } as never);
+    expect(
+      (
+        await generateQueries(
+          new Request("http://localhost", { method: "POST" }),
+          context,
+        )
+      ).status,
+    ).toBe(201);
+    vi.mocked(generateNicheQueries).mockResolvedValueOnce(null);
+    expect(
+      (
+        await generateQueries(
+          new Request("http://localhost", { method: "POST" }),
+          context,
+        )
+      ).status,
+    ).toBe(404);
   });
 });

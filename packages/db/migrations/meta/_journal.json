@@ -113,6 +113,62 @@
       "when": 1783269629000,
       "tag": "0015_seed_sources_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785168000000,
+      "tag": "0016_add_hidden_subscriber_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785168100000,
+      "tag": "0017_drop_subscriber_count_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785168200000,
+      "tag": "0018_discovery_intelligence_phase_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785168300000,
+      "tag": "0019_discovery_candidate_ranking",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785168400000,
+      "tag": "0020_discovery_candidate_language",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785168500000,
+      "tag": "0021_discovery_semantic_clustering",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785168600000,
+      "tag": "0022_discovery_content_formats",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785168700000,
+      "tag": "0023_discovery_cluster_curation",
+      "breakpoints": true
     }
   ]
 }

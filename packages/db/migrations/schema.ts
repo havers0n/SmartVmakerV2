@@ -686,6 +686,7 @@ export const discoveryRuns = pgTable(
       mode: "string",
     }),
     errorMessage: text("error_message"),
+    aiSummary: text("ai_summary"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -695,6 +696,107 @@ export const discoveryRuns = pgTable(
       table.nicheId,
       table.createdAt,
     ),
+  }),
+);
+
+/**
+ * A read-only, semantic view of the videos found in a single discovery run.
+ * The raw YouTube video and discovery evidence remain the source of truth.
+ */
+export const discoveryClusters = pgTable(
+  "discovery_clusters",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => discoveryRuns.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    summary: text("summary").notNull(),
+    researchScore: numeric("research_score", { precision: 6, scale: 4 })
+      .notNull(),
+    adjustedResearchScore: numeric("adjusted_research_score", { precision: 6, scale: 4 })
+      .notNull(),
+    labelQualityScore: numeric("label_quality_score", { precision: 5, scale: 4 })
+      .notNull(),
+    dominantLanguage: text("dominant_language").notNull(),
+    languageMatchScore: numeric("language_match_score", { precision: 5, scale: 4 })
+      .notNull(),
+    contentFormat: text("content_format").notNull(),
+    audience: text("audience").notNull(),
+    suggestedQueries: jsonb("suggested_queries").$type<string[]>().notNull(),
+    whyResearchable: text("why_researchable").notNull(),
+    semanticCohesion: numeric("semantic_cohesion", { precision: 5, scale: 4 }).notNull(),
+    repeatedFormatEvidence: numeric("repeated_format_evidence", { precision: 5, scale: 4 }).notNull(),
+    isOutlier: boolean("is_outlier").notNull(),
+    rawTokenLabel: text("raw_token_label"),
+    formatName: text("format_name").notNull().default("Repeatable Video Format"),
+    confidenceScore: integer("confidence_score").notNull().default(0),
+    formatSummary: text("format_summary").notNull().default(""),
+    commonHooks: jsonb("common_hooks").$type<string[]>().notNull().default([]),
+    commonTitlePatterns: jsonb("common_title_patterns").$type<string[]>().notNull().default([]),
+    commonEmotions: jsonb("common_emotions").$type<string[]>().notNull().default([]),
+    typicalDurationRange: text("typical_duration_range").notNull().default("Unavailable"),
+    likelyVisualStyle: text("likely_visual_style").notNull().default("Unavailable"),
+    repeatabilityScore: integer("repeatability_score").notNull().default(0),
+    exampleVideos: jsonb("example_videos").$type<string[]>().notNull().default([]),
+    exampleChannels: jsonb("example_channels").$type<string[]>().notNull().default([]),
+    videoCount: integer("video_count").notNull(),
+    channelCount: integer("channel_count").notNull(),
+    medianViewsPerDay: numeric("median_views_per_day", { precision: 14, scale: 2 })
+      .notNull(),
+    smallChannelCount: integer("small_channel_count").notNull(),
+    representativeTitles: jsonb("representative_titles")
+      .$type<string[]>()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runScoreIdx: index("discovery_clusters_run_score_idx").on(
+      table.runId,
+      table.adjustedResearchScore,
+    ),
+  }),
+);
+
+/** Cache keyed by the exact title/channel/query evidence used for semantic discovery. */
+export const discoveryVideoEmbeddings = pgTable("discovery_video_embeddings", {
+  videoId: uuid("video_id").primaryKey().notNull().references(() => youtubeVideos.id, { onDelete: "cascade" }),
+  contentHash: text("content_hash").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  embedding: jsonb("embedding").$type<number[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+});
+
+/** One semantic-cluster assignment for each unique video in a run. */
+export const discoveryClusterVideos = pgTable(
+  "discovery_cluster_videos",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => discoveryRuns.id, { onDelete: "cascade" }),
+    videoId: uuid("video_id")
+      .notNull()
+      .references(() => youtubeVideos.id, { onDelete: "cascade" }),
+    clusterId: uuid("cluster_id")
+      .notNull()
+      .references(() => discoveryClusters.id, { onDelete: "cascade" }),
+    // Curation is deliberately kept separate from the generated cluster data.
+    // A false value means the video is included in the research dataset.
+    isExcluded: boolean("is_excluded").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.runId, table.videoId],
+      name: "discovery_cluster_videos_pk",
+    }),
+    clusterIdx: index("discovery_cluster_videos_cluster_idx").on(table.clusterId),
   }),
 );
 
@@ -732,7 +834,8 @@ export const youtubeChannels = pgTable("youtube_channels", {
 	title: text("title"),
 	description: text("description"),
 	country: text("country"),
-	subscriberCount: bigint("subscriber_count", { mode: "number" }).default(0),
+	subscriberCount: bigint("subscriber_count", { mode: "number" }),
+	hiddenSubscriberCount: boolean("hidden_subscriber_count"),
 	videoCount: bigint("video_count", { mode: "number" }).default(0),
 	viewCount: bigint("view_count", { mode: "number" }).default(0),
 	publishedAt: timestamp("published_at", { withTimezone: true, mode: 'string' }),

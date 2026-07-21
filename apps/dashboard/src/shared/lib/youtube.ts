@@ -3,7 +3,7 @@
  * Handles video search and metadata fetching
  */
 
-import { google } from 'googleapis';
+import { google, type youtube_v3 } from 'googleapis';
 import { schema } from '@scrimspec/db';
 import type { InferInsertModel } from 'drizzle-orm';
 
@@ -252,11 +252,99 @@ export interface YouTubeChannelInfo {
   title: string | null;
   description: string | null;
   country: string | null;
-  subscriberCount: number;
+  subscriberCount: number | null;
+  hiddenSubscriberCount: boolean | null;
   videoCount: number;
   viewCount: number;
   publishedAt: string | null;
   thumbnailUrl: string | null;
+}
+
+export type YouTubeChannelResource = Pick<
+  youtube_v3.Schema$Channel,
+  "id" | "snippet" | "statistics"
+>;
+
+/**
+ * Parse a single YouTube channels.list API resource into a YouTubeChannelInfo.
+ * Exported for testing without mocking the API client.
+ */
+export function parseYouTubeChannelResource(
+  channelId: string,
+  resource: YouTubeChannelResource,
+): YouTubeChannelInfo {
+  const snippet = resource.snippet ?? {};
+  const statistics = resource.statistics ?? {};
+
+  const subscriberCountRaw = statistics.subscriberCount;
+  const hiddenSubs = statistics.hiddenSubscriberCount;
+  const isHidden = hiddenSubs === true;
+  const subscriberCount =
+    subscriberCountRaw && !isHidden
+      ? parseInt(subscriberCountRaw, 10)
+      : null;
+
+  const customUrl = snippet.customUrl ?? null;
+  const handle =
+    customUrl?.startsWith("@") ? customUrl : customUrl ? `@${customUrl}` : null;
+
+  return {
+    youtubeChannelId: channelId,
+    handle,
+    title: snippet.title ?? null,
+    description: snippet.description ?? null,
+    country: snippet.country ?? null,
+    subscriberCount,
+    hiddenSubscriberCount: hiddenSubs === undefined ? null : hiddenSubs,
+    videoCount: parseInt(statistics.videoCount ?? "0", 10),
+    viewCount: parseInt(statistics.viewCount ?? "0", 10),
+    publishedAt: snippet.publishedAt ?? null,
+    thumbnailUrl:
+      snippet.thumbnails?.medium?.url ??
+      snippet.thumbnails?.default?.url ??
+      null,
+  };
+}
+
+/**
+ * Get channel metadata for multiple channel IDs.
+ * Deduplicates IDs, batches in groups of 50, and returns results.
+ * Errors in one batch do not fail the entire call.
+ */
+export async function getYouTubeChannelsByIds(
+  channelIds: string[],
+): Promise<YouTubeChannelInfo[]> {
+  if (!process.env.YOUTUBE_API_KEY) {
+    throw new Error("YOUTUBE_API_KEY environment variable is not set");
+  }
+
+  const uniqueIds = [...new Set(channelIds)];
+  if (uniqueIds.length === 0) return [];
+
+  const results: YouTubeChannelInfo[] = [];
+
+  for (let i = 0; i < uniqueIds.length; i += 50) {
+    const batch = uniqueIds.slice(i, i + 50);
+    try {
+      const response = await youtube.channels.list({
+        part: ["snippet", "statistics"],
+        id: batch,
+      });
+      const items = response.data.items ?? [];
+      for (const item of items) {
+        if (!item.id) continue;
+        results.push(parseYouTubeChannelResource(item.id, item));
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown API error";
+      throw new Error(
+        `YouTube channels.list batch failed for ${batch.length} IDs (starting with "${batch[0]}"): ${message}`,
+      );
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -277,24 +365,7 @@ export async function getYouTubeChannel(channelId: string): Promise<YouTubeChann
     throw new Error(`YouTube channel not found: ${channelId}`);
   }
 
-  const snippet = item.snippet!;
-  const statistics = item.statistics;
-
-  const customUrl = snippet.customUrl || null;
-  const handle = customUrl?.startsWith('@') ? customUrl : customUrl ? `@${customUrl}` : null;
-
-  return {
-    youtubeChannelId: channelId,
-    handle,
-    title: snippet.title || null,
-    description: snippet.description || null,
-    country: snippet.country || null,
-    subscriberCount: parseInt(statistics?.subscriberCount || '0', 10),
-    videoCount: parseInt(statistics?.videoCount || '0', 10),
-    viewCount: parseInt(statistics?.viewCount || '0', 10),
-    publishedAt: snippet.publishedAt || null,
-    thumbnailUrl: snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || null,
-  };
+  return parseYouTubeChannelResource(channelId, item);
 }
 
 /**

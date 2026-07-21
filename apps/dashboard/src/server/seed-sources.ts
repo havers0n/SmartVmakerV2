@@ -11,6 +11,8 @@ import {
   nicheExtractionProvider,
   type NicheExtractionProvider,
 } from "./niche-extraction-provider";
+import { generateNicheQueries } from "./niches";
+import type { NicheQueryGenerationProvider } from "./niche-query-generation-provider";
 
 export const entityIdSchema = z.string().uuid();
 const nullableText = (max: number) =>
@@ -142,9 +144,12 @@ export function slugifyNiche(name: string) {
     .replace(/^-|-$/g, "");
 }
 
-export async function approveCandidate(id: string) {
+export async function approveCandidate(
+  id: string,
+  queryProvider?: NicheQueryGenerationProvider,
+) {
   const validId = entityIdSchema.parse(id);
-  return db.transaction(async (tx) => {
+  const approved = await db.transaction(async (tx) => {
     const [candidate] = await tx
       .select()
       .from(nicheCandidates)
@@ -170,6 +175,26 @@ export async function approveCandidate(id: string) {
       .returning();
     return { candidate: approved, niche, query };
   });
+  if (!approved) return null;
+  try {
+    const generated = await generateNicheQueries(
+      approved.niche.id,
+      queryProvider,
+      approved.candidate.description,
+    );
+    return {
+      ...approved,
+      generatedQueries: generated?.created ?? [],
+      skippedQueries: generated?.skipped ?? [],
+    };
+  } catch (error) {
+    return {
+      ...approved,
+      generatedQueries: [],
+      skippedQueries: [],
+      warning: `Niche approved, but query generation failed: ${error instanceof Error ? error.message : "AI provider failed"}`,
+    };
+  }
 }
 
 export class CandidateStateError extends Error {}

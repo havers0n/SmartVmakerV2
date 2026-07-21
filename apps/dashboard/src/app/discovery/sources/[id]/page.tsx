@@ -47,6 +47,11 @@ type ExtractionResult = {
   created: Array<Candidate & { confidence?: number }>;
   skipped: Array<{ name: string; description: string; confidence?: number }>;
 };
+type ApprovalResult = {
+  generatedQueries: Array<{ query: string }>;
+  skippedQueries: Array<{ query: string }>;
+  warning?: string;
+};
 
 export default function SourceDetailPage({
   params,
@@ -60,6 +65,7 @@ export default function SourceDetailPage({
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [extractionResult, setExtractionResult] = useState<ExtractionResult>();
+  const [approvalResult, setApprovalResult] = useState<ApprovalResult>();
   const source = useQuery<Source>({
     queryKey: ["seed-sources", params.id],
     queryFn: () => api<Source>(`/api/seed-sources/${params.id}`),
@@ -97,8 +103,13 @@ export default function SourceDetailPage({
   });
   const approve = useMutation({
     mutationFn: (id: string) =>
-      api(`/api/niche-candidates/${id}/approve`, { method: "POST" }),
-    onSuccess: refresh,
+      api<ApprovalResult>(`/api/niche-candidates/${id}/approve`, {
+        method: "POST",
+      }),
+    onSuccess: (result) => {
+      setApprovalResult(result);
+      refresh();
+    },
   });
   const extract = useMutation({
     mutationFn: () =>
@@ -225,6 +236,21 @@ export default function SourceDetailPage({
         </CardContent>
       </Card>
       {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {approvalResult && (
+        <div className="space-y-1 text-sm">
+          {approvalResult.generatedQueries.length > 0 && (
+            <p>
+              Generated queries:{" "}
+              {approvalResult.generatedQueries
+                .map((item) => item.query)
+                .join(", ")}
+            </p>
+          )}
+          {approvalResult.warning && (
+            <p className="text-amber-600">{approvalResult.warning}</p>
+          )}
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Candidate Niches</CardTitle>

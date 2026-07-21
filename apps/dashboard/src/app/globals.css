@@ -4,51 +4,49 @@
 
 @layer base {
   :root {
-    /* PRO DARK MODE PALETTE (Defaulting to Dark logic even in root) */
-    --background: 240 10% 3.9%; /* Zinc 950 #09090b */
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 226 70% 55.5%; /* Indigo 500 for that "Tech" vibe */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%; /* Zinc 800 */
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    /* Soft blue-black palette: layered surfaces without pure black or white. */
+    --background: 220 17% 7%;
+    --foreground: 222 16% 92%;
+    --card: 222 21% 10%;
+    --card-foreground: 222 16% 92%;
+    --popover: 222 21% 10%;
+    --popover-foreground: 222 16% 92%;
+    --primary: 226 100% 71%;
+    --primary-foreground: 225 100% 97%;
+    --secondary: 222 16% 17%;
+    --secondary-foreground: 222 14% 81%;
+    --muted: 222 21% 13%;
+    --muted-foreground: 221 11% 66%;
+    --accent: 224 45% 21%;
+    --accent-foreground: 224 100% 93%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    /* Radius: Making it sharper for "Pro" feel */
+    --border: 221 17% 19%;
+    --input: 221 17% 19%;
+    --ring: 226 100% 71%;
     --radius: 0.35rem;
   }
 
   .dark {
-    /* Explicit dark overrides if system switches */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 226 70% 55.5%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 220 17% 7%;
+    --foreground: 222 16% 92%;
+    --card: 222 21% 10%;
+    --card-foreground: 222 16% 92%;
+    --popover: 222 21% 10%;
+    --popover-foreground: 222 16% 92%;
+    --primary: 226 100% 71%;
+    --primary-foreground: 225 100% 97%;
+    --secondary: 222 16% 17%;
+    --secondary-foreground: 222 14% 81%;
+    --muted: 222 21% 13%;
+    --muted-foreground: 221 11% 66%;
+    --accent: 224 45% 21%;
+    --accent-foreground: 224 100% 93%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 221 17% 19%;
+    --input: 221 17% 19%;
+    --ring: 226 100% 71%;
   }
 }
 
@@ -58,8 +56,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    /* Adding a subtle gradient mesh background for depth */
-    background-image: radial-gradient(circle at top center, hsl(var(--secondary) / 0.3) 0%, transparent 40%);
+    background-image: radial-gradient(circle at top center, hsl(var(--primary) / 0.055) 0%, transparent 42%);
     background-attachment: fixed;
   }
 }

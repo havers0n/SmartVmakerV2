@@ -28,7 +28,10 @@
     "type-check:all": "pnpm -r --if-present type-check",
     "type-check:dashboard": "pnpm --filter @scrimspec/hwar-core run build && pnpm --filter dashboard type-check",
     "test": "turbo run test",
-    "types:pull": "pnpm --filter db run types:pull"
+    "types:pull": "pnpm --filter db run types:pull",
+    "db:migrate": "pnpm --filter db migrate",
+    "db:migrate:run": "pnpm --filter db migrate:run",
+    "db:migrate:prod": "dotenv -e .env.production -- pnpm --filter db migrate"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^6.14.0",
