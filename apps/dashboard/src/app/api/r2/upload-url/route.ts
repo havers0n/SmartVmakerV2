@@ -1,10 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createUploadUrl } from '@aec/storage-client';
 import { createLogger } from '@aec/logger';
+import { z } from 'zod';
+import { db } from '@/shared/lib/db';
+import { generationProjects } from '@/shared/lib/schema';
+import { and, eq } from 'drizzle-orm';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
 export const runtime = 'nodejs';
 
 const logger = createLogger({ name: 'api-r2-upload-url' });
+
+const UploadUrlRequestSchema = z.object({
+  key: z.string().min(3).max(1024),
+  contentType: z.string().min(1).max(255),
+  expiresIn: z.number().int().min(60).max(3600).optional(),
+});
+
+async function canAccessKey(key: string, userId: string): Promise<boolean> {
+  if (key.includes('..') || key.startsWith('/')) return false;
+
+  const parts = key.split('/').filter(Boolean);
+  if (parts.length < 3) return false;
+
+  if (parts[0] === 'users') {
+    return parts[1] === userId;
+  }
+
+  if (parts[0] === 'projects') {
+    const projectId = parts[1];
+    const [project] = await db
+      .select({ id: generationProjects.id })
+      .from(generationProjects)
+      .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)))
+      .limit(1);
+    return !!project;
+  }
+
+  return false;
+}
 
 /**
  * POST /api/r2/upload-url
@@ -32,33 +66,25 @@ const logger = createLogger({ name: 'api-r2-upload-url' });
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { key, contentType, expiresIn = 3600 } = body;
+    const userId = getTrustedUserId(req);
+    if (!userId) {
+      return unauthorizedResponse();
+    }
 
-    // Validate required fields
-    if (!key || typeof key !== 'string') {
+    const parsed = UploadUrlRequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request payload', details: parsed.error.issues }, { status: 400 });
+    }
+    const { key, contentType, expiresIn = 3600 } = parsed.data;
+
+    if (!(await canAccessKey(key, userId))) {
       return NextResponse.json(
-        { error: 'Missing or invalid "key" field' },
-        { status: 400 }
+        { error: 'Forbidden key scope. Use users/<your-user-id>/... or projects/<your-project-id>/...' },
+        { status: 403 }
       );
     }
 
-    if (!contentType || typeof contentType !== 'string') {
-      return NextResponse.json(
-        { error: 'Missing or invalid "contentType" field' },
-        { status: 400 }
-      );
-    }
-
-    // Validate key format (basic sanitization)
-    if (key.includes('..') || key.startsWith('/')) {
-      return NextResponse.json(
-        { error: 'Invalid key format. Key should not contain ".." or start with "/"' },
-        { status: 400 }
-      );
-    }
-
-    logger.info({ key, contentType, expiresIn }, 'Generating upload URL');
+    logger.info({ key, contentType, expiresIn, userId }, 'Generating upload URL');
 
     // Generate presigned upload URL
     const uploadUrl = await createUploadUrl(key, contentType, expiresIn);

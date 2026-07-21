@@ -22,14 +22,13 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: '8'
+          version: '7'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Check formatting
         run: pnpm format:check
-        continue-on-error: true
 
       - name: Suggest formatting fix
         if: failure()

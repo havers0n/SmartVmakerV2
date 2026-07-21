@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
+// Updated interface to match the response from /api/hwar/harvests
 interface IngestJob {
   id: string;
   query: string;
@@ -24,12 +25,23 @@ interface IngestJob {
   videoDefinition: string | null;
   createdAt: string;
   errorMessage: string | null;
-}
-
-interface IngestJobsResponse {
-  success: boolean;
-  jobs: IngestJob[];
-  message: string;
+  // Fields that may be missing in the new API response
+  publishedAfter?: string | null;
+  duration?: number | null;
+  error?: string | null;
+  retryCount?: number;
+  updatedAt?: string;
+  regionCode?: string | null;
+  relevanceLanguage?: string | null;
+  searchType?: string | null;
+  videoCaption?: string | null;
+  videoEmbeddable?: boolean | null;
+  videoLicense?: string | null;
+  eventType?: string | null;
+  lastCheckedAt?: string | null;
+  stage?: string;
+  externalId?: string | null;
+  idempotencyKey?: string | null;
 }
 
 /**
@@ -39,32 +51,58 @@ export function IngestJobsTable() {
   const [jobs, setJobs] = useState<IngestJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/ingest/jobs');
-      const data: IngestJobsResponse = await response.json();
-
-      if (data.success) {
-        setJobs(data.jobs);
-        setError(null);
-      } else {
-        setError('Не удалось загрузить задачи');
+      const response = await fetch('/api/hwar/harvests', { signal });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+
+      let data: IngestJob[];
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        throw new Error('Invalid JSON response from /api/hwar/harvests');
+      }
+
+      // Set jobs directly since the new endpoint returns the array directly
+      setJobs(data);
+      setError(null);
     } catch (err) {
+      if (signal?.aborted) return;
       console.error('Error fetching jobs:', err);
       setError('Ошибка загрузки задач');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
+  const handleRefresh = () => {
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
+    fetchJobs(controllerRef.current.signal);
+  };
+
   useEffect(() => {
-    fetchJobs();
-    // Автообновление каждые 10 секунд
-    const interval = setInterval(fetchJobs, 10000);
-    return () => clearInterval(interval);
+    controllerRef.current = new AbortController();
+    fetchJobs(controllerRef.current.signal);
+
+    // Автообновление каждые 10 секунд с отменой предыдущего запроса
+    const interval = setInterval(() => {
+      controllerRef.current?.abort();
+      controllerRef.current = new AbortController();
+      fetchJobs(controllerRef.current.signal);
+    }, 10000);
+
+    return () => {
+      controllerRef.current?.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusBadge = (status: IngestJob['status']) => {
@@ -99,7 +137,7 @@ export function IngestJobsTable() {
     });
   };
 
-  const formatDuration = (duration: string | null) => {
+  const formatDuration = (duration: string | null | undefined) => {
     if (!duration) return '—';
     const labels: Record<string, string> = {
       any: 'Любая',
@@ -110,7 +148,7 @@ export function IngestJobsTable() {
     return labels[duration] || duration;
   };
 
-  const formatOrder = (order: string | null) => {
+  const formatOrder = (order: string | null | undefined) => {
     if (!order) return '—';
     const labels: Record<string, string> = {
       date: 'По дате',
@@ -121,7 +159,7 @@ export function IngestJobsTable() {
     return labels[order] || order;
   };
 
-  const formatDefinition = (definition: string | null) => {
+  const formatDefinition = (definition: string | null | undefined) => {
     if (!definition) return '—';
     const labels: Record<string, string> = {
       any: 'Любое',
@@ -141,7 +179,7 @@ export function IngestJobsTable() {
               Последние 50 задач поиска и загрузки видео
             </CardDescription>
           </div>
-          <Button onClick={fetchJobs} disabled={loading} variant="outline" size="sm">
+          <Button onClick={handleRefresh} disabled={loading} variant="outline" size="sm">
             {loading ? 'Загрузка...' : 'Обновить'}
           </Button>
         </div>
@@ -183,9 +221,9 @@ export function IngestJobsTable() {
                       <div className="max-w-[300px] truncate" title={job.query}>
                         {job.query}
                       </div>
-                      {job.errorMessage && (
-                        <div className="text-xs text-destructive mt-1 truncate" title={job.errorMessage}>
-                          {job.errorMessage}
+                      {(job.errorMessage || job.error) && (
+                        <div className="text-xs text-destructive mt-1 truncate" title={job.errorMessage || job.error || ''}>
+                          {job.errorMessage || job.error}
                         </div>
                       )}
                     </TableCell>

@@ -6,16 +6,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { startSearch, startSearchPayloadSchema } from './ingest';
 
 // Mock the database module
+var mockDb: any;
+var insertChain: any;
+
 vi.mock('@/shared/lib/db', () => {
-  const mockDb = {
-    insert: vi.fn().mockReturnThis(),
+  insertChain = {
     values: vi.fn().mockReturnThis(),
-    returning: vi.fn(),
+    returning: vi.fn().mockResolvedValue([]),
   };
-  return {
-    db: mockDb,
-    ingestJobQueue: {},
+
+  mockDb = {
+    insert: vi.fn(() => insertChain),
   };
+
+  return { db: mockDb };
 });
 
 // Mock the logger
@@ -92,7 +96,6 @@ describe('startSearch', () => {
 
   describe('Job Creation', () => {
     it('should create ingest job with valid payload', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockJob = {
         id: 1,
         query: 'test query',
@@ -101,9 +104,7 @@ describe('startSearch', () => {
       };
 
       // Setup mock to return the job
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockJob]);
+      insertChain.returning.mockResolvedValueOnce([mockJob]);
 
       const payload = {
         query: 'test query',
@@ -113,8 +114,8 @@ describe('startSearch', () => {
       const result = await startSearch(payload);
 
       // Verify database was called correctly
-      expect(db.insert).toHaveBeenCalled();
-      expect(db.values).toHaveBeenCalledWith(
+      expect(mockDb.insert).toHaveBeenCalled();
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           query: 'test query',
           maxResults: 25,
@@ -133,16 +134,13 @@ describe('startSearch', () => {
     });
 
     it('should set default values for optional parameters', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockJob = {
         id: 2,
         query: 'minimal query',
         status: 'pending',
       };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockJob]);
+      insertChain.returning.mockResolvedValueOnce([mockJob]);
 
       const payload = {
         query: 'minimal query',
@@ -151,7 +149,7 @@ describe('startSearch', () => {
       await startSearch(payload);
 
       // Verify defaults were applied
-      expect(db.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           maxResults: 25, // Default value
           orderBy: 'date', // Default value
@@ -161,12 +159,9 @@ describe('startSearch', () => {
     });
 
     it('should handle published_after date formatting', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockJob = { id: 3, status: 'pending' };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockJob]);
+      insertChain.returning.mockResolvedValueOnce([mockJob]);
 
       const payload = {
         query: 'test query',
@@ -175,7 +170,7 @@ describe('startSearch', () => {
 
       await startSearch(payload);
 
-      expect(db.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           publishedAfter: expect.stringContaining('2024-01-01'),
         })
@@ -193,11 +188,7 @@ describe('startSearch', () => {
     });
 
     it('should propagate database errors', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockRejectedValue(new Error('Database error'));
+      insertChain.returning.mockRejectedValueOnce(new Error('Database error'));
 
       const payload = {
         query: 'test query',
@@ -209,12 +200,9 @@ describe('startSearch', () => {
 
   describe('All YouTube API Parameters', () => {
     it('should pass all supported YouTube API parameters', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockJob = { id: 4, status: 'pending' };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockJob]);
+      insertChain.returning.mockResolvedValueOnce([mockJob]);
 
       const payload = {
         query: 'comprehensive test',
@@ -235,7 +223,7 @@ describe('startSearch', () => {
       await startSearch(payload);
 
       // Verify all parameters were passed
-      expect(db.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           query: 'comprehensive test',
           orderBy: 'viewCount',

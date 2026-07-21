@@ -116,6 +116,12 @@ A fully typed TypeScript client for the MiniMax HALU video generation API.
 
 **Environment Variables Required:**
 ```env
+# Feature flags (Action Runner)
+# Эти флаги управляют доступностью действий через POST /api/actions
+HWAR_ENABLE_GENERATION=1
+HWAR_ENABLE_KEYFRAMES=1
+HWAR_ENABLE_ANIMATION=1
+
 MINIMAX_API_KEY=your_api_key_here
 DRIZZLE_DATABASE_URL=postgresql://...
 R2_ACCOUNT_ID=...

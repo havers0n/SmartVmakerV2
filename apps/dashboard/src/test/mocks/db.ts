@@ -10,23 +10,66 @@ import { vi } from 'vitest';
  * Useful for mocking database queries in action handlers
  */
 export function createMockDb() {
-  return {
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-    select: vi.fn().mockReturnThis(),
+  return createMockDrizzleDb().db;
+}
+
+type Thenable<T> = {
+  then: (
+    onfulfilled?: ((value: T) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null
+  ) => Promise<unknown>;
+};
+
+function attachThen<T>(target: any, execute: () => Promise<T>): Thenable<T> {
+  target.then = (
+    onfulfilled?: ((value: T) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null
+  ) => execute().then(onfulfilled as any, onrejected as any);
+  return target as Thenable<T>;
+}
+
+/**
+ * Creates a mock Drizzle DB with chain objects for select/insert/update/delete.
+ * Prefer this in tests so you can configure/inspect calls on chain methods.
+ */
+export function createMockDrizzleDb() {
+  const selectChain: any = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
-    execute: vi.fn().mockResolvedValue({ rows: [] }),
-    transaction: vi.fn().mockImplementation(async (callback) => {
-      // Mock transaction - just call the callback with the mock db
-      return callback(createMockDb());
-    }),
+    offset: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue([]),
   };
+  attachThen(selectChain, () => selectChain.execute());
+
+  const insertChain: any = {
+    values: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+    execute: vi.fn().mockResolvedValue(undefined),
+  };
+  attachThen(insertChain, () => insertChain.execute());
+
+  const updateChain: any = {
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  const deleteChain: any = {
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  const db: any = {
+    select: vi.fn(() => selectChain),
+    insert: vi.fn(() => insertChain),
+    update: vi.fn(() => updateChain),
+    delete: vi.fn(() => deleteChain),
+    transaction: vi.fn().mockImplementation(async (callback: any) => callback(db)),
+  };
+
+  return { db, selectChain, insertChain, updateChain, deleteChain };
 }
 
 /**

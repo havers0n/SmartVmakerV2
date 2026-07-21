@@ -4,6 +4,17 @@ import path from 'path';
 // Загружаем переменные из корневого .env файла
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// === ANTI-CRASH SHIELD ===
+process.on('uncaughtException', (err) => {
+  const msg = String(err);
+  if (msg.includes('ECONNRESET') || msg.includes('Connection terminated') || msg.includes('57P01')) {
+    console.warn('[System] DB Connection glitch intercepted. Staying alive.');
+    return;
+  }
+  console.error('[System] CRITICAL UNCAUGHT ERROR:', err);
+  process.exit(1);
+});
+
 // Убедимся, что NODE_ENV установлен (cross-env должен это сделать, но проверим)
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
@@ -241,6 +252,8 @@ async function processIngestJob() {
     return null;
   }
 }
+
+
 
 async function main() {
   logger.info('Starting worker');

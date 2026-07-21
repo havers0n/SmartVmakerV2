@@ -6,6 +6,7 @@ TypeScript client for the MiniMax HALU video generation API.
 
 - **Type-safe**: Full TypeScript support with comprehensive type definitions
 - **Two generation modes**: Subject-Reference (S2V-01) and First & Last Frame (MiniMax-Hailuo-02)
+- **Image generation**: Text-to-Image and Image-to-Image capabilities
 - **Webhook support**: Built-in challenge handling and status updates
 - **Polling utilities**: Easy task polling with progress callbacks
 - **File retrieval**: Download generated videos directly
@@ -59,6 +60,39 @@ if (result.status === 'success') {
   const videoBuffer = await client.downloadVideo(result.file_id!);
   // Save to file, upload to storage, etc.
 }
+```
+
+### Text-to-Image Generation
+
+```typescript
+// Generate image from text
+const imageResponse = await client.generateImage({
+  model: 'image-01',
+  prompt: 'A beautiful sunset over the ocean, photorealistic, high quality',
+  aspect_ratio: '16:9',
+  response_format: 'base64'
+});
+
+// Save the image
+const imageData = imageResponse.data[0].image_base64;
+const imageBuffer = Buffer.from(imageData, 'base64');
+fs.writeFileSync('sunset.png', imageBuffer);
+```
+
+### Image-to-Image Modification
+
+```typescript
+// Modify an existing image
+const modifiedImageResponse = await client.modifyImage({
+  model: 'image-01',
+  prompt: 'Make the sky more blue and add dramatic clouds',
+  image: 'https://example.com/source-image.jpg',
+  aspect_ratio: '16:9',
+  response_format: 'url'
+});
+
+// Get the modified image URL
+const modifiedImageUrl = modifiedImageResponse.data[0].url;
 ```
 
 ### Subject-Reference Video Generation
@@ -131,6 +165,33 @@ Create a new HALU client instance.
 - `config.apiKey` (required): Your MiniMax API key
 - `config.baseUrl` (optional): Custom API base URL (default: 'https://api.minimax.io/v1')
 
+### `client.generateImage(payload)`
+
+Generate image from text description.
+
+**Parameters:**
+- `payload.model`: Must be `'image-01'`
+- `payload.prompt` (required): Detailed text description
+- `payload.aspect_ratio` (optional): Image aspect ratio (default: '16:9')
+- `payload.response_format` (optional): 'url' or 'base64' (default: 'url')
+- `payload.prompt_optimizer` (optional): Auto-optimize prompt (default: true)
+
+**Returns:** Image generation response with image data
+
+### `client.modifyImage(payload)`
+
+Modify an existing image based on text instructions.
+
+**Parameters:**
+- `payload.model`: Must be `'image-01'`
+- `payload.prompt` (required): Modification instructions
+- `payload.image` (required): Source image URL or Data URL
+- `payload.aspect_ratio` (optional): Image aspect ratio (default: '16:9')
+- `payload.response_format` (optional): 'url' or 'base64' (default: 'url')
+- `payload.prompt_optimizer` (optional): Auto-optimize prompt (default: true)
+
+**Returns:** Image generation response with image data
+
 ### `client.createFirstLastFrameTask(payload)`
 
 Create a First & Last Frame video generation task.
@@ -171,32 +232,3 @@ Download a video file as a Buffer.
 ### `client.pollTask(taskId, options)`
 
 Poll a task until completion.
-
-**Options:**
-- `intervalMs`: Polling interval in milliseconds (default: 5000)
-- `maxAttempts`: Maximum polling attempts (default: 60)
-- `onProgress`: Callback for progress updates
-
-## Error Handling
-
-```typescript
-import { HaluApiError, MinimaxErrorCode } from '@scrimspec/halu-client';
-
-try {
-  const task = await client.createFirstLastFrameTask(payload);
-} catch (error) {
-  if (error instanceof HaluApiError) {
-    if (error.statusCode === MinimaxErrorCode.RATE_LIMIT) {
-      // Handle rate limit (1002)
-      console.error('Rate limited, retry later');
-    } else if (error.statusCode === MinimaxErrorCode.INSUFFICIENT_FUNDS) {
-      // Handle insufficient funds (1008)
-      console.error('Insufficient API credits');
-    }
-  }
-}
-```
-
-## License
-
-MIT

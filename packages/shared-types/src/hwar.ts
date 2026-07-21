@@ -11,3 +11,13 @@ export const ScenarioCreate = z.object({
 });
 
 export type ScenarioCreate = z.infer<typeof ScenarioCreate>;
+
+export interface ProjectPreview {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  scenesCount: number;
+  keyframesCount: number;
+  hasFinalVideo: boolean;
+}

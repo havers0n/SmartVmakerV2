@@ -14,7 +14,7 @@ Web-based UI for YouTube video ingestion, analysis, and short-form video generat
 ### Prerequisites
 
 - Node.js 18+ (20 LTS recommended)
-- pnpm 8+
+- pnpm 7.33.7
 
 ### Installation
 

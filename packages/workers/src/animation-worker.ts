@@ -1,310 +1,329 @@
+/**
+ * ANIMATION WORKER - BILLING PROTECTION EDITION
+ */
+
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'crypto';
+import { Readable } from 'stream';
 
-// Load environment variables from root .env file
+// Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// Ensure NODE_ENV is set
+// === ANTI-CRASH SHIELD ===
+process.on('uncaughtException', (err) => {
+  const msg = String(err);
+  if (msg.includes('ECONNRESET') || msg.includes('Connection terminated') || msg.includes('57P01')) {
+    console.warn('[System] DB Connection glitch intercepted. Staying alive.');
+    return;
+  }
+  console.error('[System] CRITICAL UNCAUGHT ERROR:', err);
+  process.exit(1);
+});
+
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
 
 import { createLogger } from '@aec/logger';
-import { retryFetch } from './utils/retry';
+import { getDrizzleClient, schema, sql } from '@scrimspec/db';
+import { eq } from 'drizzle-orm';
+import { createDownloadUrl, uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
+import {
+  createHaluClient,
+  HaluApiError,
+  MinimaxErrorCode
+} from '@scrimspec/halu-client';
+
+import { loadModelConfig } from './lib/model-config';
 
 const logger = createLogger({ name: 'animation-worker' });
 
-logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
+// ============================================================================
+// CONFIGURATION & SETUP
+// ============================================================================
+
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized (Safe Mode)');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
-  logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
-
-  // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
   if (databaseUrl && databaseUrl.includes('sslmode=')) {
     databaseUrl = databaseUrl.replace(/\?sslmode=[^&]*&?/, '?').replace(/&sslmode=[^&]*$/, '').replace(/&sslmode=[^&]*/, '');
-    databaseUrl = databaseUrl.replace(/\?$/, ''); // Remove trailing ? if no params left
+    databaseUrl = databaseUrl.replace(/\?$/, '');
   }
-
-  // Also update DRIZZLE_DATABASE_URL itself to ensure client.ts picks it up without sslmode
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
-
-  logger.info('Cleaned database URL (sslmode removed)');
 }
 
-import { getDrizzleClient, schema, sql } from '@scrimspec/db';
-import { eq } from 'drizzle-orm';
-import { createHaluClient, HaluApiError, MinimaxErrorCode } from '@scrimspec/halu-client';
-import { getPresignedDownloadUrl, uploadLargeStream, R2_BUCKET } from '@aec/storage-client';
-import { Readable } from 'stream';
+// ============================================================================
+// HELPERS
+// ============================================================================
 
-/**
- * Asserts that the HALU API key is configured
- */
-async function assertHaluConfig(): Promise<void> {
-  const haluApiKey = process.env.MINIMAX_API_KEY;
+function generateIdempotencyKey(projectId: string, sceneIndex: number): string {
+  return crypto
+    .createHash('sha256')
+    .update(`${projectId}:${sceneIndex}`)
+    .digest('hex');
+}
 
-  if (!haluApiKey) {
-    throw new Error('MINIMAX_API_KEY environment variable is not set');
+async function updateJobStage(id: string, stage: string) {
+  const db = getDrizzleClient();
+  await db.update(schema.animationJobQueue)
+    .set({ stage: stage as any, updatedAt: new Date() as any })
+    .where(eq(schema.animationJobQueue.id, id));
+}
+
+async function getPresignedUrls(db: any, job: any) {
+  const [firstFrameAsset] = await db
+    .select()
+    .from(schema.assets)
+    .where(eq(schema.assets.id, job.asset_id_first_frame))
+    .limit(1);
+
+  const [lastFrameAsset] = await db
+    .select()
+    .from(schema.assets)
+    .where(eq(schema.assets.id, job.asset_id_last_frame))
+    .limit(1);
+
+  if (!firstFrameAsset || !lastFrameAsset) {
+    throw new Error(`Keyframe assets not found: first=${job.asset_id_first_frame}, last=${job.asset_id_last_frame}`);
   }
 
-  logger.info('HALU API key configured');
+  if (firstFrameAsset.status !== 'completed' || lastFrameAsset.status !== 'completed') {
+    throw new Error(`Keyframe assets not ready. First: ${firstFrameAsset.status}, Last: ${lastFrameAsset.status}`);
+  }
+
+  const firstFrameUrl = await createDownloadUrl(firstFrameAsset.storageUrl, 3600);
+  const lastFrameUrl = await createDownloadUrl(lastFrameAsset.storageUrl, 3600);
+
+  return { firstFrameUrl, lastFrameUrl };
 }
 
-/**
- * Upload video bytes to Cloudflare R2
- *
- * @param videoBytes - Buffer containing video data
- * @param projectId - Project UUID
- * @param sceneIndex - Scene index (0-based)
- * @returns R2 object key (not a full URL, just the key)
- */
-async function uploadVideoToR2(
-  videoBytes: Buffer,
-  projectId: string,
-  sceneIndex: number
-): Promise<string> {
-  // Generate R2 object key (path)
+async function uploadVideoToR2(videoBytes: Buffer, projectId: string, sceneIndex: number): Promise<string> {
   const key = `animations/${projectId}/scene-${sceneIndex}-${Date.now()}.mp4`;
+  logger.info({ key, bucket: R2_BUCKET, sizeBytes: videoBytes.length }, 'Uploading result to R2');
 
-  logger.info({ key, bucket: R2_BUCKET, sizeBytes: videoBytes.length }, 'Uploading video to R2');
-
-  // Convert Buffer to Readable stream
   const stream = Readable.from(videoBytes);
-
-  // Upload to R2 using multipart upload
   await uploadLargeStream(key, stream, 'video/mp4');
-
-  logger.info({ key }, 'Video uploaded successfully to R2');
 
   return key;
 }
 
-/**
- * Process a single animation generation job
- */
-async function processAnimationJob() {
+// ============================================================================
+// CORE LOGIC
+// ============================================================================
+
+async function handleActiveTask(job: any, taskId: string, client: any, db: any) {
+  logger.info({ jobId: job.id, taskId }, 'Entering polling loop for active task');
+
+  const result = await client.pollTask(taskId, {
+    intervalMs: 5000,
+    maxAttempts: 120, // 10 minutes max wait
+    onProgress: async (_status: any) => {
+      await db.update(schema.animationJobQueue)
+        .set({ updatedAt: new Date() as any })
+        .where(eq(schema.animationJobQueue.id, job.id));
+    }
+  });
+
+  if (result.status === 'failed') {
+    throw new Error(`Provider failed generation: ${result.base_resp?.status_msg || 'Unknown error'}`);
+  }
+
+  if (result.status === 'success') {
+    logger.info({ jobId: job.id, taskId }, 'Generation success via API. Downloading result...');
+    await updateJobStage(job.id, 'downloading');
+
+    const fileId = result.file_id || result.video_url;
+    if (!fileId) throw new Error('Success status but no file_id or video_url provided');
+
+    const videoBuffer = await client.downloadVideo(fileId);
+
+    await updateJobStage(job.id, 'uploading');
+    const r2Key = await uploadVideoToR2(videoBuffer, job.project_id, job.scene_index);
+
+    await db.update(schema.animationJobQueue).set({
+      status: 'completed',
+      stage: 'completed',
+      updatedAt: new Date() as any,
+    }).where(eq(schema.animationJobQueue.id, job.id));
+
+    logger.info({ jobId: job.id, r2Key }, 'Job fully completed and saved');
+    return job.id;
+  }
+}
+
+export async function processAnimationJob() {
   const db = getDrizzleClient();
 
-  // Step 1: Atomic job capture using transaction and FOR UPDATE SKIP LOCKED
+  // PHASE 1: ATOMIC ACQUISITION
   const job = await db.transaction(async (tx) => {
-    // Use raw SQL for FOR UPDATE SKIP LOCKED
-    const result = await tx.execute(
-      sql`
-        SELECT * FROM jobs.animation_job_queue
-        WHERE status = 'pending'
-        ORDER BY created_at ASC
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-      `
-    );
+    const result = await tx.execute(sql`
+      SELECT * FROM jobs.animation_job_queue
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
-    }
-
+    if (!result.rows || result.rows.length === 0) return null;
     const selectedJob = result.rows[0] as any;
 
-    // Immediately update status to 'processing' within the same transaction
+    const idemKey = selectedJob.idempotency_key || generateIdempotencyKey(selectedJob.project_id, selectedJob.scene_index);
+
     await tx
       .update(schema.animationJobQueue)
       .set({
         status: 'processing' as any,
+        stage: 'checking_dupes' as any,
         updatedAt: new Date() as any,
+        idempotencyKey: idemKey
       })
       .where(sql`${schema.animationJobQueue.id} = ${selectedJob.id}`);
 
-    return selectedJob;
+    return {
+      ...selectedJob,
+      idempotencyKey: idemKey,
+      retry_count: selectedJob.retry_count,
+      project_id: selectedJob.project_id,
+      scene_index: selectedJob.scene_index,
+      external_id: selectedJob.external_id,
+      halu_task_id: selectedJob.halu_task_id,
+      model_id: selectedJob.model_id
+    };
   });
 
-  if (!job) {
-    // No jobs to process
-    return null;
-  }
+  if (!job) return null;
+
+  logger.info({ jobId: job.id, scene: `${job.project_id}:${job.scene_index}` }, 'Job locked. Starting safety checks.');
 
   try {
-    logger.info(
-      {
-        jobId: job.id,
-        projectId: job.project_id,
-        sceneIndex: job.scene_index,
-        firstFrameAssetId: job.asset_id_first_frame,
-        lastFrameAssetId: job.asset_id_last_frame,
-      },
-      'Processing animation job'
-    );
-
-    // Step 2: Fetch both keyframe assets
-    const [firstFrameAsset] = await db
-      .select()
-      .from(schema.assets)
-      .where(eq(schema.assets.id, job.asset_id_first_frame))
-      .limit(1);
-
-    const [lastFrameAsset] = await db
-      .select()
-      .from(schema.assets)
-      .where(eq(schema.assets.id, job.asset_id_last_frame))
-      .limit(1);
-
-    if (!firstFrameAsset || !lastFrameAsset) {
-      throw new Error(
-        `Keyframe assets not found: first=${job.asset_id_first_frame}, last=${job.asset_id_last_frame}`
-      );
+    // PHASE 2: INITIALIZATION
+    let modelConfig;
+    try {
+      modelConfig = await loadModelConfig(job.model_id || 'minimax_video_01');
+    } catch (e) {
+      const [defaultModel] = await db.select().from(schema.aiModels)
+        .where(eq(schema.aiModels.type, 'text-to-video'))
+        .limit(1);
+      if (defaultModel) {
+        modelConfig = await loadModelConfig(defaultModel.id);
+      } else {
+        throw new Error("No video generation model configuration found");
+      }
     }
 
-    // Verify both keyframes are completed
-    if (firstFrameAsset.status !== 'completed' || lastFrameAsset.status !== 'completed') {
-      throw new Error(
-        `Keyframe assets not ready: first=${firstFrameAsset.status}, last=${lastFrameAsset.status}. Requeueing...`
-      );
-    }
+    const apiKey = process.env[modelConfig.apiKeyEnvVarName];
+    if (!apiKey) throw new Error(`API Key env var not found: ${modelConfig.apiKeyEnvVarName}`);
 
-    // Step 3: Get presigned download URLs for both keyframes from R2
-    const firstFrameUrl = await getPresignedDownloadUrl(
-      firstFrameAsset.storageUrl,
-      3600 // 1 hour
-    );
-
-    const lastFrameUrl = await getPresignedDownloadUrl(
-      lastFrameAsset.storageUrl,
-      3600 // 1 hour
-    );
-
-    logger.info({ firstFrameUrl, lastFrameUrl }, 'Generated presigned URLs for keyframes');
-
-    // Step 4: Create HALU client and submit video generation task
-    const haluClient = createHaluClient({
-      apiKey: process.env.MINIMAX_API_KEY!,
+    const client = createHaluClient({
+      apiKey,
+      baseUrl: modelConfig.apiBaseUrl || undefined
     });
 
-    // Get webhook URL from environment
-    const webhookUrl = process.env.HALU_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhooks/halu`;
+    // PHASE 3: RECOVERY CHECK
+    const existingTaskId = job.external_id || job.halu_task_id;
 
-    // Submit First & Last Frame video generation task
-    const taskResponse = await haluClient.createFirstLastFrameTask({
+    if (existingTaskId) {
+      logger.warn({ jobId: job.id, existingTaskId }, 'RECOVERY MODE: Job already has external ID. Skipping submission.');
+      await updateJobStage(job.id, 'waiting_external');
+      return await handleActiveTask(job, existingTaskId, client, db);
+    }
+
+    // PHASE 4: SUBMISSION
+    await updateJobStage(job.id, 'submitting');
+    const { firstFrameUrl, lastFrameUrl } = await getPresignedUrls(db, job);
+
+    const payload = {
       model: 'MiniMax-Hailuo-02',
       first_frame_image: firstFrameUrl,
       last_frame_image: lastFrameUrl,
-      prompt: 'Smooth transition between frames. [Static shot]', // Simple default, can be enhanced
-      duration: 6, // 6 seconds
-      resolution: '768P',
-      prompt_optimizer: false, // Use exact prompt
-      callback_url: webhookUrl,
-    });
+      prompt: job.scene_description || "Cinematic shot",
+    };
 
-    logger.info({ taskId: taskResponse.task_id, haluTaskId: taskResponse.task_id }, 'HALU task created successfully');
+    logger.info({ jobId: job.id }, 'Submitting new task to Provider...');
 
-    // Step 5: Save HALU task_id to job record
-    await db
-      .update(schema.animationJobQueue)
-      .set({
-        haluTaskId: taskResponse.task_id,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
+    // @ts-ignore
+    const response = await client.createFirstLastFrameTask(payload as any);
 
-    logger.info({ jobId: job.id, haluTaskId: taskResponse.task_id }, 'Animation job submitted to HALU');
+    const newTaskId = response.task_id;
+    if (!newTaskId) throw new Error('Provider returned success but no task_id');
 
-    // Note: The job remains in 'processing' status
-    // The webhook will update it to 'completed' when HALU finishes
+    // PHASE 5: COMMIT ID
+    await db.update(schema.animationJobQueue).set({
+      externalId: newTaskId,
+      haluTaskId: newTaskId,
+      stage: 'waiting_external',
+      updatedAt: new Date() as any
+    }).where(eq(schema.animationJobQueue.id, job.id));
 
-    return job.id;
+    logger.info({ jobId: job.id, newTaskId }, 'Task submitted & ID saved. Polling...');
+
+    // PHASE 6: POLL
+    return await handleActiveTask(job, newTaskId, client, db);
 
   } catch (error) {
-    // Step 6: Handle errors
     const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error({ jobId: job.id, err: error }, 'Job Execution Failed');
 
-    logger.error({ err: error, jobId: job.id }, 'Animation job failed');
-
-    // Check if this is a retriable error (rate limit, etc.)
-    const shouldRetry = error instanceof HaluApiError && error.statusCode === MinimaxErrorCode.RATE_LIMIT;
-
-    if (shouldRetry && (job.retry_count || 0) < 3) {
-      // Increment retry count and set back to pending
-      await db
-        .update(schema.animationJobQueue)
-        .set({
-          status: 'pending' as any,
-          retryCount: (job.retry_count || 0) + 1,
-          error: errorMessage,
-          errorMessage: errorMessage,
-          updatedAt: new Date() as any,
-        })
-        .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
-
-      logger.warn({ jobId: job.id, retryCount: job.retry_count + 1 }, 'Job will be retried');
-    } else {
-      // Update job status to 'failed' with error message
-      await db
-        .update(schema.animationJobQueue)
-        .set({
-          status: 'failed' as any,
-          error: errorMessage,
-          errorMessage: errorMessage,
-          updatedAt: new Date() as any,
-        })
-        .where(sql`${schema.animationJobQueue.id} = ${job.id}`);
+    let isRetryable = false;
+    if (error instanceof HaluApiError) {
+      if (error.statusCode === MinimaxErrorCode.RATE_LIMIT || error.statusCode >= 500) {
+        isRetryable = true;
+      }
+    } else if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('ETIMEDOUT')) {
+      isRetryable = true;
     }
 
+    if (isRetryable && (job.retry_count || 0) < 3) {
+      await db.update(schema.animationJobQueue).set({
+        status: 'pending' as any,
+        retryCount: (job.retry_count || 0) + 1,
+        error: errorMessage,
+        errorMessage: errorMessage,
+        updatedAt: new Date() as any
+      }).where(eq(schema.animationJobQueue.id, job.id));
+      logger.warn({ jobId: job.id, retry: (job.retry_count || 0) + 1 }, 'Job scheduled for retry');
+    } else {
+      await db.update(schema.animationJobQueue).set({
+        status: 'failed' as any,
+        stage: 'failed' as any,
+        error: errorMessage,
+        errorMessage: errorMessage,
+        updatedAt: new Date() as any
+      }).where(eq(schema.animationJobQueue.id, job.id));
+      logger.error({ jobId: job.id }, 'Job permanently failed');
+    }
     return null;
   }
 }
 
-/**
- * Main worker loop
- */
 async function main() {
-  logger.info('Starting animation worker');
-  logger.info({
-    minimaxApiKey: !!process.env.MINIMAX_API_KEY,
-    databaseUrl: !!process.env.DATABASE_URL,
-    webhookUrl: process.env.HALU_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/halu`,
-  }, 'Environment configuration');
-  logger.info('Worker animates keyframe pairs using HALU (MiniMax) First & Last Frame API');
+  logger.info('Starting Animation Worker (Secure Mode)...');
 
-  // Fail-fast config validation
-  try {
-    await assertHaluConfig();
-  } catch (error) {
-    logger.fatal({ err: error }, 'Failed to validate HALU configuration');
-    process.exit(1);
+  if (!process.env.MINIMAX_API_KEY && !process.env.HALU_API_KEY) {
+    logger.warn("Warning: MINIMAX_API_KEY or HALU_API_KEY missing in env. Worker might fail on jobs.");
   }
 
   while (true) {
     try {
       const jobId = await processAnimationJob();
-
       if (!jobId) {
-        // No jobs, wait 30 seconds
-        logger.debug('No pending jobs, waiting 30 seconds');
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
       } else {
-        // Job processed, small pause before next
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      logger.error({ err: error }, 'Unexpected error in main loop');
-      // In case of critical error, wait before retry
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      logger.fatal({ err: error }, 'CRITICAL WORKER CRASH. Restarting loop in 30s...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
     }
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT, shutting down gracefully');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM, shutting down gracefully');
-  process.exit(0);
-});
-
-// Start the worker
-main().catch((error) => {
-  logger.fatal({ err: error }, 'Fatal error');
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== 'test') {
+  main().catch(e => {
+    logger.fatal({ err: e }, 'Fatal startup error');
+    process.exit(1);
+  });
+}

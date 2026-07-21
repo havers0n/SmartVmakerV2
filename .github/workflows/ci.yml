@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '8'
+  PNPM_VERSION: '7.33.7'
 
 jobs:
   # ============================================================================
@@ -38,7 +38,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -70,7 +70,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Restore pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -78,12 +78,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared packages
-        run: pnpm build:packages
-
       - name: Run ESLint
         run: pnpm lint
-        continue-on-error: false
 
       - name: Report lint results
         if: always()
@@ -111,7 +107,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Restore pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -119,12 +115,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared packages
-        run: pnpm build:packages
-
-      - name: Run TypeScript type-check
-        run: pnpm type-check
-        continue-on-error: false
+      - name: Run production type-check
+        run: pnpm type-check:all
 
       - name: Report type-check results
         if: always()
@@ -152,7 +144,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Restore pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -160,13 +152,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all packages
-        run: pnpm build
+      - name: Build dashboard production runtime
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/scrimspec
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          NODE_TLS_REJECT_UNAUTHORIZED: '1'
+        run: pnpm --filter dashboard build
+
+      - name: Build workspace runtime packages
+        run: pnpm build:packages
 
       - name: Verify build artifacts
         run: |
           echo "Checking build outputs..."
-          test -d packages/orchestrator/dist && echo "✅ orchestrator built"
+          test -d packages/hwar-core/dist && echo "✅ hwar-core built"
+          test -d packages/workers/dist && echo "✅ workers built"
           test -d packages/db/dist && echo "✅ db built"
           test -d packages/shared-types/dist && echo "✅ shared-types built"
 
@@ -180,23 +181,3 @@ jobs:
             apps/*/.next
           retention-days: 7
 
-  # ============================================================================
-  # SUMMARY
-  # ============================================================================
-  ci-summary:
-    runs-on: ubuntu-latest
-    name: CI Summary
-    if: always()
-    needs: [lint, type-check, build]
-    steps:
-      - name: Check CI Status
-        run: |
-          if [[ "${{ needs.lint.result }}" == "success" && \
-                "${{ needs.type-check.result }}" == "success" && \
-                "${{ needs.build.result }}" == "success" ]]; then
-            echo "✅ All CI checks passed!"
-            exit 0
-          else
-            echo "❌ CI checks failed"
-            exit 1
-          fi

@@ -11,6 +11,12 @@ import { desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '@/shared/lib/db';
 import { youtubeVideos, analysisJobQueue, analysisResults } from '@/shared/lib/schema';
 import { z } from 'zod';
+import {
+  forbiddenResponse,
+  getTrustedUserId,
+  isAdminUser,
+  unauthorizedResponse,
+} from '@/shared/lib/auth';
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(25),
@@ -19,6 +25,10 @@ const QuerySchema = z.object({
 
 export async function GET(req: Request) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) return unauthorizedResponse();
+    if (!isAdminUser(userId)) return forbiddenResponse('Admin access required');
+
     const url = new URL(req.url);
     const query = QuerySchema.parse(Object.fromEntries(url.searchParams));
 

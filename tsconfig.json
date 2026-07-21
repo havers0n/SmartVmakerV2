@@ -29,14 +29,9 @@
       "@shared/*": ["./packages/shared-types/src/*"],
       "@db/*": ["./packages/db/src/*"],
       "@project/api-client": ["./packages/api-client/src"],
-      "@project/shared-types": ["./packages/shared-types/src"]
+      "@project/shared-types": ["./packages/shared-types/src"],
+      "@scrimspec/hwar-core": ["./packages/hwar-core/src"]
     }
   },
-  "include": ["packages/**/*.ts", "apps/**/*.ts", "tools/**/*.ts"],
-  "references": [
-    { "path": "./packages/shared-types" },
-    { "path": "./packages/db" },
-    { "path": "./packages/orchestrator" },
-    { "path": "./apps/dashboard" }
-  ]
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "tools/**/*.ts"]
 }

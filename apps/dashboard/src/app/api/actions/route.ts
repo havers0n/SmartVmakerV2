@@ -3,6 +3,7 @@ export const runtime = 'nodejs'; // 'edge' is the default
 import { NextRequest, NextResponse } from 'next/server';
 import { startSearch } from './handlers/ingest';
 import { startAnalysis } from './handlers/analysis';
+import { importChannel } from './handlers/beamng';
 import {
   createStoryTemplate,
   listStoryTemplates,
@@ -17,16 +18,35 @@ import {
   updateCharacter,
   deleteCharacter,
 } from './handlers/characters';
-import { startProject, generateKeyframes } from './handlers/generation';
+import { startProject, generateKeyframes, startAnimation } from './handlers/generation';
 import { listProjects } from './handlers/projects';
+import { listModels } from './handlers/models';
+import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
+import {
+  FEATURE_NOT_AVAILABLE,
+  FeatureNotAvailableError,
+} from '@/server/generation-availability';
 
-/**
- * Action Registry
- * Maps action names to their handler functions
- */
-const actionRegistry = {
-  'ingest.startSearch': startSearch,
-  'analysis.startAnalysis': startAnalysis,
+type ActionContext = { userId?: string };
+type ActionHandler = (payload: unknown, ctx?: ActionContext) => Promise<unknown> | unknown;
+
+const envFlag = (name: string, defaultValue: boolean) => {
+  const value = process.env[name];
+  if (value === undefined) return defaultValue;
+  return value === '1' || value.toLowerCase() === 'true';
+};
+
+const featureFlags = {
+  enableIngest: envFlag('HWAR_ENABLE_INGEST', false),
+  enableAnalysis: envFlag('HWAR_ENABLE_ANALYSIS', true),
+  // По умолчанию включаем generation/animation, т.к. это core-функционал создания видео.
+  // Если нужно отключить дорогостоящие операции в конкретной среде — используйте HWAR_ENABLE_GENERATION/HWAR_ENABLE_ANIMATION.
+  enableGeneration: envFlag('HWAR_ENABLE_GENERATION', true),
+  enableAnimation: envFlag('HWAR_ENABLE_ANIMATION', true),
+  enableKeyframes: envFlag('HWAR_ENABLE_KEYFRAMES', true),
+};
+
+const baseRegistry = {
   'storyTemplates.create': createStoryTemplate,
   'storyTemplates.list': listStoryTemplates,
   'storyTemplates.getById': getStoryTemplateById,
@@ -37,9 +57,18 @@ const actionRegistry = {
   'characters.getById': getCharacterById,
   'characters.update': updateCharacter,
   'characters.delete': deleteCharacter,
-  'generation.startProject': startProject,
-  'generation.generateKeyframes': generateKeyframes,
   'projects.list': listProjects,
+  'models.list': listModels,
+  'beamng.importChannel': importChannel,
+} satisfies Record<string, ActionHandler>;
+
+const actionRegistry = {
+  ...baseRegistry,
+  ...(featureFlags.enableIngest ? { 'ingest.startSearch': startSearch } : {}),
+  ...(featureFlags.enableAnalysis ? { 'analysis.startAnalysis': startAnalysis } : {}),
+  ...(featureFlags.enableGeneration ? { 'generation.startProject': startProject } : {}),
+  ...(featureFlags.enableKeyframes ? { 'generation.generateKeyframes': generateKeyframes } : {}),
+  ...(featureFlags.enableAnimation ? { 'generation.startAnimation': startAnimation } : {}),
 } as const;
 
 type ActionName = keyof typeof actionRegistry;
@@ -66,6 +95,11 @@ type ActionName = keyof typeof actionRegistry;
  */
 export async function POST(req: NextRequest) {
   try {
+    const userId = getTrustedUserId(req);
+    if (!userId) {
+      return unauthorizedResponse();
+    }
+
     const body = await req.json();
     const { action, payload } = body;
 
@@ -97,7 +131,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Execute handler with payload
-    const result = await handler(payload);
+    const result = await handler(payload, { userId });
 
     // Return success response
     return NextResponse.json(
@@ -120,6 +154,13 @@ export async function POST(req: NextRequest) {
           details: error,
         },
         { status: 400 }
+      );
+    }
+
+    if (error instanceof FeatureNotAvailableError) {
+      return NextResponse.json(
+        { success: false, error: error.message, code: FEATURE_NOT_AVAILABLE },
+        { status: 503 },
       );
     }
 

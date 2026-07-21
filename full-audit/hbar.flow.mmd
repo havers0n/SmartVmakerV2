@@ -1,0 +1,117 @@
+sequenceDiagram
+    actor User
+    participant UI as Frontend<br/>(Next.js)
+    participant API as Action Runner<br/>/api/actions
+    participant GenHandler as Generation Handler<br/>generation.ts
+    participant MiniMax as MiniMax-M2 API<br/>(Function Calling)
+    participant DB as PostgreSQL<br/>(Supabase)
+    participant KFQueue as Keyframe Job Queue
+    participant KFWorker as Keyframe Worker
+    participant Gemini as Gemini API<br/>(Image Gen)
+    participant R2 as Cloudflare R2<br/>(Storage)
+    participant AnimQueue as Animation Job Queue
+    participant AnimWorker as Animation Worker
+    participant HALU as MiniMax HALU API<br/>(Video Gen)
+
+    rect rgb(230, 240, 255)
+        Note over User,MiniMax: Step 1: Project Creation & Scenario Generation
+        User->>UI: Fill New Project Form<br/>(title, ratio, lang, models, prompt/preset/trend)
+        UI->>API: POST /api/actions<br/>{action: "generation.startProject"}
+        API->>GenHandler: startProject(payload)
+        GenHandler->>DB: Fetch AI models (defaults)
+        GenHandler->>DB: Fetch preset/trend data (if needed)
+        GenHandler->>MiniMax: Generate scenarios with function calling<br/>Tools: get_story_preset_details, generate_video_scenarios
+        MiniMax-->>GenHandler: 3-5 scenario concepts<br/>(title, description, AES score, scenes)
+        GenHandler->>DB: INSERT generation_project<br/>(status=pending, meta={scenarios})
+        GenHandler-->>API: {project: {id, status}, scenarios}
+        API-->>UI: Project created with scenarios
+        UI->>UI: Navigate to /hwar/create/[project_id]
+    end
+
+    rect rgb(255, 245, 230)
+        Note over User,DB: Step 2: Scenario Selection
+        UI->>API: GET /api/generation/projects/[id]
+        API->>DB: SELECT project by ID
+        DB-->>UI: Project with scenarios in meta
+        User->>UI: Select preferred scenario
+        User->>UI: Click "Generate Keyframes"
+    end
+
+    rect rgb(240, 255, 240)
+        Note over User,R2: Step 3: Keyframe Generation Jobs
+        UI->>API: POST /api/actions<br/>{action: "generation.generateKeyframes"}
+        API->>GenHandler: generateKeyframes({projectId, scenarioIndex})
+        GenHandler->>DB: SELECT project
+
+        loop For each scene in scenario
+            GenHandler->>DB: INSERT assets<br/>(first_frame, last_frame, status=pending)
+            GenHandler->>KFQueue: INSERT keyframe_job<br/>(prompt, assetId, modelId, status=pending)
+        end
+
+        GenHandler->>DB: UPDATE project<br/>(status=processing, keyframeGenerationStartedAt)
+        GenHandler-->>UI: Jobs created
+
+        Note over UI: Start polling every 3 seconds
+    end
+
+    rect rgb(255, 235, 245)
+        Note over KFWorker,R2: Step 4: Keyframe Worker Processing (Parallel)
+
+        loop Continuous polling (5s sleep when no jobs)
+            KFWorker->>KFQueue: SELECT * FOR UPDATE SKIP LOCKED<br/>WHERE status=pending LIMIT 1
+            KFQueue-->>KFWorker: Job data
+            KFWorker->>KFQueue: UPDATE status=processing
+
+            KFWorker->>DB: Fetch AI model config
+            KFWorker->>Gemini: POST generateContent<br/>{prompt, aspectRatio}
+            Gemini-->>KFWorker: Base64 image data
+            KFWorker->>R2: Upload image (multipart)<br/>keyframes/{projectId}/scene-X-{first|last}.png
+            R2-->>KFWorker: R2 key
+            KFWorker->>DB: UPDATE asset<br/>(storageUrl=key, status=completed)
+            KFWorker->>KFQueue: UPDATE job (status=completed)
+        end
+
+        Note over UI: Poll /api/generation/projects/[id]/assets<br/>Display completed keyframes
+    end
+
+    rect rgb(255, 250, 230)
+        Note over User,HALU: Step 5: Animation Generation (Future Feature)
+        User->>UI: Click "Generate Animation"
+        UI->>API: POST /api/actions<br/>{action: "generation.startAnimation"}
+        API->>GenHandler: startAnimation({projectId})
+        GenHandler->>DB: Verify all keyframes completed
+
+        loop For each scene
+            GenHandler->>AnimQueue: INSERT animation_job<br/>(firstFrameAssetId, lastFrameAssetId, sceneDescription)
+        end
+
+        GenHandler->>DB: UPDATE project<br/>(status=processing, animationStartedAt)
+    end
+
+    rect rgb(230, 245, 255)
+        Note over AnimWorker,R2: Step 6: Animation Worker Processing (Parallel)
+
+        loop Continuous polling
+            AnimWorker->>AnimQueue: SELECT * FOR UPDATE SKIP LOCKED
+            AnimQueue-->>AnimWorker: Job data
+            AnimWorker->>AnimQueue: UPDATE status=processing
+
+            AnimWorker->>R2: Download first frame
+            AnimWorker->>R2: Download last frame
+            AnimWorker->>HALU: POST /video_generation<br/>{first_frame_image, last_frame_image}
+            HALU-->>AnimWorker: task_id
+
+            loop Poll every 5s (max 10 min)
+                AnimWorker->>HALU: GET /query?task_id=...
+                HALU-->>AnimWorker: status, video_url
+            end
+
+            AnimWorker->>HALU: Download video
+            AnimWorker->>R2: Upload video<br/>animations/{projectId}/scene-X.mp4
+            R2-->>AnimWorker: R2 key
+            AnimWorker->>DB: INSERT asset<br/>(type=video, storageUrl=key, status=completed)
+            AnimWorker->>AnimQueue: UPDATE job (status=completed)
+        end
+
+        Note over User: View completed video in project detail
+    end

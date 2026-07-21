@@ -1,3 +1,5 @@
+import { ProjectPreview } from "@scrimspec/shared-types";
+
 /**
  * API клиент для вызова Actions
  * Универсальная функция для взаимодействия с Action Runner
@@ -14,6 +16,63 @@ export interface ActionResponse<T = unknown> {
 export interface ActionError {
   error: string;
   details?: unknown;
+}
+
+export class ActionHttpError extends Error {
+  public readonly action: string;
+  public readonly status: number;
+  public readonly details?: unknown;
+
+  constructor(params: { action: string; status: number; message: string; details?: unknown }) {
+    super(params.message);
+    this.name = 'ActionHttpError';
+    this.action = params.action;
+    this.status = params.status;
+    this.details = params.details;
+  }
+}
+
+// Define types for story templates
+export interface StoryTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  tags: string[] | null;
+  targetDurationSeconds: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Define type for story template with beats
+export interface StoryTemplateWithBeats extends StoryTemplate {
+  beats: StoryBeat[];
+}
+
+// Define type for story beats
+export interface StoryBeat {
+  id: string;
+  templateId: string;
+  order: number;
+  phase: 'HOOK' | 'BUILD' | 'PAYOFF' | 'RESOLUTION';
+  durationSeconds: string; // Note: This is stored as string in the database
+  description: string;
+  actionPrompt?: string;
+  emotion: 'joy' | 'sadness' | 'surprise' | 'anticipation' | 'tension' | 'relief' | 'empathy' | 'curiosity' | 'humor' | 'awe';
+  contrast?: 'small_vs_big' | 'slow_vs_fast' | 'alone_vs_together' | 'sad_vs_happy' | 'problem_vs_solution' | 'before_vs_after';
+  intendedImpact?: string;
+  meta?: Record<string, unknown>;
+}
+
+// Define types for characters
+export interface Character {
+  id: string;
+  name: string;
+  description: string | null;
+  stylePresets: Record<string, unknown> | null;
+  referenceImageUrls: string[] | null;
+  ownerId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -42,7 +101,12 @@ export async function callAction<T = unknown>(
     const data: ActionResponse<T> = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+      throw new ActionHttpError({
+        action,
+        status: response.status,
+        message: data.error || `HTTP ${response.status}: ${response.statusText}`,
+        details: data.details,
+      });
     }
 
     if (!data.success) {
@@ -56,6 +120,9 @@ export async function callAction<T = unknown>(
     return data.result;
   } catch (error) {
     // Перебрасываем ошибку с дополнительным контекстом
+    if (error instanceof ActionHttpError) {
+      throw error;
+    }
     if (error instanceof Error) {
       throw new Error(`Action ${action} failed: ${error.message}`);
     }
@@ -81,12 +148,12 @@ export async function createStoryTemplate(payload: unknown) {
   return callAction('storyTemplates.create', payload);
 }
 
-export async function listStoryTemplates() {
-  return callAction('storyTemplates.list', {});
+export async function listStoryTemplates(): Promise<StoryTemplate[]> {
+  return callAction<StoryTemplate[]>('storyTemplates.list', {});
 }
 
-export async function getStoryTemplateById(id: string) {
-  return callAction('storyTemplates.getById', { id });
+export async function getStoryTemplateById(id: string): Promise<StoryTemplateWithBeats> {
+  return callAction<StoryTemplateWithBeats>('storyTemplates.getById', { id });
 }
 
 export async function updateStoryTemplate(id: string, payload: unknown) {
@@ -105,8 +172,8 @@ export async function createCharacter(payload: unknown) {
   return callAction('characters.create', payload);
 }
 
-export async function listCharacters() {
-  return callAction('characters.list', {});
+export async function listCharacters(): Promise<Character[]> {
+  return callAction<Character[]>('characters.list', {});
 }
 
 export async function getCharacterById(id: string) {
@@ -141,6 +208,56 @@ export async function startAnimation(payload: unknown) {
 // Projects Actions
 // =============================================================================
 
-export async function listProjects() {
-  return callAction('projects.list', {});
+export async function listProjects(): Promise<ProjectPreview[]> {
+  return callAction<ProjectPreview[]>('projects.list', {});
+}
+
+// =============================================================================
+// Models Actions
+// =============================================================================
+
+export type ModelType =
+  | 'text-to-text'
+  | 'text-to-image'
+  | 'image-to-video'
+  | 'text-to-video'
+  | 'image-to-image'
+  | 'audio-to-text'
+  | 'text-to-audio'
+  | 'multimodal';
+
+export interface ModelWithProvider {
+  id: string;
+  name: string;
+  type: ModelType;
+  providerId: string;
+  providerName: string;
+  isDefault: boolean;
+  isEnabled: boolean;
+  capabilities: string[] | null;
+  costDetails: unknown;
+  metadata: unknown;
+}
+
+export async function listModels(type: ModelType): Promise<ModelWithProvider[]> {
+  return callAction('models.list', { type });
+}
+
+// =============================================================================
+// BeamNG Channel Import Actions
+// =============================================================================
+
+export interface ImportChannelResult {
+  channelId: string;
+  channelTitle: string | null;
+  videosImported: number;
+  videosTotal: number;
+  importSessionId: string;
+}
+
+export async function importBeamngChannel(payload: {
+  input: string;
+  maxVideos?: number;
+}): Promise<ImportChannelResult> {
+  return callAction<ImportChannelResult>('beamng.importChannel', payload);
 }

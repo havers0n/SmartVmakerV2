@@ -6,6 +6,15 @@ import { PgTable } from 'drizzle-orm/pg-core';
 
 import * as schema from '../migrations/schema';
 
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
+) {
+  throw new Error(
+    'NODE_TLS_REJECT_UNAUTHORIZED=0 is forbidden in production. Use a valid CA certificate instead.',
+  );
+}
+
 // ============================================================================
 // Database Connection Factory with Hot Reload Support
 // ============================================================================
@@ -15,45 +24,46 @@ interface ExtendedPoolConfig extends PoolConfig {
   family?: number;
 }
 
-// Use globalThis to preserve pool across hot reloads in development
-const globalForDb = globalThis as unknown as {
-  __pgPool: Pool | undefined;
-  __pgPoolEnv: string | undefined;
-};
+export function resolveDatabaseSsl(url: string, nodeEnv = process.env.NODE_ENV, mode = process.env.SCRIMSPEC_DB_SSL): PoolConfig["ssl"] {
+  const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+  const local = ["localhost", "127.0.0.1", "::1"].includes(host);
+  if (local || mode === "disable") {
+    if (!local && nodeEnv === "production") throw new Error("SCRIMSPEC_DB_SSL=disable is forbidden for remote production databases");
+    return false;
+  }
+  if (mode === "allow-self-signed") {
+    if (nodeEnv === "production") throw new Error("Self-signed database TLS is forbidden in production");
+    return { rejectUnauthorized: false };
+  }
+  return { rejectUnauthorized: true };
+}
+
+// Use globalThis to preserve pool and drizzle across hot reloads in development
+declare global {
+  // eslint-disable-next-line no-var
+  var __pgPool: Pool | undefined;
+  // eslint-disable-next-line no-var
+  var __pgPoolEnv: string | undefined;
+  // eslint-disable-next-line no-var
+  var __drizzle: ReturnType<typeof drizzle> | undefined;
+}
 
 export function getPgClient(): Pool {
-  const isDev = process.env.NODE_ENV !== 'production';
   const currentEnv = process.env.NODE_ENV || 'development';
 
   // Recreate pool if NODE_ENV changed (e.g., from production to development during hot reload)
-  const envChanged = globalForDb.__pgPoolEnv && globalForDb.__pgPoolEnv !== currentEnv;
+  const envChanged = globalThis.__pgPoolEnv && globalThis.__pgPoolEnv !== currentEnv;
 
-  if (envChanged && globalForDb.__pgPool) {
-    if (isDev) {
-      console.log(`🔄 Environment changed from ${globalForDb.__pgPoolEnv} to ${currentEnv}, recreating pool...`);
-    }
-    globalForDb.__pgPool.end().catch(() => {});
-    globalForDb.__pgPool = undefined;
+  if (envChanged && globalThis.__pgPool) {
+    globalThis.__pgPool.end().catch(() => {});
+    globalThis.__pgPool = undefined;
+    globalThis.__drizzle = undefined; // Invalidate drizzle when pool is recreated
   }
 
-  if (!globalForDb.__pgPool) {
+  if (!globalThis.__pgPool) {
     // Приоритет - пулер. Если его нет - обычный URL.
     const drizzleUrl = process.env.DRIZZLE_DATABASE_URL;
     const directUrl = process.env.DATABASE_URL;
-
-    // Диагностика: проверяем какие переменные доступны
-    const isDev = process.env.NODE_ENV !== 'production';
-
-    if (isDev) {
-      console.log('🔍 DB Connection Debug Info:');
-      console.log('  - DRIZZLE_DATABASE_URL exists:', !!drizzleUrl);
-      console.log('  - DATABASE_URL exists:', !!directUrl);
-
-      if (drizzleUrl) {
-        const maskedUrl = drizzleUrl.replace(/:([^@]+)@/, ':****@');
-        console.log('  - Using DRIZZLE_DATABASE_URL:', maskedUrl);
-      }
-    }
 
     const databaseUrl = drizzleUrl || directUrl;
 
@@ -72,14 +82,10 @@ export function getPgClient(): Pool {
       );
     }
 
-    const isProduction = process.env.NODE_ENV === 'production';
-
     // Cast to ExtendedPoolConfig to include the family property
     const poolConfig: ExtendedPoolConfig = {
       connectionString: databaseUrl,
-      ssl: isProduction
-        ? { rejectUnauthorized: true }  // Production: strict SSL validation
-        : { rejectUnauthorized: false }, // Development: allow self-signed certs
+      ssl: resolveDatabaseSsl(databaseUrl),
       family: 4, // Force IPv4 to avoid DNS resolution issues
 
       // Connection Pool Configuration (Production-Ready)
@@ -99,35 +105,30 @@ export function getPgClient(): Pool {
       console.error('Unexpected database pool error:', err);
     });
 
-    globalForDb.__pgPool = pool;
-    globalForDb.__pgPoolEnv = currentEnv;
+    globalThis.__pgPool = pool;
+    globalThis.__pgPoolEnv = currentEnv;
 
-    if (!isProduction) {
-      console.warn('⚠️  WARNING: SSL certificate validation is disabled in development mode');
-      console.log('✅ Database pool initialized successfully');
-      console.log('📊 Pool config:', {
-        max: poolConfig.max,
-        connectionTimeout: `${poolConfig.connectionTimeoutMillis}ms`,
-        idleTimeout: `${poolConfig.idleTimeoutMillis}ms`,
-        statementTimeout: `${poolConfig.statement_timeout}ms`,
-      });
-    }
   }
-  return globalForDb.__pgPool;
+  return globalThis.__pgPool;
 }
 
 export function getDrizzleClient() {
-  const client = getPgClient();
+  // Cache drizzle instance to avoid recreating it on every call
+  if (!globalThis.__drizzle) {
+    const client = getPgClient();
 
-  // Фильтруем schema, оставляя только таблицы (PgTable)
-  // Исключаем enum'ы, pgSchema объекты и другие сущности
-  const tablesOnly = Object.fromEntries(
-    Object.entries(schema).filter(([_, value]) => {
-      return is(value, PgTable);
-    })
-  );
+    // Фильтруем schema, оставляя только таблицы (PgTable)
+    // Исключаем enum'ы, pgSchema объекты и другие сущности
+    const tablesOnly = Object.fromEntries(
+      Object.entries(schema).filter(([_, value]) => {
+        return is(value, PgTable);
+      })
+    );
 
-  return drizzle(client, { schema: tablesOnly });
+    globalThis.__drizzle = drizzle(client, { schema: tablesOnly });
+
+  }
+  return globalThis.__drizzle;
 }
 
 // ============================================================================

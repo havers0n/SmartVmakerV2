@@ -99,3 +99,50 @@ pnpm types:pull
 1. Правильность `SUPABASE_ACCESS_TOKEN`
 2. Версию Supabase CLI (`supabase --version`)
 3. Подключение к интернету
+
+---
+
+## 📦 Миграции базы данных
+
+В проекте используются **Drizzle migrations**, а не Supabase CLI migrations.
+
+### ❌ Неправильно
+```bash
+supabase migration up      # НЕ применит Drizzle миграции
+```
+`supabase/migrations/` в этом проекте **пуст**. Supabase CLI не знает о Drizzle.
+
+### ✅ Правильно
+
+Локальная разработка (из корня):
+```bash
+pnpm db:migrate
+# или
+pnpm db:migrate:run
+```
+
+Из `packages/db`:
+```bash
+cd packages/db
+pnpm migrate
+# или
+pnpm migrate:run
+```
+
+Продакшен (требует `.env.production`):
+```bash
+pnpm db:migrate:prod
+```
+
+### Проверка применения миграций
+
+```sql
+SELECT column_name, column_default, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'youtube_channels'
+  AND column_name IN ('subscriber_count', 'hidden_subscriber_count');
+```
+
+Ожидаемый результат:
+- `subscriber_count` — default: NULL, nullable: YES
+- `hidden_subscriber_count` — default: NULL, nullable: YES

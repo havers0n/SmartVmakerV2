@@ -1,32 +1,125 @@
 import { z } from 'zod';
 import { db } from '@/shared/lib/db';
-import { generationProjects, storyTemplates, beats, assets, keyframeJobQueue, animationJobQueue } from '@/shared/lib/schema';
+import { generationProjects, storyTemplates, beats, characters, assets, keyframeJobQueue, animationJobQueue, aiModels } from '@/shared/lib/schema';
 import { createLogger } from '@aec/logger';
-import { eq } from 'drizzle-orm';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { eq, and } from 'drizzle-orm';
+import { createTextClient, generateScenariosWithTools } from '@scrimspec/halu-client';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import { getTrends, type Trend } from '@/shared/trends';
+import {
+  FeatureNotAvailableError,
+  isExplicitDevelopmentMockGeneration,
+} from '@/server/generation-availability';
 
 const logger = createLogger({ name: 'api-generation' });
 
 /**
  * Validation schema for generation.startProject action
  */
-export const startProjectSchema = z.object({
+const baseProjectSchema = {
   title: z.string().optional(),
   ratio: z.enum(['16:9', '9:16', '4:3', '3:4']).default('16:9'),
   lang: z.string().default('none'),
-  source: z.enum(['prompt', 'preset', 'trends']),
-  prompt: z.string().optional(),
-  presetId: z.string().uuid().optional(),
-  trendId: z.string().optional(),
   ownerId: z.string().uuid().optional(),
-});
+  textModelId: z.string().optional(),
+  imageModelId: z.string().optional(),
+};
+
+export const startProjectSchema = z.discriminatedUnion('source', [
+  z.object({
+    source: z.literal('prompt'),
+    prompt: z.string().optional(),
+    presetId: z.string().uuid().optional(),
+    trendId: z.string().optional(),
+    ...baseProjectSchema,
+  }),
+  z.object({
+    source: z.literal('preset'),
+    presetId: z.string().uuid(),
+    prompt: z.string().optional(),
+    trendId: z.string().optional(),
+    ...baseProjectSchema,
+  }),
+  z.object({
+    source: z.literal('trends'),
+    trendId: z.string().min(1, "trendId is required when source='trends'"),
+    prompt: z.string().optional(),
+    presetId: z.string().uuid().optional(),
+    ...baseProjectSchema,
+  }),
+]);
 
 export type StartProjectPayload = z.infer<typeof startProjectSchema>;
 
 /**
- * Generate scenarios using Gemini API
+ * Tool executors for MiniMax-M2 Function Calling
  */
-async function generateScenariosWithGemini(input: {
+async function executeGetStoryPresetDetails(presetId: string) {
+  try {
+    const [template] = await db
+      .select()
+      .from(storyTemplates)
+      .where(eq(storyTemplates.id, presetId));
+
+    if (!template) {
+      return { error: `Story template with id ${presetId} not found` };
+    }
+
+    const templateBeats = await db
+      .select()
+      .from(beats)
+      .where(eq(beats.templateId, presetId))
+      .orderBy(beats.order);
+
+    return {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      tags: template.tags,
+      targetDurationSeconds: template.targetDurationSeconds,
+      beats: templateBeats.map(b => ({
+        order: b.order,
+        phase: b.phase,
+        duration: b.durationSeconds,
+        description: b.description,
+        emotion: b.emotion,
+        contrast: b.contrast,
+      })),
+    };
+  } catch (error) {
+    logger.error({ error, presetId }, 'Failed to fetch story preset');
+    return { error: 'Failed to fetch story preset details' };
+  }
+}
+
+async function executeGetCharacterDetails(characterId: string) {
+  try {
+    const [character] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, characterId));
+
+    if (!character) {
+      return { error: `Character with id ${characterId} not found` };
+    }
+
+    return {
+      id: character.id,
+      name: character.name,
+      description: character.description,
+      stylePresets: character.stylePresets,
+      referenceImageUrls: character.referenceImageUrls,
+    };
+  } catch (error) {
+    logger.error({ error, characterId }, 'Failed to fetch character');
+    return { error: 'Failed to fetch character details' };
+  }
+}
+
+/**
+ * Generate scenarios using MiniMax-M2 with Function Calling
+ */
+async function generateScenariosWithMiniMax(input: {
   source: 'prompt' | 'preset' | 'trends';
   prompt?: string;
   preset?: any;
@@ -34,10 +127,13 @@ async function generateScenariosWithGemini(input: {
   ratio: string;
   lang: string;
 }): Promise<any[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.MINIMAX_API_KEY;
 
   if (!apiKey) {
-    logger.warn('GEMINI_API_KEY not set, returning mock scenarios');
+    if (!isExplicitDevelopmentMockGeneration()) {
+      throw new FeatureNotAvailableError('MiniMax scenario generation is not configured');
+    }
+    logger.warn('MINIMAX_API_KEY not set; using explicitly enabled development mock scenarios');
     // Return mock scenarios for development
     return [
       {
@@ -83,71 +179,240 @@ async function generateScenariosWithGemini(input: {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    // Create MiniMax-M2 text client
+    const client = createTextClient({ apiKey });
 
-    // Build prompt based on source
-    let systemPrompt = `You are an expert video scriptwriter specializing in short-form viral content.
-Generate 3-5 different scenario concepts for a ${input.ratio} video.
+    // Define tools for Function Calling
+    const tools: ChatCompletionTool[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_story_preset_details',
+          description: 'Get detailed information about a story template/preset from the library, including its beats, emotions, and timing structure',
+          parameters: {
+            type: 'object',
+            properties: {
+              presetId: {
+                type: 'string',
+                description: 'UUID of the story template to fetch',
+              },
+            },
+            required: ['presetId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_character_details',
+          description: 'Get detailed information about a character from the library, including visual description, style presets, and reference images',
+          parameters: {
+            type: 'object',
+            properties: {
+              characterId: {
+                type: 'string',
+                description: 'UUID of the character to fetch',
+              },
+            },
+            required: ['characterId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'generate_video_scenarios',
+          description: 'Generate structured video scenarios with scenes, emotions, and AES (Attention-Emotion-Solution) scoring',
+          parameters: {
+            type: 'object',
+            properties: {
+              scenarios: {
+                type: 'array',
+                description: 'Array of scenario objects',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: 'Scenario title' },
+                    description: { type: 'string', description: 'Brief scenario description' },
+                    aesScore: { type: 'number', description: 'AES score (0-100)' },
+                    hookStrength: { type: 'number', description: 'Hook strength (0-100)' },
+                    emotionalCurve: {
+                      type: 'array',
+                      description: 'Emotional progression',
+                      items: { type: 'string' },
+                    },
+                    scenes: {
+                      type: 'array',
+                      description: 'Array of scenes',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          phase: { type: 'string', description: 'Scene phase: HOOK, BUILD, PAYOFF, or RESOLUTION' },
+                          duration: { type: 'number', description: 'Scene duration in seconds' },
+                          description: { type: 'string', description: 'Visual description of the scene' },
+                          cameraCommands: { 
+                            type: 'array', 
+                            description: 'Suggested camera movements for this scene (e.g., [Push in, Pan right])',
+                            items: { type: 'string' }
+                          },
+                        },
+                        required: ['phase', 'duration', 'description'],
+                      },
+                    },
+                  },
+                  required: ['title', 'description', 'aesScore', 'hookStrength', 'emotionalCurve', 'scenes'],
+                },
+              },
+            },
+            required: ['scenarios'],
+          },
+        },
+      },
+    ];
 
-Each scenario should follow the AES (Attention-Emotion-Solution) framework and include:
-1. A compelling hook (≤3 seconds)
-2. Emotional build-up and tension
-3. A satisfying payoff/resolution
-4. Clear scene breakdowns with timing
+    // Build user prompt based on source
+    let userPrompt = `Create 3-5 video scenario concepts for a ${input.ratio} video`;
 
-Format your response as a JSON array with this structure:
-[
-  {
-    "title": "Concept title",
-    "description": "Brief description",
-    "aesScore": 8.5,
-    "hookStrength": 9.0,
-    "emotionalCurve": ["emotion1", "emotion2", ...],
-    "scenes": [
-      {"phase": "HOOK", "duration": 2, "description": "Scene description"},
-      {"phase": "BUILD", "duration": 8, "description": "Scene description"},
-      {"phase": "PAYOFF", "duration": 4, "description": "Scene description"},
-      {"phase": "RESOLUTION", "duration": 2, "description": "Scene description"}
-    ]
-  }
-]
+    if (input.lang && input.lang !== 'none') {
+      userPrompt += ` in ${input.lang} language`;
+    }
+
+    userPrompt += `.
+
+Each scenario MUST follow the AES (Attention-Emotion-Solution) framework:
+1. HOOK phase (≤3 seconds): Grab attention immediately
+2. BUILD phase: Create emotional tension and engagement
+3. PAYOFF phase: Deliver the climax or key revelation
+4. RESOLUTION phase: Provide satisfying closure
+
+Requirements:
+- Total duration should be 15-20 seconds per scenario
+- Each scene must have specific visual descriptions
+- AES scores should reflect viral potential (0-100)
+- Hook strength should reflect immediate engagement (0-100)
+- Emotional curve should show progression through the video
+- Include suggested camera movements for each scene (e.g., [Push in, Pan right])
 
 `;
 
     if (input.source === 'prompt' && input.prompt) {
-      systemPrompt += `\nUser prompt: ${input.prompt}`;
+      userPrompt += `\nUser's creative brief:\n${input.prompt}\n`;
     } else if (input.source === 'preset' && input.preset) {
-      systemPrompt += `\nUse this story template as a guide:
+      userPrompt += `\nBase your scenarios on this story template:
 Title: ${input.preset.name}
 Description: ${input.preset.description}
 Target Duration: ${input.preset.targetDurationSeconds}s
 
-Beats:
-${input.preset.beats.map((b: any, i: number) => `${i + 1}. ${b.phase} (${b.durationSeconds}s): ${b.description} [Emotion: ${b.emotion}${b.contrast ? `, Contrast: ${b.contrast}` : ''}]`).join('\n')}`;
+Story Beats:
+${input.preset.beats.map((b: any, i: number) => `${i + 1}. ${b.phase} (${b.durationSeconds}s): ${b.description} [Emotion: ${b.emotion}${b.contrast ? `, Contrast: ${b.contrast}` : ''}]`).join('\n')}
+`;
     } else if (input.source === 'trends' && input.trend) {
-      systemPrompt += `\nUse these trend insights:
-${input.trend.title}
+      userPrompt += `\nCreate scenarios based on these trending insights:
+Trend: ${input.trend.title}
 ${input.trend.description}
-Insights: ${input.trend.insights.join(', ')}`;
+Key Insights: ${input.trend.insights.join(', ')}
+`;
     }
 
-    const result = await model.generateContent(systemPrompt);
-    const response = result.response;
-    const text = response.text();
+    userPrompt += `\nIMPORTANT: Call the generate_video_scenarios function with your complete scenario concepts.`;
 
-    // Try to extract JSON from the response
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const scenarios = JSON.parse(jsonMatch[0]);
-      logger.info({ count: scenarios.length }, 'Generated scenarios with Gemini');
-      return scenarios;
+    const systemMessage = `You are an expert video scriptwriter and creative strategist specializing in viral short-form content.
+
+Your expertise includes:
+- AES (Attention-Emotion-Solution) framework for viral content
+- Emotional storytelling and pacing
+- Visual scene composition
+- Viral video patterns and hooks
+
+You have access to tools to fetch additional context from the content library if needed (story presets, character details).
+
+When generating scenarios, ensure each one is:
+- Visually compelling and specific
+- Emotionally engaging with clear progression
+- Optimized for the requested aspect ratio
+- Structured with proper timing and pacing
+- Include suggested camera movements for dynamic visual storytelling (e.g., [Push in, Pan right, Tilt up])
+`;
+
+    // First API call - MiniMax-M2 decides what to do
+    logger.info({ source: input.source }, 'Calling MiniMax-M2 for scenario generation');
+
+    const response = await generateScenariosWithTools(
+      client,
+      userPrompt,
+      tools,
+      {
+        systemMessage,
+        maxTokens: 4096,
+        temperature: 0.85,
+        toolChoice: 'auto',
+      }
+    );
+
+    // Check if model wants to call any tools first
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      logger.info({ toolCalls: response.toolCalls.length }, 'MiniMax-M2 requested tool calls');
+
+      // Execute tool calls
+      const toolResults: Array<{ toolCallId: string; result: any }> = [];
+
+      for (const toolCall of response.toolCalls) {
+        if (toolCall.function.name === 'get_story_preset_details') {
+          const args = toolCall.function.argumentsParsed as { presetId: string };
+          const result = await executeGetStoryPresetDetails(args.presetId);
+          toolResults.push({ toolCallId: toolCall.id, result });
+          logger.info({ presetId: args.presetId }, 'Fetched story preset details');
+        } else if (toolCall.function.name === 'get_character_details') {
+          const args = toolCall.function.argumentsParsed as { characterId: string };
+          const result = await executeGetCharacterDetails(args.characterId);
+          toolResults.push({ toolCallId: toolCall.id, result });
+          logger.info({ characterId: args.characterId }, 'Fetched character details');
+        } else if (toolCall.function.name === 'generate_video_scenarios') {
+          const args = toolCall.function.argumentsParsed as { scenarios: any[] };
+          logger.info({ count: args.scenarios.length }, 'MiniMax-M2 generated scenarios');
+          return args.scenarios;
+        }
+      }
+
+      // If there were tool calls but not the final generation, make a second call with tool results
+      if (toolResults.length > 0) {
+        const followUpPrompt = `Based on the additional context from the library, now generate the final video scenarios using the generate_video_scenarios function.
+
+Tool results:
+${toolResults.map(tr => JSON.stringify(tr.result, null, 2)).join('\n\n')}`;
+
+        const finalResponse = await generateScenariosWithTools(
+          client,
+          followUpPrompt,
+          tools,
+          {
+            systemMessage,
+            maxTokens: 4096,
+            temperature: 0.85,
+            toolChoice: { type: 'function', function: { name: 'generate_video_scenarios' } },
+          }
+        );
+
+        if (finalResponse.toolCalls) {
+          const generateCall = finalResponse.toolCalls.find(tc => tc.function.name === 'generate_video_scenarios');
+          if (generateCall && generateCall.function.argumentsParsed) {
+            const args = generateCall.function.argumentsParsed as { scenarios: any[] };
+            logger.info({ count: args.scenarios.length }, 'Generated scenarios with MiniMax-M2 after tool enrichment');
+            return args.scenarios;
+          }
+        }
+      }
     }
 
-    logger.warn('Failed to parse Gemini response, using fallback');
-    throw new Error('Invalid response format from Gemini');
+    // If we got here, something went wrong
+    logger.warn('MiniMax-M2 did not generate scenarios as expected, using fallback');
+    throw new Error('No scenarios generated by MiniMax-M2');
+
   } catch (error) {
-    logger.error({ error }, 'Gemini API error, falling back to mock data');
+    if (!isExplicitDevelopmentMockGeneration()) {
+      throw new FeatureNotAvailableError('MiniMax scenario generation failed');
+    }
+    logger.error({ error }, 'MiniMax-M2 API error; using explicitly enabled development mock data');
     // Fallback to mock scenarios
     return [
       {
@@ -171,13 +436,69 @@ Insights: ${input.trend.insights.join(', ')}`;
  * Handler for generation.startProject action
  * Creates a new generation project and generates scenarios
  */
-export async function startProject(payload: unknown) {
+export async function startProject(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = startProjectSchema.parse(payload);
 
   logger.info(
     { source: validated.source, ratio: validated.ratio },
     'Starting project generation'
   );
+
+  // Resolve AI models - use provided IDs or fetch defaults
+  let textModelId = validated.textModelId;
+  let imageModelId = validated.imageModelId;
+
+  if (!textModelId) {
+    logger.info('textModelId not provided, fetching default text-to-text model');
+    const [defaultTextModel] = await db
+      .select()
+      .from(aiModels)
+      .where(
+        and(
+          eq(aiModels.type, 'text-to-text'),
+          eq(aiModels.isDefault, true),
+          eq(aiModels.isEnabled, true)
+        )
+      )
+      .limit(1);
+
+    if (defaultTextModel) {
+      textModelId = defaultTextModel.id;
+      logger.info({ modelId: textModelId }, 'Using default text-to-text model');
+    } else {
+      logger.warn('No default text-to-text model found');
+    }
+  }
+
+  if (!imageModelId) {
+    logger.info('imageModelId not provided, fetching default text-to-image model');
+    const [defaultImageModel] = await db
+      .select()
+      .from(aiModels)
+      .where(
+        and(
+          eq(aiModels.type, 'text-to-image'),
+          eq(aiModels.isDefault, true),
+          eq(aiModels.isEnabled, true)
+        )
+      )
+      .limit(1);
+
+    if (defaultImageModel) {
+      imageModelId = defaultImageModel.id;
+      logger.info({ modelId: imageModelId }, 'Using default text-to-image model');
+    } else {
+      logger.warn('No default text-to-image model found');
+    }
+  }
 
   // Fetch preset data if using preset source
   let presetData = null;
@@ -201,20 +522,28 @@ export async function startProject(payload: unknown) {
     logger.info({ templateId: template.id }, 'Loaded preset template');
   }
 
-  // Fetch trend data if using trends source
-  let trendData = null;
-  if (validated.source === 'trends' && validated.trendId) {
-    // Fetch from trends API
-    const trendsResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analytics/trends`);
-    if (trendsResponse.ok) {
-      const trends = await trendsResponse.json();
-      trendData = trends.find((t: any) => t.id === validated.trendId);
-      logger.info({ trendId: validated.trendId }, 'Loaded trend data');
+  // Resolve trend data locally (no self-fetch)
+  let trendData: Trend | null = null;
+  if (validated.source === 'trends') {
+    const trends = getTrends();
+    const trend = trends.find((t) => t.id === validated.trendId) ?? null;
+
+    if (!trend) {
+      throw new z.ZodError([
+        {
+          code: 'custom',
+          path: ['trendId'],
+          message: `Trend not found: ${validated.trendId}`,
+        },
+      ]);
     }
+
+    trendData = trend;
+    logger.info({ trendId: validated.trendId }, 'Loaded trend data');
   }
 
-  // Generate scenarios using Gemini
-  const scenarios = await generateScenariosWithGemini({
+  // Generate scenarios using MiniMax-M2
+  const scenarios = await generateScenariosWithMiniMax({
     source: validated.source,
     prompt: validated.prompt,
     preset: presetData,
@@ -227,7 +556,7 @@ export async function startProject(payload: unknown) {
   const [project] = await db
     .insert(generationProjects)
     .values({
-      ownerId: validated.ownerId,
+      ownerId: userId,
       templateId: validated.presetId,
       status: 'pending',
       meta: {
@@ -239,12 +568,19 @@ export async function startProject(payload: unknown) {
         trendId: validated.trendId,
         scenarios,
         generatedAt: new Date().toISOString(),
+        textModelId,
+        imageModelId,
       },
     })
     .returning();
 
   logger.info(
-    { projectId: project.id, scenariosCount: scenarios.length },
+    {
+      projectId: project.id,
+      scenariosCount: scenarios.length,
+      textModelId,
+      imageModelId,
+    },
     'Project created successfully'
   );
 
@@ -269,11 +605,43 @@ export const generateKeyframesSchema = z.object({
 
 export type GenerateKeyframesPayload = z.infer<typeof generateKeyframesSchema>;
 
+const KEYFRAME_IMAGE_STYLE = 'Ultra realistic, cinematic still frame, 8k, shallow depth of field, natural lighting.';
+const KEYFRAME_NEGATIVE_TEXT = 'no text, no captions, no subtitles, no watermarks, no titles, no interface elements, no logos, no numbers on the image, no graphic overlays';
+
+function buildVisualPrompt(raw?: string): string {
+  if (!raw) return '';
+
+  let cleaned = raw
+    // Убираем служебные лейблы сцен/кадров
+    .replace(/^scene\s*\d+(?:\/\d+)?\s*[:\-]\s*/i, '')
+    .replace(/\bframe\s*\d+(?:\/\d+)?\s*[:\-]?\s*/gi, '')
+    .replace(/\b(opening|closing|final)\s*frame\s*[:\-]?\s*/gi, '')
+    .replace(/\bphase\s*[:\-]\s*\w+\b/gi, '')
+    // Убираем явные указания текста на экране
+    .replace(/text on screen:[^.]+/gi, '')
+    .trim();
+
+  // Если после чистки всё убрали — возвращаем исходное, чтобы не потерять смысл
+  if (!cleaned) {
+    cleaned = raw.trim();
+  }
+
+  return cleaned;
+}
+
 /**
  * Handler for generation.generateKeyframes action
  * Creates keyframe generation jobs for first and last frame of each scene
  */
-export async function generateKeyframes(payload: unknown) {
+export async function generateKeyframes(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = generateKeyframesSchema.parse(payload);
 
   logger.info(
@@ -285,7 +653,7 @@ export async function generateKeyframes(payload: unknown) {
   const [project] = await db
     .select()
     .from(generationProjects)
-    .where(eq(generationProjects.id, validated.projectId));
+    .where(and(eq(generationProjects.id, validated.projectId), eq(generationProjects.ownerId, userId)));
 
   if (!project) {
     throw new Error(`Project with id ${validated.projectId} not found`);
@@ -314,9 +682,11 @@ export async function generateKeyframes(payload: unknown) {
   // Map aspect ratio to Gemini's format
   const geminiAspectRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
-  // Get project characters and style preferences if available
+  // Get project characters if available
   const characters = meta.characters || [];
-  const stylePresets = meta.stylePresets || {};
+
+  // Get image model ID from project meta
+  const imageModelId = meta.imageModelId;
 
   const jobsCreated: string[] = [];
 
@@ -324,12 +694,22 @@ export async function generateKeyframes(payload: unknown) {
   for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
     const scene = scenes[sceneIndex];
 
-    // Create prompts for first and last keyframe
-    const basePrompt = `A photorealistic shot from a ${aspectRatio} video. Scene ${sceneIndex + 1} of ${scenes.length}. Phase: ${scene.phase}. ${scene.description}`;
+    const sceneDescription = scene.description || '';
+    const visualPrompt = buildVisualPrompt(scene.visualPrompt || sceneDescription);
 
-    const firstFramePrompt = `${basePrompt}. This is the OPENING frame of the scene, showing the initial state.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+    if (!visualPrompt) {
+      throw new Error(`Scene ${sceneIndex} has empty visual description`);
+    }
 
-    const lastFramePrompt = `${basePrompt}. This is the CLOSING frame of the scene, showing the final state or result.${characters.length > 0 ? ` Characters: ${characters.map((c: any) => c.name).join(', ')}` : ''}`;
+    const charactersLine =
+      characters.length > 0 ? ` featuring ${characters.map((c: any) => c.name).join(', ')}` : '';
+
+    const baseVisual = `${visualPrompt}${charactersLine}`.trim();
+    const positivePrompt = `${baseVisual}. ${KEYFRAME_IMAGE_STYLE}`;
+    const fullPrompt = `${positivePrompt} Avoid any written text or titles on the image. Negative prompt: ${KEYFRAME_NEGATIVE_TEXT}.`;
+
+    const firstFramePrompt = `${fullPrompt} Opening moment, initial state.`;
+    const lastFramePrompt = `${fullPrompt} Closing moment, final state or result.`;
 
     // Create asset records for both keyframes
     const [firstAsset] = await db
@@ -345,6 +725,7 @@ export async function generateKeyframes(payload: unknown) {
           phase: scene.phase,
           duration: scene.duration,
           aspectRatio: geminiAspectRatio,
+          visualPrompt,
         },
       } as any)
       .returning();
@@ -362,6 +743,7 @@ export async function generateKeyframes(payload: unknown) {
           phase: scene.phase,
           duration: scene.duration,
           aspectRatio: geminiAspectRatio,
+          visualPrompt,
         },
       } as any)
       .returning();
@@ -375,6 +757,7 @@ export async function generateKeyframes(payload: unknown) {
         frameType: 'first',
         prompt: firstFramePrompt,
         assetId: firstAsset.id,
+        modelId: imageModelId, // Add model ID to job
         status: 'pending',
       } as any)
       .returning();
@@ -387,6 +770,7 @@ export async function generateKeyframes(payload: unknown) {
         frameType: 'last',
         prompt: lastFramePrompt,
         assetId: lastAsset.id,
+        modelId: imageModelId, // Add model ID to job
         status: 'pending',
       } as any)
       .returning();
@@ -394,7 +778,7 @@ export async function generateKeyframes(payload: unknown) {
     jobsCreated.push(firstJob.id, lastJob.id);
 
     logger.info(
-      { sceneIndex, firstAssetId: firstAsset.id, lastAssetId: lastAsset.id },
+      { sceneIndex, firstAssetId: firstAsset.id, lastAssetId: lastAsset.id, imageModelId },
       'Created keyframe jobs for scene'
     );
   }
@@ -439,7 +823,15 @@ export type StartAnimationPayload = z.infer<typeof startAnimationSchema>;
  * Handler for generation.startAnimation action
  * Creates animation generation jobs for each scene's keyframe pair
  */
-export async function startAnimation(payload: unknown) {
+export async function startAnimation(
+  payload: unknown,
+  ctx?: { userId?: string }
+) {
+  const userId = ctx?.userId;
+  if (!userId) {
+    throw new Error('Unauthorized');
+  }
+
   const validated = startAnimationSchema.parse(payload);
 
   logger.info(
@@ -451,7 +843,7 @@ export async function startAnimation(payload: unknown) {
   const [project] = await db
     .select()
     .from(generationProjects)
-    .where(eq(generationProjects.id, validated.projectId));
+    .where(and(eq(generationProjects.id, validated.projectId), eq(generationProjects.ownerId, userId)));
 
   if (!project) {
     throw new Error(`Project with id ${validated.projectId} not found`);
@@ -535,6 +927,15 @@ export async function startAnimation(payload: unknown) {
 
   for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
     const sceneAssets = assetsByScene.get(sceneIndex)!;
+    const scene = scenes[sceneIndex];
+    
+    // Build scene description including camera commands if available
+    let sceneDescription = scene.description || '';
+    
+    // Add camera commands if available
+    if (scene.cameraCommands && Array.isArray(scene.cameraCommands) && scene.cameraCommands.length > 0) {
+      sceneDescription += ` [${scene.cameraCommands.join(',')}]`;
+    }
 
     const [job] = await db
       .insert(animationJobQueue)
@@ -543,9 +944,18 @@ export async function startAnimation(payload: unknown) {
         sceneIndex,
         assetIdFirstFrame: sceneAssets.first.id,
         assetIdLastFrame: sceneAssets.last.id,
+        sceneDescription, // Add scene description to job
         status: 'pending',
       } as any)
+      .onConflictDoNothing({
+        target: [animationJobQueue.projectId, animationJobQueue.sceneIndex],
+      })
       .returning();
+
+    if (!job) {
+      logger.warn({ projectId: validated.projectId, sceneIndex }, 'Animation job already exists, skipping duplicate');
+      continue;
+    }
 
     jobsCreated.push(job.id);
 
@@ -555,6 +965,7 @@ export async function startAnimation(payload: unknown) {
         jobId: job.id,
         firstFrameAssetId: sceneAssets.first.id,
         lastFrameAssetId: sceneAssets.last.id,
+        sceneDescription,
       },
       'Created animation job for scene'
     );

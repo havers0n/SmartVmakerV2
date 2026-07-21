@@ -6,13 +6,14 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuL
 
 export function Header() {
   const pathname = usePathname();
-  
+
   const navItems = [
     { name: 'Home', href: '/' },
     { name: 'Ingest', href: '/ingest' },
     { name: 'Analyze', href: '/analysis' },
     { name: 'Generate', href: '/generation' },
     { name: 'HWAR', href: '/hwar' },
+    { name: 'Projects', href: '/projects' },
   ];
 
   return (
@@ -23,9 +24,9 @@ export function Header() {
             {navItems.map((item) => (
               <NavigationMenuItem key={item.href}>
                 <Link href={item.href} legacyBehavior passHref>
-                  <NavigationMenuLink 
+                  <NavigationMenuLink
                     className={navigationMenuTriggerStyle()}
-                    active={pathname === item.href}
+                    active={pathname === item.href || (item.href === '/projects' && pathname.startsWith('/projects'))}
                   >
                     {item.name}
                   </NavigationMenuLink>

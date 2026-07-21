@@ -118,12 +118,8 @@ async function checkAndApply() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     )`);
 
-    await client.query(`CREATE TABLE IF NOT EXISTS "hwar_workers" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "name" text NOT NULL,
-      "status" text NOT NULL,
-      "updated_at" timestamp with time zone DEFAULT now() NOT NULL
-    )`);
+    // Note: hwar_workers table is now managed through Drizzle migrations
+    // See migration 0011_hwar_workers_typed.sql
 
     console.log('✅ Migration 0003 complete');
 

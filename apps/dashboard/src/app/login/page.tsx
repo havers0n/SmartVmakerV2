@@ -1,20 +1,22 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/providers/auth-provider';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { sanitizeRedirectPath } from '@/shared/lib/redirect';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -27,7 +29,9 @@ export default function LoginPage() {
       if (error) {
         setError(error.message);
       } else {
-        router.push('/');
+        const redirectedFrom = searchParams.get('redirectedFrom');
+        const target = sanitizeRedirectPath(redirectedFrom, '/hwar/create');
+        router.replace(target);
         router.refresh();
       }
     } catch (err) {
@@ -89,9 +93,15 @@ export default function LoginPage() {
           </form>
           
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <button 
-              onClick={() => router.push('/signup')}
+              onClick={() => {
+                const redirectedFrom = searchParams.get('redirectedFrom');
+                const next = redirectedFrom
+                  ? `/signup?redirectedFrom=${encodeURIComponent(redirectedFrom)}`
+                  : '/signup';
+                router.push(next);
+              }}
               className="text-primary hover:underline"
             >
               Sign up
@@ -100,5 +110,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

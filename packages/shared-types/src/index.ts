@@ -5,6 +5,7 @@
 
 // Export HWAR types
 export * from './hwar';
+export * from './hwarWorkers';
 
 // ============================================================================
 // TASK TYPES

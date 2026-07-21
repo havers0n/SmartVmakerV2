@@ -98,7 +98,8 @@
       "Bash(done)",
       "Bash(where next)",
       "Bash(where:*)",
-      "Bash(npx pm2:*)"
+      "Bash(npx pm2:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

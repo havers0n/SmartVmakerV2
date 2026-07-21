@@ -12,6 +12,9 @@ import {
   RetrieveFileResponse,
   SubjectReferenceVideoRequest,
   FirstLastFrameVideoRequest,
+  TextToImageRequest,
+  ImageToImageRequest,
+  ImageGenerationResponse,
   HaluApiError,
   MinimaxErrorCode,
 } from './types';
@@ -21,6 +24,15 @@ import {
  */
 const DEFAULT_BASE_URL = 'https://api.minimax.io/v1';
 const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
+
+function isAllowedDownloadHost(hostname: string): boolean {
+  const configured = process.env.HALU_ALLOWED_VIDEO_HOSTS;
+  const rules = (configured ? configured.split(',') : ['minimax.io'])
+    .map((rule) => rule.trim().toLowerCase())
+    .filter(Boolean);
+  const host = hostname.toLowerCase();
+  return rules.some((rule) => host === rule || host.endsWith(`.${rule}`));
+}
 
 /**
  * HALU API Client
@@ -174,6 +186,59 @@ export class HaluClient {
   }
 
   /**
+   * Generate image from text description (Text-to-Image)
+   *
+   * @param payload - Request payload for text-to-image generation
+   * @returns Image generation response with image data
+   *
+   * @example
+   * ```ts
+   * const response = await client.generateImage({
+   *   model: 'image-01',
+   *   prompt: 'A beautiful sunset over the ocean',
+   *   aspect_ratio: '16:9',
+   *   response_format: 'base64'
+   * });
+   * 
+   * // Save base64 image to file
+   * const imageData = response.data[0].image_base64;
+   * const imageBuffer = Buffer.from(imageData, 'base64');
+   * fs.writeFileSync('image.png', imageBuffer);
+   * ```
+   */
+  async generateImage(
+    payload: TextToImageRequest
+  ): Promise<ImageGenerationResponse> {
+    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
+  }
+
+  /**
+   * Generate image from source image and text modification (Image-to-Image)
+   *
+   * @param payload - Request payload for image-to-image generation
+   * @returns Image generation response with image data
+   *
+   * @example
+   * ```ts
+   * const response = await client.modifyImage({
+   *   model: 'image-01',
+   *   prompt: 'Make the sky more blue and add clouds',
+   *   image: 'https://example.com/source-image.jpg',
+   *   aspect_ratio: '16:9',
+   *   response_format: 'url'
+   * });
+   * 
+   * // Get image URL
+   * const imageUrl = response.data[0].url;
+   * ```
+   */
+  async modifyImage(
+    payload: ImageToImageRequest
+  ): Promise<ImageGenerationResponse> {
+    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
+  }
+
+  /**
    * Query the status of a video generation task
    *
    * @param taskId - The task_id returned from task creation
@@ -243,8 +308,22 @@ export class HaluClient {
       downloadUrl = fileInfo.file.download_url;
     }
 
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(downloadUrl);
+    } catch {
+      throw new Error('Invalid download URL returned by provider');
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Insecure video download URL protocol');
+    }
+    if (!isAllowedDownloadHost(parsedUrl.hostname)) {
+      throw new Error(`Video download host is not allowed: ${parsedUrl.hostname}`);
+    }
+
     // Download the video
-    const response = await fetch(downloadUrl);
+    const response = await fetch(parsedUrl.toString());
 
     if (!response.ok) {
       throw new Error(`Failed to download video: HTTP ${response.status}`);

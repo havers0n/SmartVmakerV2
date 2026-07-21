@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+data/transcripts/*.txt
+data/metadata/*.json
+data/annotations/annotations.jsonl
+reports/*.md
+!reports/.gitkeep

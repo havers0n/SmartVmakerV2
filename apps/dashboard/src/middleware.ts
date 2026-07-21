@@ -36,6 +36,8 @@ import { createServerClient } from '@supabase/ssr';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
+const TRUSTED_USER_ID_HEADER = 'x-scrimspec-user-id';
+
 // ============================================================================
 // Redis-based Rate Limiting (Production-Ready)
 // ============================================================================
@@ -44,6 +46,37 @@ import { Redis } from '@upstash/redis';
 // Uses REST API for edge compatibility
 let redis: Redis | null = null;
 let ratelimit: Ratelimit | null = null;
+
+type LocalRateLimitResult = {
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset: number;
+};
+
+const LOCAL_WINDOW_MS = 60_000;
+const LOCAL_LIMIT = 100;
+const localRateState = new Map<string, { count: number; reset: number }>();
+
+function localRateLimit(ip: string): LocalRateLimitResult {
+  const now = Date.now();
+  const current = localRateState.get(ip);
+
+  if (!current || current.reset <= now) {
+    const reset = now + LOCAL_WINDOW_MS;
+    localRateState.set(ip, { count: 1, reset });
+    return { success: true, limit: LOCAL_LIMIT, remaining: LOCAL_LIMIT - 1, reset };
+  }
+
+  current.count += 1;
+  const remaining = Math.max(0, LOCAL_LIMIT - current.count);
+  return {
+    success: current.count <= LOCAL_LIMIT,
+    limit: LOCAL_LIMIT,
+    remaining,
+    reset: current.reset,
+  };
+}
 
 if (process.env.UPSTASH_REDIS_URL && process.env.UPSTASH_REDIS_TOKEN) {
   try {
@@ -64,11 +97,11 @@ if (process.env.UPSTASH_REDIS_URL && process.env.UPSTASH_REDIS_TOKEN) {
     console.log('[Middleware] ✅ Upstash Redis rate limiting enabled');
   } catch (error) {
     console.error('[Middleware] ⚠️  Failed to initialize Upstash Redis:', error);
-    console.warn('[Middleware] Rate limiting will be disabled');
+    console.warn('[Middleware] Falling back to local in-memory rate limiting');
   }
 } else {
   console.warn('[Middleware] ⚠️  UPSTASH_REDIS_URL or UPSTASH_REDIS_TOKEN not set');
-  console.warn('[Middleware] Rate limiting will be disabled. Add credentials to enable.');
+  console.warn('[Middleware] Falling back to local in-memory rate limiting. Add Upstash credentials to enable distributed limits.');
 }
 
 export async function middleware(req: NextRequest) {
@@ -76,7 +109,8 @@ export async function middleware(req: NextRequest) {
   if (req.nextUrl.pathname.startsWith('/api/')) {
     // Only truly public endpoints (health checks, webhooks, etc.)
     // All other endpoints require authentication
-    const publicApiPaths = ['/api/health'];
+    const publicApiPaths = ['/api/health', '/api/webhooks/halu'];
+
     const isPublicApiPath = publicApiPaths.some(path => req.nextUrl.pathname.startsWith(path));
     
     if (isPublicApiPath) {
@@ -134,7 +168,58 @@ export async function middleware(req: NextRequest) {
       } catch (error) {
         // If rate limiting fails, log error but allow request to continue
         console.error('[Security] Rate limit check failed:', error);
-        console.warn('[Security] Allowing request to continue despite rate limit error');
+        console.warn('[Security] Falling back to local in-memory rate limiter');
+        const fallback = localRateLimit(ip);
+        limit = fallback.limit;
+        remaining = fallback.remaining;
+        reset = fallback.reset;
+        if (!fallback.success) {
+          return new NextResponse(
+            JSON.stringify({
+              error: 'Too many requests. Please try again later.',
+              code: 'RATE_LIMIT_EXCEEDED',
+              limit,
+              remaining: 0,
+              reset: new Date(reset).toISOString(),
+            }),
+            {
+              status: 429,
+              headers: {
+                'Content-Type': 'application/json',
+                'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+                'X-RateLimit-Limit': String(limit),
+                'X-RateLimit-Remaining': String(remaining),
+                'X-RateLimit-Reset': String(reset),
+              },
+            }
+          );
+        }
+      }
+    } else {
+      const fallback = localRateLimit(ip);
+      limit = fallback.limit;
+      remaining = fallback.remaining;
+      reset = fallback.reset;
+      if (!fallback.success) {
+        return new NextResponse(
+          JSON.stringify({
+            error: 'Too many requests. Please try again later.',
+            code: 'RATE_LIMIT_EXCEEDED',
+            limit,
+            remaining: 0,
+            reset: new Date(reset).toISOString(),
+          }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+              'X-RateLimit-Limit': String(limit),
+              'X-RateLimit-Remaining': String(remaining),
+              'X-RateLimit-Reset': String(reset),
+            },
+          }
+        );
       }
     }
 
@@ -151,10 +236,10 @@ export async function middleware(req: NextRequest) {
       }
     );
 
-    // Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
+    // Check if user is authenticated (getUser() validates token with Supabase Auth API)
+    const { data: { user }, error } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (error || !user) {
       // Log unauthorized access attempts for security monitoring
       console.warn(`[Security] Unauthorized API access attempt: ${req.nextUrl.pathname} from IP: ${ip}`);
 
@@ -176,15 +261,26 @@ export async function middleware(req: NextRequest) {
 
     // Log authenticated API requests in development
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[Auth] ✓ Authenticated request to: ${req.nextUrl.pathname} (user: ${session.user.email}) [Rate: ${remaining}/${limit}]`);
+      console.log(`[Auth] ✓ Authenticated request to: ${req.nextUrl.pathname} (user: ${user.email}) [Rate: ${remaining}/${limit}]`);
     }
 
     // Add security headers and rate limit info
-    const response = NextResponse.next();
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set(TRUSTED_USER_ID_HEADER, user.id);
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'DENY');
     response.headers.set('X-XSS-Protection', '1; mode=block');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    response.headers.set(
+      'Content-Security-Policy',
+      "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    );
 
     // Add rate limit headers to successful responses
     response.headers.set('X-RateLimit-Limit', String(limit));
@@ -212,10 +308,10 @@ export async function middleware(req: NextRequest) {
       }
     );
 
-    // Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
+    // Check if user is authenticated (getUser() validates token with Supabase Auth API)
+    const { data: { user }, error } = await supabase.auth.getUser();
     
-    if (!session) {
+    if (error || !user) {
       // Redirect to login page
       const redirectUrl = new URL('/login', req.url);
       redirectUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
@@ -231,7 +327,7 @@ export const config = {
     /*
      * Match all API routes except:
      * - health checks
-     * - webhooks (if you have them)
+     * - webhooks are validated by signature in their own routes
      */
     '/api/:path*',
     '/((?!_next/static|_next/image|favicon.ico|login|signup).*)',

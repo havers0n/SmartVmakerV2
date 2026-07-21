@@ -2,31 +2,36 @@
   "name": "@scrimspec/workers",
   "version": "0.1.0",
   "description": "Background workers for Scrimspec",
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsup src/index.ts --format cjs,esm --dts",
     "type-check": "tsc --noEmit",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "dev:ingest": "cross-env NODE_ENV=development tsx --watch src/ingest-worker.ts",
     "dev:enrich": "cross-env NODE_ENV=development tsx --watch src/enrichment-worker.ts",
     "dev:analysis": "cross-env NODE_ENV=development tsx --watch src/analysis-worker.ts",
     "dev:keyframe": "cross-env NODE_ENV=development tsx --watch src/keyframe-worker.ts",
     "dev:animation": "cross-env NODE_ENV=development tsx --watch src/animation-worker.ts",
+    "dev:cleanup": "tsx --watch src/cleanup-worker.ts",
     "test": "echo 'No tests yet' && exit 0",
-    "clean": "rm -rf dist"
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "@aec/logger": "workspace:*",
     "@aec/storage-client": "workspace:*",
-    "@scrimspec/db": "workspace:*",
     "@scrimspec/core-domain": "workspace:*",
+    "@scrimspec/hwar-core": "workspace:*",
+    "@scrimspec/db": "workspace:*",
     "@scrimspec/halu-client": "workspace:*",
     "dotenv": "^16.3.1",
     "p-retry": "^6.2.1"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
+    "@types/node": "^20.10.0",
+    "tsup": "^8.5.0",
     "tsx": "^4.7.0",
-    "@types/node": "^20.10.0"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.8"
   }
 }

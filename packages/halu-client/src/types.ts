@@ -102,6 +102,60 @@ export interface FirstLastFrameVideoRequest {
 }
 
 // ============================================================================
+// Image Generation Types
+// ============================================================================
+
+/**
+ * Aspect ratios for image generation
+ */
+export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '3:2' | '2:3' | '4:3' | '3:4' | '21:9' | '9:21';
+
+/**
+ * Response format for image generation
+ */
+export type ImageResponseFormat = 'url' | 'base64';
+
+/**
+ * Request payload for text-to-image generation
+ */
+export interface TextToImageRequest {
+  model: 'image-01';
+  prompt: string; // Detailed text description
+  aspect_ratio?: ImageAspectRatio; // Default: '16:9'
+  response_format?: ImageResponseFormat; // Default: 'url'
+  prompt_optimizer?: boolean; // Default: true
+}
+
+/**
+ * Request payload for image-to-image generation
+ */
+export interface ImageToImageRequest {
+  model: 'image-01';
+  prompt: string; // Modification instructions
+  image: string; // Source image URL or Data URL (Base64)
+  aspect_ratio?: ImageAspectRatio; // Default: '16:9'
+  response_format?: ImageResponseFormat; // Default: 'url'
+  prompt_optimizer?: boolean; // Default: true
+}
+
+/**
+ * Image data in response
+ */
+export interface ImageData {
+  url?: string; // When response_format is 'url'
+  image_base64?: string; // When response_format is 'base64'
+}
+
+/**
+ * Response from image generation
+ */
+export interface ImageGenerationResponse {
+  created: number; // Unix timestamp
+  data: ImageData[];
+  base_resp: BaseResponse;
+}
+
+// ============================================================================
 // Response Types
 // ============================================================================
 

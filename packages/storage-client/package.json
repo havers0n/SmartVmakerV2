@@ -11,19 +11,20 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist",
+    "clean": "rimraf dist",
     "test": "echo 'No tests yet' && exit 0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.504.0",
-    "@aws-sdk/s3-request-presigner": "^3.504.0",
-    "@aws-sdk/lib-storage": "^3.504.0"
+    "@aws-sdk/lib-storage": "^3.504.0",
+    "@aws-sdk/s3-request-presigner": "^3.504.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.3.3"
   }
 }

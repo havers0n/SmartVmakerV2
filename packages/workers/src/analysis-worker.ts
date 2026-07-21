@@ -1,456 +1,83 @@
+/**
+ * ANALYSIS WORKER - HWAR CORE EDITION
+ * 
+ * This worker uses the centralized @scrimspec/hwar-core package.
+ */
+
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Загружаем переменные из корневого .env файла
+// Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// Убедимся, что NODE_ENV установлен (cross-env должен это сделать, но проверим)
+// === ANTI-CRASH SHIELD ===
+process.on('uncaughtException', (err) => {
+  const msg = String(err);
+  if (msg.includes('ECONNRESET') || msg.includes('Connection terminated') || msg.includes('57P01')) {
+    console.warn('[System] DB Connection glitch intercepted. Staying alive.');
+    return;
+  }
+  console.error('[System] CRITICAL UNCAUGHT ERROR:', err);
+  process.exit(1);
+});
+
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
 
 import { createLogger } from '@aec/logger';
-import { retryFetch } from './utils/retry';
+import { getDrizzleClient } from '@scrimspec/db';
+import { createHwarCore, DefaultAiRouter } from '@scrimspec/hwar-core';
 
 const logger = createLogger({ name: 'analysis-worker' });
 
-logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized');
+logger.info({ nodeEnv: process.env.NODE_ENV }, 'Worker environment initialized (Core Mode)');
 
 if (process.env.DRIZZLE_DATABASE_URL) {
-  logger.info('Using DRIZZLE_DATABASE_URL (Pooler)');
-
-  // Remove sslmode parameter from the connection string to avoid conflict with Pool SSL options
   let databaseUrl = process.env.DRIZZLE_DATABASE_URL;
   if (databaseUrl && databaseUrl.includes('sslmode=')) {
     databaseUrl = databaseUrl.replace(/\?sslmode=[^&]*&?/, '?').replace(/&sslmode=[^&]*$/, '').replace(/&sslmode=[^&]*/, '');
-    databaseUrl = databaseUrl.replace(/\?$/, ''); // Remove trailing ? if no params left
+    databaseUrl = databaseUrl.replace(/\?$/, '');
   }
-
-  // Also update DRIZZLE_DATABASE_URL itself to ensure client.ts picks it up without sslmode
   process.env.DRIZZLE_DATABASE_URL = databaseUrl;
   process.env.DATABASE_URL = databaseUrl;
-
-  logger.info('Cleaned database URL (sslmode removed)');
 }
 
-import { getDrizzleClient, schema, sql } from '@scrimspec/db';
-import { eq } from 'drizzle-orm';
+async function main() {
+  logger.info('Starting Analysis Worker (HWAR Core)...');
 
-/**
- * Gemini API response interface
- */
-interface GeminiResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-      }>;
-    };
-    finishReason?: string;
-  }>;
-  error?: {
-    code: number;
-    message: string;
-    status: string;
-  };
-}
-
-/**
- * Expected structure of analysis result from Gemini
- */
-interface AnalysisResult {
-  hook_text: string;
-  emotion_tags: string[];
-  beats: Array<{
-    time_s: number;
-    desc: string;
-    emotion: string;
-  }>;
-  payoff: string;
-  moral: string;
-}
-
-/**
- * Asserts that the configured Gemini model exists and is accessible
- * This is a fail-fast check to prevent the worker from starting with invalid configuration
- */
-async function assertModelExists(): Promise<void> {
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  const geminiModel = process.env.GEMINI_MODEL;
-  
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is not set');
-  }
-  
-  if (!geminiModel) {
-    throw new Error('GEMINI_MODEL environment variable is not set');
-  }
-
-  const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`;
-
-  try {
-    // Wrap Gemini API call with retry logic
-    const modelsResponse = await retryFetch(
-      async () => {
-        const response = await fetch(modelsUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to fetch models: ${response.status} ${response.statusText} - ${errorText}`);
-        }
-
-        return response.json();
-      },
-      logger,
-      { retries: 3 }
-    );
-    const models = modelsResponse.models || [];
-    
-    const modelExists = models.some((model: any) => model.name && model.name.endsWith(`/${geminiModel}`));
-    
-    if (!modelExists) {
-      throw new Error(`Configured GEMINI_MODEL '${geminiModel}' is not available in the list of accessible models`);
-    }
-
-    logger.info({ model: geminiModel }, 'Verified Gemini model is accessible');
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Model validation failed: ${error.message}`);
-    }
-    throw new Error('Model validation failed due to unknown error');
-  }
-}
-
-/**
- * Извлекает JSON из текста, даже если он обернут в Markdown блоки
- *
- * Примеры поддерживаемых форматов:
- * - Простой JSON: {"key": "value"}
- * - Markdown блок: ```json\n{"key": "value"}\n```
- * - Markdown блок без языка: ```\n{"key": "value"}\n```
- *
- * @param text Text that may contain JSON
- * @returns Extracted JSON string
- */
-function extractJsonFromText(text: string): string {
-  // Попробуем найти JSON в markdown блоке ```json ... ```
-  const markdownJsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (markdownJsonMatch) {
-    return markdownJsonMatch[1].trim();
-  }
-
-  // Попробуем найти JSON напрямую (ищем { ... })
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return jsonMatch[0].trim();
-  }
-
-  // Если ничего не нашли, возвращаем исходный текст
-  return text.trim();
-}
-
-/**
- * Обрабатывает одну задачу анализа
- */
-async function processAnalysisJob() {
   const db = getDrizzleClient();
 
-  // Step 1: Атомарный захват задачи с использованием транзакции и FOR UPDATE SKIP LOCKED
-  const job = await db.transaction(async (tx) => {
-    // Используем сырой SQL для FOR UPDATE SKIP LOCKED
-    const result = await tx.execute(
-      sql`
-        SELECT * FROM jobs.analysis_job_queue
-        WHERE status = 'pending'
-        ORDER BY created_at ASC
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-      `
-    );
-
-    if (!result.rows || result.rows.length === 0) {
-      return null;
-    }
-
-    const selectedJob = result.rows[0] as any;
-
-    // Немедленно обновляем статус на 'processing' внутри той же транзакции
-    await tx
-      .update(schema.analysisJobQueue)
-      .set({
-        status: 'processing' as any,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.analysisJobQueue.id} = ${selectedJob.id}`);
-
-    return selectedJob;
+  const aiRouter = new DefaultAiRouter({
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    geminiModel: process.env.GEMINI_MODEL,
+    db,
   });
 
-  if (!job) {
-    // Нет задач для обработки
-    return null;
-  }
-
-  try {
-    logger.info({ jobId: job.id, videoId: job.video_id }, 'Processing job');
-
-    // Step 2: Двойная проверка - проверяем, не был ли уже проанализирован этот видео
-    const existingAnalysis = await db
-      .select()
-      .from(schema.analysisResults)
-      .where(eq(schema.analysisResults.videoId, job.video_id))
-      .limit(1);
-
-    if (existingAnalysis.length > 0) {
-      logger.info({ videoId: job.video_id }, 'Video already analyzed, skipping');
-
-      // Помечаем задачу как завершенную (дубликат)
-      await db
-        .update(schema.analysisJobQueue)
-        .set({
-          status: 'completed' as any,
-          updatedAt: new Date() as any,
-        })
-        .where(sql`${schema.analysisJobQueue.id} = ${job.id}`);
-
-      return job.id;
-    }
-
-    // Step 3: Подготовка данных - получаем URL видео
-    const videoData = await db
-      .select({
-        url: schema.youtubeVideos.url,
-        title: schema.youtubeVideos.title,
-        youtubeId: schema.youtubeVideos.youtubeId,
-      })
-      .from(schema.youtubeVideos)
-      .where(eq(schema.youtubeVideos.id, job.video_id))
-      .limit(1);
-
-    if (videoData.length === 0) {
-      throw new Error(`Video not found: ${job.video_id}`);
-    }
-
-    const video = videoData[0];
-    logger.info({ title: video.title, youtubeId: video.youtubeId }, 'Analyzing video');
-
-    // Step 4: Формирование запроса к Gemini
-    const prompt = `Analyze this YouTube Shorts video and output ONLY JSON with keys: hook_text, emotion_tags (5 strings), beats (array of {time_s:number, desc, emotion}), payoff, moral. JSON only, no extra text. Video: ${video.url}`;
-
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const geminiModel = process.env.GEMINI_MODEL;
-    
-    if (!geminiApiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is not set');
-    }
-    
-    if (!geminiModel) {
-      throw new Error('GEMINI_MODEL environment variable is not set');
-    }
-
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
-
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        responseMimeType: "application/json",
-        // Adding responseSchema to enforce strict JSON structure
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            hook_text: { type: "STRING" },
-            emotion_tags: { type: "ARRAY", items: { type: "STRING" } },
-            beats: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  time_s: { type: "NUMBER" },
-                  desc: { type: "STRING" },
-                  emotion: { type: "STRING" }
-                },
-                required: ["time_s", "desc", "emotion"]
-              }
-            },
-            payoff: { type: "STRING" },
-            moral: { type: "STRING" }
-          },
-          required: ["hook_text", "emotion_tags", "beats", "payoff", "moral"]
-        }
-      },
-    };
-
-    logger.debug('Sending request to Gemini API');
-
-    // Step 5: Выполнение запроса к Gemini с retry логикой
-    const geminiResponse: GeminiResponse = await retryFetch(
-      async () => {
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Gemini API error: ${response.status} ${response.statusText} - ${errorText}`
-          );
-        }
-
-        return response.json();
-      },
-      logger,
-      { retries: 3 }
-    );
-
-    // Проверяем на ошибки в ответе
-    if (geminiResponse.error) {
-      throw new Error(
-        `Gemini API returned error: ${geminiResponse.error.message} (${geminiResponse.error.status})`
-      );
-    }
-
-    // Извлекаем текст ответа
-    const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!responseText) {
-      throw new Error('Gemini API returned empty response');
-    }
-
-    logger.debug('Received response from Gemini API');
-
-    // Step 6: Парсинг ответа - теперь Gemini должен возвращать чистый JSON
-    let analysisResult: AnalysisResult;
-    try {
-      // Прямая попытка парсинга JSON (основной путь)
-      analysisResult = JSON.parse(responseText);
-    } catch (parseError) {
-      // Только если прямой парсинг не удался, используем страховочный extractJsonFromText
-      logger.warn('Direct JSON parsing failed, trying fallback extraction method');
-      const jsonText = extractJsonFromText(responseText);
-      try {
-        analysisResult = JSON.parse(jsonText);
-      } catch (fallbackError) {
-        logger.error({ jsonText }, 'Failed to parse JSON with fallback method');
-        throw new Error(`Failed to parse Gemini response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-      }
-    }
-
-    // Валидация структуры ответа
-    if (!analysisResult.hook_text || !Array.isArray(analysisResult.emotion_tags)) {
-      throw new Error('Invalid analysis result structure: missing required fields');
-    }
-
-    logger.info({
-      hookPreview: analysisResult.hook_text.substring(0, 50),
-      emotions: analysisResult.emotion_tags.join(', '),
-      beatsCount: analysisResult.beats?.length || 0
-    }, 'Successfully parsed analysis result');
-
-    // Step 7: Сохранение результата в базу данных
-    await db.insert(schema.analysisResults).values({
-      videoId: job.video_id,
-      analyzer: job.analyzer || 'gemini-pro',
-      analysisUrl: video.url,
-      aesBreakdown: analysisResult as any, // Сохраняем весь результат в JSONB поле
-      emotionalTags: analysisResult.emotion_tags as any,
-      createdAt: new Date() as any,
-      updatedAt: new Date() as any,
-    } as any);
-
-    logger.debug('Saved analysis result to database');
-
-    // Step 8: Обновление статуса задачи на 'completed'
-    await db
-      .update(schema.analysisJobQueue)
-      .set({
-        status: 'completed' as any,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.analysisJobQueue.id} = ${job.id}`);
-
-    logger.info({ jobId: job.id }, 'Job completed successfully');
-
-    return job.id;
-
-  } catch (error) {
-    // Step 9: Обработка ошибок
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    logger.error({ err: error, jobId: job.id }, 'Job failed');
-
-    // Обновляем статус задачи на 'failed' с сообщением об ошибке
-    await db
-      .update(schema.analysisJobQueue)
-      .set({
-        status: 'failed' as any,
-        error: errorMessage,
-        errorMessage: errorMessage,
-        updatedAt: new Date() as any,
-      })
-      .where(sql`${schema.analysisJobQueue.id} = ${job.id}`);
-
-    return null;
-  }
-}
-
-/**
- * Основной цикл воркера
- */
-async function main() {
-  logger.info('Starting worker');
-  logger.info({
-    geminiApiKey: !!process.env.GEMINI_API_KEY,
-    databaseUrl: !!process.env.DATABASE_URL
-  }, 'Environment configuration');
-  logger.info('Worker analyzes videos using Gemini AI, checks for duplicates, and saves results to analysis_results table');
-
-  // Fail-fast model validation
-  try {
-    await assertModelExists();
-  } catch (error) {
-    logger.fatal({ err: error }, 'Failed to validate Gemini model configuration');
-    process.exit(1);
-  }
+  const core = createHwarCore({
+    db,
+    logger,
+    aiRouter,
+    storage: {} // Placeholder
+  });
 
   while (true) {
     try {
-      const jobId = await processAnalysisJob();
+      // Run a tick of the analysis subsystem
+      // This will fetch one pending job, process it, and mark it completed/failed
+      await core.analysis.runTick();
 
-      if (!jobId) {
-        // Нет задач, ждем 30 секунд
-        logger.debug('No pending jobs, waiting 30 seconds');
-        await new Promise(resolve => setTimeout(resolve, 30000));
-      } else {
-        // Задача обработана, небольшая пауза перед следующей
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      // Small delay to prevent tight loop if queue is empty
+      // Ideally runTick returns whether it did work, but for now we just sleep
+      await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (error) {
-      logger.error({ err: error }, 'Unexpected error in main loop');
-      // В случае критической ошибки, ждем перед повтором
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      logger.fatal({ err: error }, 'CRITICAL WORKER CRASH. Restarting loop in 30s...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
     }
   }
 }
 
-// Graceful shutdown
+// Signal handlers
 process.on('SIGINT', () => {
   logger.info('Received SIGINT, shutting down gracefully');
   process.exit(0);
@@ -461,8 +88,10 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// Start the worker
-main().catch((error) => {
-  logger.fatal({ err: error }, 'Fatal error');
-  process.exit(1);
-});
+// Start the worker (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  main().catch((error) => {
+    logger.fatal({ err: error }, 'Fatal error');
+    process.exit(1);
+  });
+}

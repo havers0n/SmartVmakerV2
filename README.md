@@ -9,8 +9,9 @@ scrimspec/
 ├── apps/
 │   └── dashboard/          ← Next.js UI приложение
 ├── packages/
-│   ├── orchestrator/       ← MiniMax API backend (TypeScript)
 │   ├── db/                 ← Drizzle ORM слой
+│   ├── hwar-core/          ← Core AI/domain logic
+│   ├── workers/            ← Background workers
 │   └── shared-types/       ← Общие TypeScript типы
 └── tools/
     └── yt-orchestrator-python/  ← Python аналитика (YouTube, Gemini)
@@ -21,7 +22,7 @@ scrimspec/
 ### Требования
 
 - Node.js 18+
-- pnpm 8+
+- pnpm 7.33.7
 - PostgreSQL / Supabase (опционально)
 
 ### Установка
@@ -45,9 +46,21 @@ pnpm dev
 | `pnpm build` | Собрать все пакеты |
 | `pnpm lint` | Проверить код (ESLint) |
 | `pnpm format` | Отформатировать код (Prettier) |
-| `pnpm type-check` | Проверить типы (TypeScript) |
+| `pnpm type-check` | Проверить типы (TypeScript) **только для `packages/**`** (зелёный гейт монорепо) |
+| `pnpm type-check:all` | Проверить типы (TypeScript) **для всех workspace**, включая `apps/dashboard` (может быть красным) |
 | `pnpm test` | Запустить тесты |
 | `pnpm clean` | Очистить всех build артефакты |
+
+## 🧰 pnpm reporter и проброс аргументов
+
+Если вам нужен `--reporter=append-only`, это **флаг pnpm**, его нельзя передавать “в хвост” скрипта (иначе он уедет в `tsc` и даст `TS5023`).
+
+Правильно:
+
+```bash
+pnpm --reporter=append-only run type-check
+pnpm --reporter=append-only run type-check:all
+```
 
 ## 📁 Пакеты
 
@@ -80,21 +93,8 @@ const db = getDrizzleClient();
 const task = await createTask(db, { id: '123', kind: 't2v', status: 'processing' });
 ```
 
-### `packages/orchestrator`
-Backend на Express + MiniMax API. Основной сервис генерации видео.
-
-**Endpoints:**
-- `POST /api/generate-text-video` — Text-to-Video
-- `POST /api/generate-image-video` — Image-to-Video
-- `POST /api/generate-image` — Text-to-Image
-- `POST /api/t2a_async_v2` — Text-to-Audio
-- `POST /api/voice-clone` — Voice cloning
-- Более 18 endpoints...
-
-```bash
-cd packages/orchestrator
-pnpm dev  # Запустить на http://localhost:8000
-```
+### `packages/hwar-core` + `packages/workers`
+Ядро AI-логики (analysis/keyframes/animation) и фоновые воркеры очередей.
 
 ### `apps/dashboard`
 Next.js UI для управления генерациями и просмотра истории.
@@ -135,12 +135,47 @@ PORT=8000
 NODE_ENV=development
 ```
 
-## 📚 Документация
+## Evolution
 
-- [Architecture Guide](./docs/ARCHITECTURE.md) — Архитектура проекта
+ScrimSpec is the result of a three-stage evolution:
+
+1. **yt-research** → research & dataset generation
+   - Extracting narrative primitives from viral videos
+   - Creating data contracts (`yt_samples.ndjson`, `master_frames.ndjson`)
+
+2. **minimax** → integration prototype (validated gateway)
+   - Validating MiniMax Hailuo API integration end-to-end
+   - Stabilizing contracts and operational patterns
+
+3. **scrimspec** → production rebuild (TypeScript + scalable architecture)
+   - Job queue workers with atomic task capture
+   - Modular orchestration (HWAR Core)
+   - Schema-first approach to DB
+
+For more details, see [docs/EVOLUTION.md](./docs/EVOLUTION.md) | [docs/EVOLUTION_ru.md](./docs/EVOLUTION_ru.md).
+
+## Data Sources
+
+ScrimSpec uses data from the following sources:
+
+- **[yt-research](../YT)** — semantic analysis & datasets
+  - `yt_samples.ndjson` — viral metrics
+  - `master_frames.ndjson` — frame-by-frame analysis
+
+- **[minimax](../minimax)** — integration & generation layer
+  - `yt_samples` table — viral metrics in DB
+  - Validated patterns for working with MiniMax API
+
+For more information about tables and data flows, see [docs/DATA_CONTRACTS.md](./docs/DATA_CONTRACTS.md) | [docs/DATA_CONTRACTS_ru.md](./docs/DATA_CONTRACTS_ru.md).
+
+## 📚 Documentation
+
+- [Architecture Guide](./docs/ARCHITECTURE.md) — Project architecture
+- [Evolution](./docs/EVOLUTION.md) | [Evolution (RU)](./docs/EVOLUTION_ru.md) — System evolution (Stage 1-3)
+- [Data Contracts](./docs/DATA_CONTRACTS.md) | [Data Contracts (RU)](./docs/DATA_CONTRACTS_ru.md) — Data contracts and DB tables
 - [API Documentation](./packages/orchestrator/README.md) — API endpoints
-- [Database Schema](./packages/db/README.md) — Структура БД
-- [Type Definitions](./packages/shared-types/src/index.ts) — Все типы
+- [Database Schema](./packages/db/README.md) — Database structure
+- [Type Definitions](./packages/shared-types/src/index.ts) — All types
 
 ## 🏗️ Архитектура
 

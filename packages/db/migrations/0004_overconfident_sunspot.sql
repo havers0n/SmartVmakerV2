@@ -1,0 +1,1 @@
+ALTER TABLE "jobs"."keyframe_job_queue" ADD COLUMN "model_id" text;

@@ -10,27 +10,51 @@ import {
   updateCharacter,
   deleteCharacter,
   createCharacterSchema,
-  updateCharacterSchema,
-  getByIdSchema,
-  deleteSchema,
 } from './characters';
 
 // Mock the database module
+var mockDb: any;
+var selectChain: any;
+var insertChain: any;
+var updateChain: any;
+var deleteChain: any;
+
 vi.mock('@/shared/lib/db', () => {
-  const mockDb = {
-    insert: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
+  selectChain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    offset: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue([]),
+    then: (onfulfilled?: any, onrejected?: any) => selectChain.execute().then(onfulfilled, onrejected),
+  };
+
+  insertChain = {
     values: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  updateChain = {
     set: vi.fn().mockReturnThis(),
-    returning: vi.fn(),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
   };
-  return {
-    db: mockDb,
+
+  deleteChain = {
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
   };
+
+  mockDb = {
+    select: vi.fn(() => selectChain),
+    insert: vi.fn(() => insertChain),
+    update: vi.fn(() => updateChain),
+    delete: vi.fn(() => deleteChain),
+    transaction: vi.fn(),
+  };
+
+  return { db: mockDb };
 });
 
 // Mock schema tables
@@ -114,7 +138,6 @@ describe('Characters Handlers', () => {
 
   describe('createCharacter', () => {
     it('should create character with all fields', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: '550e8400-e29b-41d4-a716-446655440010',
         name: 'Fluffy Corgi',
@@ -128,9 +151,7 @@ describe('Characters Handlers', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      insertChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         name: 'Fluffy Corgi',
@@ -145,8 +166,8 @@ describe('Characters Handlers', () => {
       const result = await createCharacter(payload);
 
       expect(result).toEqual(mockCharacter);
-      expect(db.insert).toHaveBeenCalled();
-      expect(db.values).toHaveBeenCalledWith(
+      expect(mockDb.insert).toHaveBeenCalled();
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Fluffy Corgi',
           description: 'A cute fluffy corgi puppy',
@@ -157,7 +178,6 @@ describe('Characters Handlers', () => {
     });
 
     it('should create character with minimal fields', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: '550e8400-e29b-41d4-a716-446655440011',
         name: 'Simple Character',
@@ -169,9 +189,7 @@ describe('Characters Handlers', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      insertChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         name: 'Simple Character',
@@ -180,7 +198,7 @@ describe('Characters Handlers', () => {
       const result = await createCharacter(payload);
 
       expect(result).toEqual(mockCharacter);
-      expect(db.values).toHaveBeenCalledWith(
+      expect(insertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Simple Character',
           stylePresets: {},
@@ -197,11 +215,7 @@ describe('Characters Handlers', () => {
     });
 
     it('should propagate database errors', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockRejectedValue(new Error('Database error'));
+      insertChain.returning.mockRejectedValueOnce(new Error('Database error'));
 
       const payload = {
         name: 'Test Character',
@@ -213,7 +227,6 @@ describe('Characters Handlers', () => {
 
   describe('listCharacters', () => {
     it('should list all characters', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacters = [
         {
           id: '550e8400-e29b-41d4-a716-446655440012',
@@ -227,21 +240,17 @@ describe('Characters Handlers', () => {
         },
       ];
 
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockResolvedValue(mockCharacters);
+      selectChain.execute.mockResolvedValueOnce(mockCharacters);
 
       const result = await listCharacters();
 
       expect(result).toEqual(mockCharacters);
-      expect(db.select).toHaveBeenCalled();
-      expect(db.from).toHaveBeenCalled();
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(selectChain.from).toHaveBeenCalled();
     });
 
     it('should return empty array when no characters exist', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockResolvedValue([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const result = await listCharacters();
 
@@ -249,10 +258,7 @@ describe('Characters Handlers', () => {
     });
 
     it('should propagate database errors', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockRejectedValue(new Error('Database error'));
+      selectChain.execute.mockRejectedValueOnce(new Error('Database error'));
 
       await expect(listCharacters()).rejects.toThrow('Database error');
     });
@@ -260,7 +266,6 @@ describe('Characters Handlers', () => {
 
   describe('getCharacterById', () => {
     it('should get character by ID', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: '550e8400-e29b-41d4-a716-446655440014',
         name: 'Character 1',
@@ -269,9 +274,7 @@ describe('Characters Handlers', () => {
         referenceImageUrls: ['https://example.com/image.jpg'],
       };
 
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockReturnThis();
-      (db.where as any).mockResolvedValue([mockCharacter]);
+      selectChain.execute.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440014',
@@ -280,16 +283,12 @@ describe('Characters Handlers', () => {
       const result = await getCharacterById(payload);
 
       expect(result).toEqual(mockCharacter);
-      expect(db.select).toHaveBeenCalled();
-      expect(db.where).toHaveBeenCalled();
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalled();
     });
 
     it('should throw error when character not found', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockReturnThis();
-      (db.where as any).mockResolvedValue([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440015',
@@ -309,7 +308,6 @@ describe('Characters Handlers', () => {
 
   describe('updateCharacter', () => {
     it('should update character with all fields', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: '550e8400-e29b-41d4-a716-446655440016',
         name: 'Updated Character',
@@ -319,10 +317,7 @@ describe('Characters Handlers', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      (db.update as any).mockReturnThis();
-      (db.set as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      updateChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440016',
@@ -335,8 +330,8 @@ describe('Characters Handlers', () => {
       const result = await updateCharacter(payload);
 
       expect(result).toEqual(mockCharacter);
-      expect(db.update).toHaveBeenCalled();
-      expect(db.set).toHaveBeenCalledWith(
+      expect(mockDb.update).toHaveBeenCalled();
+      expect(updateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Updated Character',
           description: 'Updated description',
@@ -346,7 +341,6 @@ describe('Characters Handlers', () => {
     });
 
     it('should update only specified fields', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: '550e8400-e29b-41d4-a716-446655440017',
         name: 'Updated Name',
@@ -354,10 +348,7 @@ describe('Characters Handlers', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      (db.update as any).mockReturnThis();
-      (db.set as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      updateChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440017',
@@ -367,7 +358,7 @@ describe('Characters Handlers', () => {
       const result = await updateCharacter(payload);
 
       expect(result).toEqual(mockCharacter);
-      expect(db.set).toHaveBeenCalledWith(
+      expect(updateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Updated Name',
           updatedAt: expect.any(String),
@@ -376,12 +367,7 @@ describe('Characters Handlers', () => {
     });
 
     it('should throw error when character not found', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.update as any).mockReturnThis();
-      (db.set as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([]);
+      updateChain.returning.mockResolvedValueOnce([]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440018',
@@ -403,15 +389,12 @@ describe('Characters Handlers', () => {
 
   describe('deleteCharacter', () => {
     it('should delete character', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockDeleted = {
         id: '550e8400-e29b-41d4-a716-446655440021',
         name: 'Deleted Character',
       };
 
-      (db.delete as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockDeleted]);
+      deleteChain.returning.mockResolvedValueOnce([mockDeleted]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -423,16 +406,12 @@ describe('Characters Handlers', () => {
         message: 'Character deleted successfully',
         id: mockDeleted.id,
       });
-      expect(db.delete).toHaveBeenCalled();
-      expect(db.where).toHaveBeenCalled();
+      expect(mockDb.delete).toHaveBeenCalled();
+      expect(deleteChain.where).toHaveBeenCalled();
     });
 
     it('should throw error when character not found', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.delete as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([]);
+      deleteChain.returning.mockResolvedValueOnce([]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440022',
@@ -452,7 +431,6 @@ describe('Characters Handlers', () => {
 
   describe('Complex Scenarios', () => {
     it('should handle character with multiple reference images', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockCharacter = {
         id: 'character-uuid-1',
         name: 'Multi-Ref Character',
@@ -463,9 +441,7 @@ describe('Characters Handlers', () => {
         ],
       };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      insertChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         name: 'Multi-Ref Character',
@@ -482,7 +458,6 @@ describe('Characters Handlers', () => {
     });
 
     it('should handle complex stylePresets object', async () => {
-      const { db } = await import('@/shared/lib/db');
       const complexStylePresets = {
         base_prompt: 'detailed character, high quality',
         negative_prompt: 'blurry, low quality',
@@ -500,9 +475,7 @@ describe('Characters Handlers', () => {
         stylePresets: complexStylePresets,
       };
 
-      (db.insert as any).mockReturnThis();
-      (db.values as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockCharacter]);
+      insertChain.returning.mockResolvedValueOnce([mockCharacter]);
 
       const payload = {
         name: 'Complex Character',

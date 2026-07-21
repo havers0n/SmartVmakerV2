@@ -10,29 +10,52 @@ import {
   updateStoryTemplate,
   deleteStoryTemplate,
   createStoryTemplateSchema,
-  updateStoryTemplateSchema,
-  getByIdSchema,
-  deleteSchema,
 } from './story-templates';
 
 // Mock the database module
+var mockDb: any;
+var selectChain: any;
+var insertChain: any;
+var updateChain: any;
+var deleteChain: any;
+
 vi.mock('@/shared/lib/db', () => {
-  const mockDb = {
-    insert: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
+  // SELECT chain is thenable: `await db.select().from(...)` works.
+  selectChain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    returning: vi.fn(),
     orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    offset: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue([]),
+    then: (onfulfilled?: any, onrejected?: any) => selectChain.execute().then(onfulfilled, onrejected),
+  };
+
+  insertChain = {
+    values: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  updateChain = {
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  deleteChain = {
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  mockDb = {
+    select: vi.fn(() => selectChain),
+    insert: vi.fn(() => insertChain),
+    update: vi.fn(() => updateChain),
+    delete: vi.fn(() => deleteChain),
     transaction: vi.fn(),
   };
-  return {
-    db: mockDb,
-  };
+
+  return { db: mockDb };
 });
 
 // Mock schema tables
@@ -200,7 +223,6 @@ describe('Story Templates Handlers', () => {
 
   describe('listStoryTemplates', () => {
     it('should list all story templates', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockTemplates = [
         {
           id: 'template-uuid-1',
@@ -214,21 +236,17 @@ describe('Story Templates Handlers', () => {
         },
       ];
 
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockResolvedValue(mockTemplates);
+      selectChain.execute.mockResolvedValueOnce(mockTemplates);
 
       const result = await listStoryTemplates();
 
       expect(result).toEqual(mockTemplates);
-      expect(db.select).toHaveBeenCalled();
-      expect(db.from).toHaveBeenCalled();
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(selectChain.from).toHaveBeenCalled();
     });
 
     it('should return empty array when no templates exist', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockResolvedValue([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const result = await listStoryTemplates();
 
@@ -238,7 +256,6 @@ describe('Story Templates Handlers', () => {
 
   describe('getStoryTemplateById', () => {
     it('should get template with beats by ID', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockTemplate = {
         id: '550e8400-e29b-41d4-a716-446655440000',
         name: 'Template 1',
@@ -256,12 +273,9 @@ describe('Story Templates Handlers', () => {
         },
       ];
 
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockReturnThis();
-      (db.where as any)
+      selectChain.execute
         .mockResolvedValueOnce([mockTemplate])
-        .mockReturnThis();
-      (db.orderBy as any).mockResolvedValueOnce(mockBeats);
+        .mockResolvedValueOnce(mockBeats);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440000',
@@ -276,11 +290,7 @@ describe('Story Templates Handlers', () => {
     });
 
     it('should throw error when template not found', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.select as any).mockReturnThis();
-      (db.from as any).mockReturnThis();
-      (db.where as any).mockResolvedValue([]);
+      selectChain.execute.mockResolvedValueOnce([]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440002',
@@ -440,15 +450,12 @@ describe('Story Templates Handlers', () => {
 
   describe('deleteStoryTemplate', () => {
     it('should delete story template', async () => {
-      const { db } = await import('@/shared/lib/db');
       const mockDeleted = {
         id: '550e8400-e29b-41d4-a716-446655440008',
         name: 'Deleted Template',
       };
 
-      (db.delete as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([mockDeleted]);
+      deleteChain.returning.mockResolvedValueOnce([mockDeleted]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440008',
@@ -463,11 +470,7 @@ describe('Story Templates Handlers', () => {
     });
 
     it('should throw error when template not found', async () => {
-      const { db } = await import('@/shared/lib/db');
-
-      (db.delete as any).mockReturnThis();
-      (db.where as any).mockReturnThis();
-      (db.returning as any).mockResolvedValue([]);
+      deleteChain.returning.mockResolvedValueOnce([]);
 
       const payload = {
         id: '550e8400-e29b-41d4-a716-446655440009',

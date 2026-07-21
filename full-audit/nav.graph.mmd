@@ -1,0 +1,50 @@
+graph TD
+    Start([User Entry])
+
+    Start --> Login[/login<br/>Login Page]
+    Start --> Signup[/signup<br/>Sign Up Page]
+    Start --> Home[/<br/>Home Dashboard]
+
+    Login --> Home
+    Signup --> Home
+
+    Home --> Ingest[/ingest<br/>Video Ingestion]
+    Home --> Analysis[/analysis<br/>Video Analysis]
+    Home --> HwarHub[/hwar<br/>HWAR Hub]
+    Home --> Generation[/generation<br/>Generation Page]
+
+    HwarHub --> Create[/hwar/create<br/>Projects List]
+    HwarHub --> Factory[/hwar/factory<br/>Factory Dashboard]
+    HwarHub --> Library[/hwar/library<br/>Library Hub]
+
+    Create --> NewProject[/hwar/create/new<br/>New Project Wizard]
+    Create --> ProjectDetail[/hwar/create/[id]<br/>Project Detail]
+
+    NewProject -->|Step 1| ProjectDetails[Project Details<br/>Title, Ratio, Language, Models]
+    NewProject -->|Step 2| ContentSource[Content Source<br/>Prompt/Preset/Trends]
+    NewProject -->|Step 3| Review[Review & Generate]
+    Review -->|Submit| ProjectDetail
+
+    ProjectDetail -->|Select Scenario| ScenarioSelection[Scenario Selection]
+    ScenarioSelection -->|Generate Keyframes| KeyframeGeneration[Keyframe Generation]
+    KeyframeGeneration -->|Poll Status| KeyframePreview[Keyframe Preview]
+
+    Factory --> Harvests[/hwar/factory/harvests<br/>Harvests Management]
+    Factory --> FactoryAnalysis[/hwar/factory/analysis<br/>Analysis Queue]
+    Factory --> Queues[/hwar/factory/queues<br/>Job Queues]
+    Factory --> Workers[/hwar/factory/workers<br/>Worker Status]
+    Factory --> Batches[/hwar/factory/batches<br/>Batch Jobs]
+    Factory --> Analytics[/hwar/factory/analytics<br/>Analytics & Costs]
+    Factory --> Settings[/hwar/factory/settings<br/>Factory Settings]
+
+    Library --> Presets[/hwar/library/presets<br/>Story Presets]
+    Library --> Characters[/hwar/library/characters<br/>Characters]
+    Library --> Templates[/hwar/library/templates<br/>Templates]
+    Library --> Datasets[/hwar/library/datasets<br/>Datasets]
+
+    style Home fill:#e1f5ff
+    style HwarHub fill:#fff3e0
+    style Create fill:#f3e5f5
+    style Factory fill:#e8f5e9
+    style Library fill:#fce4ec
+    style ProjectDetail fill:#fff9c4

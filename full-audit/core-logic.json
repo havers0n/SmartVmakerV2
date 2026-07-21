@@ -1,0 +1,304 @@
+{
+  "domains": [
+    {
+      "name": "Video Generation (HWAR)",
+      "description": "Core domain for AI-powered video generation using AES (Attention-Emotion-Solution) framework",
+      "services": [
+        {
+          "name": "Scenario Generation Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+          "function": "generateScenariosWithMiniMax",
+          "responsibility": "Generate multiple scenario concepts using AI with function calling",
+          "inputs": ["source (prompt/preset/trends)", "prompt", "preset", "trend", "ratio", "lang"],
+          "outputs": ["Array of scenarios with title, description, AES score, hook strength, emotional curve, scenes"],
+          "externalDeps": ["MiniMax-M2 API"],
+          "businessRules": [
+            "Must generate 3-5 scenario concepts per request",
+            "Each scenario must follow AES framework: HOOK → BUILD → PAYOFF → RESOLUTION",
+            "Total duration should be 15-20 seconds per scenario",
+            "AES scores must reflect viral potential (0-100)",
+            "Hook strength must reflect immediate engagement (0-100)",
+            "If MINIMAX_API_KEY not set, return mock scenarios for development"
+          ]
+        },
+        {
+          "name": "Keyframe Generation Orchestration",
+          "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+          "function": "generateKeyframes",
+          "responsibility": "Create jobs for generating first and last frame of each scene",
+          "inputs": ["projectId", "selectedScenarioIndex"],
+          "outputs": ["Job count", "Asset records", "Job queue entries"],
+          "businessRules": [
+            "Must create 2 assets per scene (first frame, last frame)",
+            "Prompts must include scene description, phase, and aspect ratio",
+            "Must include character information if available in project meta",
+            "Update project status to 'processing' after job creation",
+            "Store keyframeGenerationStartedAt timestamp in project meta"
+          ]
+        },
+        {
+          "name": "Animation Generation Orchestration",
+          "file": "apps/dashboard/src/app/api/actions/handlers/generation.ts",
+          "function": "startAnimation",
+          "responsibility": "Create jobs for generating videos from keyframe pairs",
+          "inputs": ["projectId"],
+          "outputs": ["Job count", "Animation job queue entries"],
+          "businessRules": [
+            "All keyframes must have status='completed' before animation can start",
+            "Must verify first/last frame pairs exist for all scenes",
+            "Scene description must include camera commands if available",
+            "Update project status to 'processing' after job creation",
+            "Store animationStartedAt timestamp in project meta"
+          ],
+          "prerequisites": ["All keyframe jobs completed successfully"]
+        }
+      ],
+      "workflows": [
+        {
+          "name": "HWAR Create Flow (Complete Pipeline)",
+          "steps": [
+            {
+              "step": 1,
+              "name": "Project Creation",
+              "trigger": "User submits new project form",
+              "handler": "generation.startProject action",
+              "process": [
+                "Validate project details (title, ratio, language, AI models)",
+                "Resolve AI model IDs (use provided or fetch defaults)",
+                "Fetch additional context if needed (preset/trend data)",
+                "Call MiniMax-M2 with function calling for scenario generation",
+                "Insert project into database with scenarios in meta field"
+              ],
+              "output": "Project ID + generated scenarios",
+              "nextStep": "Scenario Selection"
+            },
+            {
+              "step": 2,
+              "name": "Scenario Selection",
+              "trigger": "User navigates to project detail page",
+              "page": "/hwar/create/[project_id]",
+              "process": [
+                "Display all generated scenarios with AES scores",
+                "User selects preferred scenario",
+                "User clicks 'Generate Keyframes' button"
+              ],
+              "output": "Selected scenario index",
+              "nextStep": "Keyframe Generation"
+            },
+            {
+              "step": 3,
+              "name": "Keyframe Generation",
+              "trigger": "User clicks 'Generate Keyframes'",
+              "handler": "generation.generateKeyframes action",
+              "process": [
+                "Create asset records for first/last frames per scene",
+                "Create keyframe_job_queue entries with prompts",
+                "Update project status and meta"
+              ],
+              "output": "Job IDs in keyframe_job_queue",
+              "nextStep": "Keyframe Worker Processing"
+            },
+            {
+              "step": 4,
+              "name": "Keyframe Worker Processing",
+              "trigger": "Keyframe worker polls queue",
+              "worker": "keyframe-worker",
+              "process": [
+                "Atomic job capture with FOR UPDATE SKIP LOCKED",
+                "Generate image using AI model (Gemini by default)",
+                "Upload image to R2 storage",
+                "Update asset record with storage URL",
+                "Update job status to 'completed'"
+              ],
+              "output": "Completed keyframes in R2",
+              "polling": "Project detail page polls for asset updates every 3 seconds",
+              "nextStep": "Animation Generation (manual trigger)"
+            },
+            {
+              "step": 5,
+              "name": "Animation Generation",
+              "trigger": "User clicks 'Generate Animation' (future feature)",
+              "handler": "generation.startAnimation action",
+              "process": [
+                "Verify all keyframes completed",
+                "Create animation_job_queue entries for each scene",
+                "Update project status and meta"
+              ],
+              "output": "Job IDs in animation_job_queue",
+              "nextStep": "Animation Worker Processing"
+            },
+            {
+              "step": 6,
+              "name": "Animation Worker Processing",
+              "trigger": "Animation worker polls queue",
+              "worker": "animation-worker",
+              "process": [
+                "Atomic job capture with FOR UPDATE SKIP LOCKED",
+                "Download keyframes from R2",
+                "Submit to MiniMax HALU API for video generation",
+                "Poll HALU API for completion",
+                "Download generated video",
+                "Upload video to R2 storage",
+                "Create new asset record (type=video)",
+                "Update job status to 'completed'"
+              ],
+              "output": "Completed video in R2",
+              "nextStep": "Video Preview (future feature)"
+            }
+          ]
+        }
+      ],
+      "invariants": [
+        "Project must have at least 1 scenario before keyframe generation",
+        "Scenario must be selected before keyframe generation",
+        "All keyframes must be completed before animation generation",
+        "Asset storage_url must be valid R2 key",
+        "Job status transitions: pending → processing → completed/failed (no backwards)"
+      ]
+    },
+    {
+      "name": "Library Management",
+      "description": "Manage reusable assets for video generation",
+      "services": [
+        {
+          "name": "Story Template Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/story-templates.ts",
+          "responsibility": "CRUD operations for story templates with beats",
+          "operations": ["create", "list", "getById", "update", "delete"],
+          "businessRules": [
+            "Template must have at least 1 beat",
+            "Beats must have unique order numbers within template",
+            "Total duration = sum of all beat durations",
+            "Phase must be one of: HOOK, BUILD, PAYOFF, RESOLUTION"
+          ]
+        },
+        {
+          "name": "Character Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/characters.ts",
+          "responsibility": "CRUD operations for characters",
+          "operations": ["create", "list", "getById", "update", "delete"],
+          "businessRules": [
+            "Character must have name",
+            "Reference images must be valid URLs or R2 keys",
+            "Style presets stored as JSONB for flexibility"
+          ]
+        },
+        {
+          "name": "AI Models Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/models.ts",
+          "responsibility": "Manage AI models and providers",
+          "operations": ["list (by type)"],
+          "businessRules": [
+            "Each model type should have exactly 1 default model",
+            "Only enabled models can be selected",
+            "Model config stored as JSONB for provider-specific settings"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Content Ingestion & Analysis",
+      "description": "YouTube video ingestion and emotional architecture analysis",
+      "services": [
+        {
+          "name": "Ingest Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/ingest.ts",
+          "responsibility": "Search and ingest YouTube videos",
+          "externalDeps": ["YouTube Data API"],
+          "businessRules": [
+            "Must validate YouTube API key before search",
+            "Store video metadata in database",
+            "Create ingest job for async processing"
+          ]
+        },
+        {
+          "name": "Analysis Service",
+          "file": "apps/dashboard/src/app/api/actions/handlers/analysis.ts",
+          "responsibility": "Analyze videos using Gemini multimodal AI",
+          "externalDeps": ["Google Gemini API"],
+          "businessRules": [
+            "Extract AES framework elements (Attention, Emotion, Solution)",
+            "Identify emotional curve throughout video",
+            "Store analysis results in structured format"
+          ]
+        }
+      ]
+    }
+  ],
+  "sharedModules": [
+    {
+      "name": "Database Client",
+      "file": "packages/db/src/index.ts",
+      "exports": ["getDrizzleClient", "schema", "sql"],
+      "description": "Centralized Drizzle ORM client with schema definitions"
+    },
+    {
+      "name": "HALU Client",
+      "file": "packages/halu-client/src/client.ts",
+      "exports": ["createTextClient", "createHaluClient", "generateScenariosWithTools"],
+      "description": "MiniMax HALU API client for text generation with function calling and video generation"
+    },
+    {
+      "name": "Storage Client",
+      "file": "packages/storage-client/src/index.ts",
+      "exports": ["uploadLargeStream", "createDownloadUrl"],
+      "description": "Cloudflare R2 / AWS S3 client for media storage"
+    },
+    {
+      "name": "Logger",
+      "file": "packages/logger/src/index.ts",
+      "exports": ["createLogger"],
+      "description": "Pino-based structured logger",
+      "usedBy": ["All workers", "Backend handlers"]
+    },
+    {
+      "name": "Core Domain Schemas",
+      "file": "packages/core-domain/src/index.ts",
+      "exports": ["Zod validation schemas"],
+      "description": "Shared validation schemas for domain entities"
+    },
+    {
+      "name": "Shared Types",
+      "file": "packages/shared-types/src/index.ts",
+      "exports": ["TypeScript interfaces", "Type definitions"],
+      "description": "Shared type definitions used across packages",
+      "note": "Includes HWAR-specific types in separate export"
+    }
+  ],
+  "utils": [
+    {
+      "name": "retryFetch",
+      "file": "packages/workers/src/utils/retry.ts",
+      "usedIn": ["keyframe-worker", "animation-worker"],
+      "description": "Retry wrapper for external API calls with exponential backoff",
+      "config": {
+        "retries": 3,
+        "minTimeout": 1000,
+        "maxTimeout": 5000
+      }
+    }
+  ],
+  "criticalPaths": [
+    {
+      "name": "Project Creation to Keyframe Generation",
+      "components": [
+        "New Project Form",
+        "generation.startProject handler",
+        "MiniMax-M2 API",
+        "Project Detail Page",
+        "generation.generateKeyframes handler",
+        "keyframe_job_queue",
+        "keyframe-worker",
+        "Gemini API",
+        "R2 Storage"
+      ],
+      "testCoverage": "Partial (unit tests exist for handlers, no E2E tests)",
+      "risks": [
+        "MiniMax API rate limits",
+        "Gemini API failures",
+        "R2 upload failures",
+        "Database connection issues"
+      ]
+    }
+  ]
+}
