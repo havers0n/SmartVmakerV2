@@ -53,6 +53,12 @@ provider call.
 
 ## Required migration preflight
 
+The preflight reports two SQL identities for each migration: the raw execution
+hash used by Drizzle and an LF-normalised canonical hash. The former must match
+Drizzle exactly; the latter makes a CRLF/LF-only checkout difference visible as
+`canonical_line_endings` instead of misreporting it as changed SQL. Trailing
+newlines remain significant in both identities.
+
 Before any deployment, run with credentials that are themselves read-only:
 
 ```powershell
