@@ -24,6 +24,8 @@ export const auditLog = schema.auditLog;
 
 // Generation Pipeline - use tables mapping for consistency
 export const generationProjects = schema.generationProjects;
+export const videoProjects = schema.videoProjects;
+export const generationRuns = schema.generationRuns;
 export const assets = schema.assets;
 
 // AES Core - use tables mapping for consistency
