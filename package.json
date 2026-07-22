@@ -28,6 +28,7 @@
     "type-check:all": "pnpm -r --if-present type-check",
     "type-check:dashboard": "pnpm --filter @scrimspec/hwar-core run build && pnpm --filter dashboard type-check",
     "test": "turbo run test",
+    "test:generation-runs:integration": "node scripts/run-generation-runs-integration.mjs",
     "types:pull": "pnpm --filter db run types:pull",
     "db:migrate": "pnpm --filter db migrate",
     "db:migrate:run": "pnpm --filter db migrate:run",

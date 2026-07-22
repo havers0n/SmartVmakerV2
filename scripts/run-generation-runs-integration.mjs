@@ -1,0 +1,156 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+
+const root = process.cwd();
+const container = "scrimspec_generation_runs_integration";
+const port = "55439";
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+let containerCreated = false;
+const migration = readFileSync(
+  resolve(root, "packages/db/migrations/0028_generation_run_foundation.sql"),
+  "utf8",
+);
+
+const bootstrap = `
+CREATE SCHEMA aes_core;
+CREATE SCHEMA generation_pipeline;
+CREATE SCHEMA auth;
+CREATE ROLE authenticated NOLOGIN;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+  SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+$$;
+CREATE TABLE content_formats (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, slug text NOT NULL,
+  description text, status text NOT NULL DEFAULT 'draft', format_type text NOT NULL DEFAULT 'mixed',
+  hook_pattern text, structure_pattern text, visual_pattern text, pacing_pattern text,
+  target_duration_min_seconds integer, target_duration_max_seconds integer, notes text,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE aes_core.story_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, description text, tags text[],
+  target_duration_seconds integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE aes_core.beats (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), template_id uuid NOT NULL REFERENCES aes_core.story_templates(id) ON DELETE CASCADE,
+  "order" integer NOT NULL, phase text NOT NULL, duration_seconds numeric NOT NULL, description text NOT NULL,
+  action_prompt text, emotion text NOT NULL, contrast text, intended_impact text, meta jsonb DEFAULT '{}'::jsonb
+);
+CREATE TABLE aes_core.ai_models (id text PRIMARY KEY, provider_id text NOT NULL, is_enabled boolean NOT NULL DEFAULT true);
+INSERT INTO aes_core.ai_models (id, provider_id) VALUES
+  ('minimax-m2', 'minimax'), ('gemini-2.5-flash-image', 'google_gemini'), ('minimax-halu-video', 'minimax');
+CREATE TABLE generation_pipeline.generation_projects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid, template_id uuid, content_format_id uuid,
+  status text NOT NULL DEFAULT 'pending', stage text NOT NULL DEFAULT 'init', final_video_url text,
+  api_cost_usd numeric(10,4) NOT NULL DEFAULT 0, channel_id text, error_message text, minimax_cost numeric,
+  upload_status text, youtube_video_id text, meta jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz
+);
+`;
+
+function run(command, args, options = {}) {
+  return execFileSync(command, args, {
+    cwd: root,
+    stdio: "inherit",
+    ...options,
+  });
+}
+
+function psql(input) {
+  const result = spawnSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      container,
+      "psql",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+    ],
+    { cwd: root, input, stdio: ["pipe", "inherit", "inherit"] },
+  );
+  if (result.status !== 0)
+    throw new Error("Temporary integration database setup failed");
+}
+
+function waitForPostgres() {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const result = spawnSync(
+      "docker",
+      ["exec", container, "pg_isready", "-U", "postgres"],
+      {
+        cwd: root,
+        stdio: "ignore",
+      },
+    );
+    if (result.status === 0) return;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  }
+  throw new Error("Temporary integration PostgreSQL did not become ready");
+}
+
+try {
+  const existing = execFileSync(
+    "docker",
+    ["ps", "-a", "--filter", `name=^/${container}$`, "--format", "{{.Names}}"],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  ).trim();
+  if (existing)
+    throw new Error(`Temporary container already exists: ${existing}`);
+
+  run("docker", [
+    "run",
+    "--name",
+    container,
+    "-p",
+    `${port}:5432`,
+    "--user",
+    "postgres",
+    "--entrypoint",
+    "bash",
+    "-d",
+    "public.ecr.aws/supabase/postgres:17.6.1.121",
+    "-c",
+    "initdb -D /tmp/verifydata -U postgres --auth-local=trust --auth-host=trust && printf 'host all all 0.0.0.0/0 trust\\n' >> /tmp/verifydata/pg_hba.conf && exec postgres -D /tmp/verifydata -c listen_addresses='*'",
+  ]);
+  containerCreated = true;
+  waitForPostgres();
+  psql(bootstrap);
+  psql(migration);
+  run(pnpm, ["--filter", "@scrimspec/db", "build"], {
+    shell: process.platform === "win32",
+  });
+  run(
+    pnpm,
+    [
+      "--filter",
+      "dashboard",
+      "exec",
+      "vitest",
+      "run",
+      "src/server/generation-runs.integration.test.ts",
+    ],
+    {
+      shell: process.platform === "win32",
+      env: {
+        ...process.env,
+        DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+        DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+      },
+    },
+  );
+} finally {
+  if (containerCreated) {
+    spawnSync("docker", ["rm", "-f", container], {
+      cwd: root,
+      stdio: "ignore",
+    });
+  }
+}
