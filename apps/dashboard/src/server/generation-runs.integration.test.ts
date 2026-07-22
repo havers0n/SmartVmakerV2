@@ -7,6 +7,9 @@ import { db } from "@/shared/lib/db";
 import {
   generationProjects,
   generationRuns,
+  scenarioArtifacts,
+  scenarioGenerationAttempts,
+  scenarioGenerationJobQueue,
   videoProjects,
 } from "@/shared/lib/schema";
 import {
@@ -19,6 +22,11 @@ import {
   transitionGenerationRunOperationalState,
   updateVideoProject,
 } from "./generation-runs";
+import {
+  enqueueScenarioGenerationAttempt,
+  getScenarioAttempt,
+  getScenarioExecution,
+} from "./scenario-execution";
 
 const ownerA = randomUUID();
 const ownerB = randomUUID();
@@ -364,5 +372,274 @@ describe.sequential("generation run DB foundation", () => {
       id: legacy.id,
       meta: { legacyProbe: true },
     });
+  });
+
+  it("atomically enqueues one idempotent scenario attempt and queue event", async () => {
+    const currentProject = await project();
+    const created = await run(ownerA, currentProject.id);
+    const first = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      currentProject.id,
+      created.id,
+      "request-one",
+    );
+    const replay = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      currentProject.id,
+      created.id,
+      "request-one",
+    );
+    expect(first.idempotentReplay).toBe(false);
+    expect(replay).toMatchObject({
+      idempotentReplay: true,
+      attempt: { id: first.attempt.id },
+    });
+
+    const attempts = await db
+      .select()
+      .from(scenarioGenerationAttempts)
+      .where(eq(scenarioGenerationAttempts.runId, created.id));
+    const jobs = await db
+      .select()
+      .from(scenarioGenerationJobQueue)
+      .where(eq(scenarioGenerationJobQueue.attemptId, first.attempt.id));
+    expect(attempts).toHaveLength(1);
+    expect(jobs).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({
+      attemptNumber: 1,
+      status: "queued",
+      provider: "minimax",
+    });
+    expect(jobs[0].status).toBe("queued");
+    const otherProject = await project();
+    const otherRun = await run(ownerA, otherProject.id);
+    const sameKeyOtherRun = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      otherProject.id,
+      otherRun.id,
+      "request-one",
+    );
+    expect(sameKeyOtherRun.idempotentReplay).toBe(false);
+    const attemptConstraints = await db.execute(sql`
+      select conname, pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conrelid = 'generation_pipeline.scenario_generation_attempts'::regclass
+    `);
+    expect(attemptConstraints.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          conname: "scenario_attempts_run_idempotency_unique",
+          definition: expect.stringContaining(
+            "UNIQUE (run_id, idempotency_key)",
+          ),
+        }),
+      ]),
+    );
+    expect(
+      (await getGenerationRun(ownerA, currentProject.id, created.id)).status,
+    ).toBe("active");
+    await expect(
+      enqueueScenarioGenerationAttempt(
+        ownerA,
+        currentProject.id,
+        created.id,
+        "different-request",
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("persists only array artifacts and derives ready from the immutable artifact", async () => {
+    const currentProject = await project();
+    const created = await run(ownerA, currentProject.id);
+    const { attempt } = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      currentProject.id,
+      created.id,
+      "successful-request",
+    );
+    const [job] = await db
+      .select()
+      .from(scenarioGenerationJobQueue)
+      .where(eq(scenarioGenerationJobQueue.attemptId, attempt.id));
+    const now = new Date().toISOString();
+    await db
+      .update(scenarioGenerationJobQueue)
+      .set({ status: "processing", lockedAt: now, lockedBy: randomUUID() })
+      .where(eq(scenarioGenerationJobQueue.id, job.id));
+    await db
+      .update(scenarioGenerationAttempts)
+      .set({ status: "running", startedAt: now })
+      .where(eq(scenarioGenerationAttempts.id, attempt.id));
+
+    await expectDatabaseFailure(
+      db.insert(scenarioArtifacts).values({
+        runId: created.id,
+        attemptId: attempt.id,
+        artifactType: "scenario_candidates",
+        schemaVersion: 1,
+        payload: "not-an-array",
+        validationMetadata: { valid: true },
+      }),
+      { code: "23514", constraint: "scenario_artifacts_payload_check" },
+    );
+    const [artifact] = await db
+      .insert(scenarioArtifacts)
+      .values({
+        runId: created.id,
+        attemptId: attempt.id,
+        artifactType: "scenario_candidates",
+        schemaVersion: 1,
+        payload: [{ title: "Validated candidate" }],
+        validationMetadata: { valid: true, validator: "scenario-zod:v1" },
+      })
+      .returning();
+    const artifactConstraints = await db.execute(sql`
+      select conname
+      from pg_constraint
+      where conrelid = 'generation_pipeline.scenario_artifacts'::regclass
+    `);
+    expect(artifactConstraints.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          conname: "scenario_artifacts_attempt_unique",
+        }),
+      ]),
+    );
+    await expectDatabaseFailure(
+      db.insert(scenarioArtifacts).values({
+        runId: created.id,
+        attemptId: attempt.id,
+        artifactType: "scenario_candidates",
+        schemaVersion: 1,
+        payload: [{ title: "Duplicate" }],
+        validationMetadata: { valid: true },
+      }),
+      { code: "23505", constraint: "scenario_artifacts_run_unique" },
+    );
+    await db
+      .update(scenarioGenerationAttempts)
+      .set({
+        status: "succeeded",
+        completedAt: now,
+        validationResult: { valid: true },
+      })
+      .where(eq(scenarioGenerationAttempts.id, attempt.id));
+    await db
+      .update(scenarioGenerationJobQueue)
+      .set({ status: "completed", completedAt: now })
+      .where(eq(scenarioGenerationJobQueue.id, job.id));
+
+    expect(
+      (await getScenarioExecution(ownerA, currentProject.id, created.id))
+        .status,
+    ).toBe("ready");
+    await expectDatabaseFailure(
+      db
+        .update(scenarioArtifacts)
+        .set({ payload: [] })
+        .where(eq(scenarioArtifacts.id, artifact.id)),
+      { code: "23514", message: "scenario artifacts are immutable" },
+    );
+  });
+
+  it("retries by appending a new attempt without reopening the failed row", async () => {
+    const currentProject = await project();
+    const created = await run(ownerA, currentProject.id);
+    const { attempt: first } = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      currentProject.id,
+      created.id,
+      "failed-request",
+    );
+    const [job] = await db
+      .select()
+      .from(scenarioGenerationJobQueue)
+      .where(eq(scenarioGenerationJobQueue.attemptId, first.id));
+    const now = new Date().toISOString();
+    await db
+      .update(scenarioGenerationJobQueue)
+      .set({ status: "processing", lockedAt: now, lockedBy: randomUUID() })
+      .where(eq(scenarioGenerationJobQueue.id, job.id));
+    await db
+      .update(scenarioGenerationAttempts)
+      .set({ status: "running", startedAt: now })
+      .where(eq(scenarioGenerationAttempts.id, first.id));
+    await db
+      .update(scenarioGenerationAttempts)
+      .set({
+        status: "failed",
+        completedAt: now,
+        errorCode: "PROVIDER_FAILED",
+        errorMessage: "Provider failed",
+        diagnosticPayload: {
+          payloadType: "string",
+          payloadLength: 12,
+          fragment: "safe fragment",
+        },
+      })
+      .where(eq(scenarioGenerationAttempts.id, first.id));
+    await db
+      .update(scenarioGenerationJobQueue)
+      .set({ status: "failed", completedAt: now, lastError: "Provider failed" })
+      .where(eq(scenarioGenerationJobQueue.id, job.id));
+
+    const safeAttempt = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local role authenticated`);
+      await tx.execute(
+        sql`select set_config('request.jwt.claim.sub', ${ownerA}, true)`,
+      );
+      return tx.execute(sql`
+        select id, status, error_code
+        from generation_pipeline.scenario_generation_attempts
+        where id = ${first.id}
+      `);
+    });
+    expect(safeAttempt.rows[0]).toMatchObject({
+      status: "failed",
+      error_code: "PROVIDER_FAILED",
+    });
+    await expectDatabaseFailure(
+      db.transaction(async (tx) => {
+        await tx.execute(sql`set local role authenticated`);
+        await tx.execute(
+          sql`select set_config('request.jwt.claim.sub', ${ownerA}, true)`,
+        );
+        return tx.execute(sql`
+          select diagnostic_payload
+          from generation_pipeline.scenario_generation_attempts
+          where id = ${first.id}
+        `);
+      }),
+      { code: "42501" },
+    );
+
+    const { attempt: second } = await enqueueScenarioGenerationAttempt(
+      ownerA,
+      currentProject.id,
+      created.id,
+      "retry-request",
+    );
+    expect(second.attemptNumber).toBe(2);
+    const storedFirst = await db
+      .select()
+      .from(scenarioGenerationAttempts)
+      .where(eq(scenarioGenerationAttempts.id, first.id));
+    expect(storedFirst[0].status).toBe("failed");
+    const execution = await getScenarioExecution(
+      ownerA,
+      currentProject.id,
+      created.id,
+    );
+    expect(execution.status).toBe("queued");
+    expect(execution.attempts[1]).not.toHaveProperty("diagnosticPayload");
+    expect(
+      await getScenarioAttempt(ownerA, currentProject.id, created.id, first.id),
+    ).toMatchObject({ id: first.id, status: "failed" });
+    expect(
+      await getScenarioAttempt(ownerA, currentProject.id, created.id, first.id),
+    ).not.toHaveProperty("diagnosticPayload");
+    await expect(
+      getScenarioAttempt(ownerB, currentProject.id, created.id, first.id),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

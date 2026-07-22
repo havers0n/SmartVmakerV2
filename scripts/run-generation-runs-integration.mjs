@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
@@ -7,14 +8,45 @@ const container = "scrimspec_generation_runs_integration";
 const port = "55439";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 let containerCreated = false;
-const migration = readFileSync(
+const foundationMigration = readFileSync(
   resolve(root, "packages/db/migrations/0028_generation_run_foundation.sql"),
   "utf8",
 );
+const scenarioMigration = readFileSync(
+  resolve(root, "packages/db/migrations/0029_durable_scenario_execution.sql"),
+  "utf8",
+);
+const migrationJournal = JSON.parse(
+  readFileSync(
+    resolve(root, "packages/db/migrations/meta/_journal.json"),
+    "utf8",
+  ),
+);
+const foundationJournalEntry = migrationJournal.entries.find(
+  ({ tag }) => tag === "0028_generation_run_foundation",
+);
+const scenarioJournalEntry = migrationJournal.entries.find(
+  ({ tag }) => tag === "0029_durable_scenario_execution",
+);
+if (!foundationJournalEntry || !scenarioJournalEntry) {
+  throw new Error(
+    "0028 and 0029 must be present in the local migration journal",
+  );
+}
+const migrationHistory = `
+CREATE SCHEMA drizzle;
+CREATE TABLE drizzle.__drizzle_migrations (
+  id serial PRIMARY KEY, hash text NOT NULL, created_at bigint
+);
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
+  ('${createHash("sha256").update(foundationMigration).digest("hex")}', ${foundationJournalEntry.when}),
+  ('${createHash("sha256").update(scenarioMigration).digest("hex")}', ${scenarioJournalEntry.when});
+`;
 
 const bootstrap = `
 CREATE SCHEMA aes_core;
 CREATE SCHEMA generation_pipeline;
+CREATE SCHEMA jobs;
 CREATE SCHEMA auth;
 CREATE ROLE authenticated NOLOGIN;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
@@ -123,7 +155,16 @@ try {
   containerCreated = true;
   waitForPostgres();
   psql(bootstrap);
-  psql(migration);
+  psql(foundationMigration);
+  psql(scenarioMigration);
+  psql(migrationHistory);
+  run(pnpm, ["--filter", "@scrimspec/db", "migrations:preflight:generation"], {
+    shell: process.platform === "win32",
+    env: {
+      ...process.env,
+      READONLY_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable`,
+    },
+  });
   run(pnpm, ["--filter", "@scrimspec/db", "build"], {
     shell: process.platform === "win32",
   });
@@ -141,6 +182,26 @@ try {
       shell: process.platform === "win32",
       env: {
         ...process.env,
+        DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+        DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+      },
+    },
+  );
+  run(
+    pnpm,
+    [
+      "--filter",
+      "@scrimspec/workers",
+      "exec",
+      "vitest",
+      "run",
+      "src/__tests__/scenario-worker.integration.test.ts",
+    ],
+    {
+      shell: process.platform === "win32",
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
         DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
         DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
       },

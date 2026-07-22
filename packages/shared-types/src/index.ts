@@ -4,15 +4,25 @@
  */
 
 // Export HWAR types
-export * from './hwar';
-export * from './hwarWorkers';
+export * from "./hwar";
+export * from "./hwarWorkers";
+export * from "./scenario-generation";
 
 // ============================================================================
 // TASK TYPES
 // ============================================================================
 
-export type TaskStatus = 'queued' | 'processing' | 'success' | 'failed';
-export type TaskKind = 't2v' | 'i2v' | 'startend' | 't2i' | 'tts' | 't2a' | 'voice-clone' | 'compose' | 'template';
+export type TaskStatus = "queued" | "processing" | "success" | "failed";
+export type TaskKind =
+  | "t2v"
+  | "i2v"
+  | "startend"
+  | "t2i"
+  | "tts"
+  | "t2a"
+  | "voice-clone"
+  | "compose"
+  | "template";
 
 export interface Task {
   id: string;
@@ -34,8 +44,16 @@ export interface Task {
 // VIDEO GENERATION TYPES
 // ============================================================================
 
-export type VideoResolution = '1080P' | '768P' | '512P';
-export type AspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:2' | '2:3' | '3:4' | '21:9';
+export type VideoResolution = "1080P" | "768P" | "512P";
+export type AspectRatio =
+  | "16:9"
+  | "9:16"
+  | "1:1"
+  | "4:3"
+  | "3:2"
+  | "2:3"
+  | "3:4"
+  | "21:9";
 
 export interface TextToVideoRequest {
   prompt: string;
@@ -56,7 +74,7 @@ export interface ImageToVideoRequest {
 
 export interface StartEndVideoRequest {
   startFrameImage: string; // URL or base64
-  endFrameImage: string;   // URL or base64
+  endFrameImage: string; // URL or base64
   prompt?: string;
   duration?: 6 | 10;
   resolution?: VideoResolution;
@@ -241,7 +259,7 @@ export interface AssetRecord {
 export interface ServerConfig {
   port: number;
   publicBaseUrl: string;
-  nodeEnv: 'development' | 'production' | 'test';
+  nodeEnv: "development" | "production" | "test";
 }
 
 export interface APIConfig {

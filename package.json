@@ -15,7 +15,7 @@
     "dev": "turbo dev --parallel",
     "dev:packages": "turbo dev --filter=./packages/* --parallel",
     "clean": "turbo clean",
-    "dev:all": "dotenv -e ./.env -- concurrently --names \"dashboard,ingest,analysis,keyframe,animation\" -c \"bgBlue.bold,bgMagenta.bold,bgCyan.bold,bgGreen.bold,bgYellow.bold\" \"pnpm --filter dashboard dev\" \"pnpm --filter workers dev:ingest\" \"pnpm --filter workers dev:analysis\" \"pnpm --filter workers dev:keyframe\" \"pnpm --filter workers dev:animation\"",
+    "dev:all": "dotenv -e ./.env -- concurrently --names \"dashboard,ingest,analysis,scenario,keyframe,animation\" -c \"bgBlue.bold,bgMagenta.bold,bgCyan.bold,bgRed.bold,bgGreen.bold,bgYellow.bold\" \"pnpm --filter dashboard dev\" \"pnpm --filter workers dev:ingest\" \"pnpm --filter workers dev:analysis\" \"pnpm --filter workers dev:scenario\" \"pnpm --filter workers dev:keyframe\" \"pnpm --filter workers dev:animation\"",
     "start:all": "pm2 start ecosystem.config.cjs",
     "stop:all": "pm2 stop all && pm2 delete all",
     "restart:all": "pm2 restart all",
@@ -32,7 +32,8 @@
     "types:pull": "pnpm --filter db run types:pull",
     "db:migrate": "pnpm --filter db migrate",
     "db:migrate:run": "pnpm --filter db migrate:run",
-    "db:migrate:prod": "dotenv -e .env.production -- pnpm --filter db migrate"
+    "db:migrate:prod": "dotenv -e .env.production -- pnpm --filter db migrate",
+    "db:migrations:preflight": "pnpm --filter @scrimspec/db migrations:preflight:generation"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^6.14.0",

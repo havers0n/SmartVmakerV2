@@ -686,7 +686,15 @@ export const generationRuns = generationPipeline.table(
       .references(() => videoProjects.id, { onDelete: "cascade" }),
     runNumber: integer("run_number").notNull(),
     status: text("status", {
-      enum: ["draft", "queued", "running", "succeeded", "failed", "cancelled"],
+      enum: [
+        "draft",
+        "active",
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+      ],
     })
       .default("draft")
       .notNull(),
@@ -733,6 +741,90 @@ export const generationRuns = generationPipeline.table(
     statusStageIdx: index("generation_runs_status_stage_idx").on(
       table.status,
       table.stage,
+    ),
+  }),
+);
+
+export const scenarioGenerationAttempts = generationPipeline.table(
+  "scenario_generation_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: text("status", {
+      enum: ["queued", "running", "succeeded", "failed", "cancelled"],
+    })
+      .default("queued")
+      .notNull(),
+    provider: text("provider").notNull(),
+    modelId: text("model_id").notNull(),
+    correlationId: uuid("correlation_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    providerRequestId: text("provider_request_id"),
+    finishReason: text("finish_reason"),
+    usage: jsonb("usage"),
+    validationResult: jsonb("validation_result"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    diagnosticPayload: jsonb("diagnostic_payload"),
+    queuedAt: timestamp("queued_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runNumberUnique: unique("scenario_attempts_run_number_unique").on(
+      table.runId,
+      table.attemptNumber,
+    ),
+    runIdempotencyUnique: unique("scenario_attempts_run_idempotency_unique").on(
+      table.runId,
+      table.idempotencyKey,
+    ),
+    runCreatedIdx: index("scenario_attempts_run_created_idx").on(
+      table.runId,
+      table.attemptNumber,
+    ),
+    statusIdx: index("scenario_attempts_status_idx").on(
+      table.status,
+      table.queuedAt,
+    ),
+  }),
+);
+
+export const scenarioArtifacts = generationPipeline.table(
+  "scenario_artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => scenarioGenerationAttempts.id, { onDelete: "cascade" }),
+    artifactType: text("artifact_type", { enum: ["scenario_candidates"] })
+      .default("scenario_candidates")
+      .notNull(),
+    schemaVersion: integer("schema_version").default(1).notNull(),
+    payload: jsonb("payload").notNull(),
+    validationMetadata: jsonb("validation_metadata").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runUnique: unique("scenario_artifacts_run_unique").on(table.runId),
+    attemptUnique: unique("scenario_artifacts_attempt_unique").on(
+      table.attemptId,
     ),
   }),
 );
@@ -947,6 +1039,47 @@ export const generationJobQueue = jobs.table(
       ).on(table.assetId, table.provider),
     };
   },
+);
+
+export const scenarioGenerationJobQueue = jobs.table(
+  "scenario_generation_job_queue",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => scenarioGenerationAttempts.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    status: text("status", {
+      enum: ["queued", "processing", "completed", "failed", "cancelled"],
+    })
+      .default("queued")
+      .notNull(),
+    availableAt: timestamp("available_at", {
+      withTimezone: true,
+      mode: "string",
+    })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true, mode: "string" }),
+    lockedBy: uuid("locked_by"),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    attemptUnique: unique("scenario_jobs_attempt_unique").on(table.attemptId),
+    eventUnique: unique("scenario_jobs_event_unique").on(table.eventKey),
+    claimIdx: index("scenario_jobs_claim_idx").on(
+      table.status,
+      table.availableAt,
+      table.createdAt,
+    ),
+  }),
 );
 
 export const keyframeJobQueue = jobs.table(

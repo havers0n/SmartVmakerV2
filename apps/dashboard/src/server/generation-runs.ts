@@ -15,6 +15,7 @@ export const GENERATION_RUN_SCHEMA_VERSION = 1 as const;
 export const projectStatusSchema = z.enum(["draft", "active", "archived"]);
 export const generationRunStatusSchema = z.enum([
   "draft",
+  "active",
   "queued",
   "running",
   "succeeded",
@@ -660,7 +661,8 @@ const allowedTransitions: Record<
   GenerationRunStatus,
   readonly GenerationRunStatus[]
 > = {
-  draft: ["queued", "cancelled"],
+  draft: ["active", "queued", "cancelled"],
+  active: ["succeeded", "failed", "cancelled"],
   queued: ["running", "cancelled"],
   running: ["succeeded", "failed", "cancelled"],
   succeeded: [],
