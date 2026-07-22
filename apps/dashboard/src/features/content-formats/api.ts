@@ -29,6 +29,12 @@ export type Detail = {
   evidence: Array<any>;
 };
 
+export class ContentFormatsApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -36,7 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || "Request failed");
+    throw new ContentFormatsApiError(body.error || "Request failed", response.status);
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
@@ -53,6 +59,19 @@ export const contentFormatsApi = {
   create: (
     body: Omit<Partial<Format>, "status" | "id" | "slug" | "updatedAt">,
   ) => request<Format>("/api/content-formats", json("POST", body)),
+  bulkAttachVideos: (
+    id: string,
+    body: {
+      videoIds: string[];
+      role: "supporting" | "exemplar" | "counterexample";
+      source: "discovery";
+      discoveryRunId: string;
+    },
+  ) =>
+    request<{ attachedVideoIds: string[] }>(
+      `/api/content-formats/${id}/videos/bulk`,
+      json("POST", body),
+    ),
   update: (id: string, body: Partial<Format>) =>
     request<Format>(`/api/content-formats/${id}`, json("PATCH", body)),
   activate: (id: string) =>
