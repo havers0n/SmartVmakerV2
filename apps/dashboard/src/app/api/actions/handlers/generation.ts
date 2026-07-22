@@ -5,7 +5,8 @@ import { createLogger } from '@aec/logger';
 import { eq, and } from 'drizzle-orm';
 import { createTextClient, generateScenariosWithTools } from '@scrimspec/halu-client';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { getTrends, type Trend } from '@/shared/trends';
+import { createProjectWithSnapshot, startProjectSchema, type StartProjectPayload } from '@/server/project-creation';
+import { getTrends } from '@/shared/trends';
 import {
   FeatureNotAvailableError,
   isExplicitDevelopmentMockGeneration,
@@ -16,40 +17,7 @@ const logger = createLogger({ name: 'api-generation' });
 /**
  * Validation schema for generation.startProject action
  */
-const baseProjectSchema = {
-  title: z.string().optional(),
-  ratio: z.enum(['16:9', '9:16', '4:3', '3:4']).default('16:9'),
-  lang: z.string().default('none'),
-  ownerId: z.string().uuid().optional(),
-  textModelId: z.string().optional(),
-  imageModelId: z.string().optional(),
-};
-
-export const startProjectSchema = z.discriminatedUnion('source', [
-  z.object({
-    source: z.literal('prompt'),
-    prompt: z.string().optional(),
-    presetId: z.string().uuid().optional(),
-    trendId: z.string().optional(),
-    ...baseProjectSchema,
-  }),
-  z.object({
-    source: z.literal('preset'),
-    presetId: z.string().uuid(),
-    prompt: z.string().optional(),
-    trendId: z.string().optional(),
-    ...baseProjectSchema,
-  }),
-  z.object({
-    source: z.literal('trends'),
-    trendId: z.string().min(1, "trendId is required when source='trends'"),
-    prompt: z.string().optional(),
-    presetId: z.string().uuid().optional(),
-    ...baseProjectSchema,
-  }),
-]);
-
-export type StartProjectPayload = z.infer<typeof startProjectSchema>;
+export { startProjectSchema, type StartProjectPayload } from '@/server/project-creation';
 
 /**
  * Tool executors for MiniMax-M2 Function Calling
@@ -120,10 +88,10 @@ async function executeGetCharacterDetails(characterId: string) {
  * Generate scenarios using MiniMax-M2 with Function Calling
  */
 async function generateScenariosWithMiniMax(input: {
-  source: 'prompt' | 'preset' | 'trends';
-  prompt?: string;
-  preset?: any;
-  trend?: any;
+  source: StartProjectPayload['source'];
+  prompt: string;
+  contentFormat?: any;
+  storyTemplate?: any;
   ratio: string;
   lang: string;
 }): Promise<any[]> {
@@ -295,23 +263,21 @@ Requirements:
 
 `;
 
-    if (input.source === 'prompt' && input.prompt) {
+    if (input.source === 'prompt') {
       userPrompt += `\nUser's creative brief:\n${input.prompt}\n`;
-    } else if (input.source === 'preset' && input.preset) {
+    } else if ((input.source === 'story_template' || input.source === 'preset') && input.storyTemplate) {
       userPrompt += `\nBase your scenarios on this story template:
-Title: ${input.preset.name}
-Description: ${input.preset.description}
-Target Duration: ${input.preset.targetDurationSeconds}s
+Title: ${input.storyTemplate.templateName}
+Target Duration: ${input.storyTemplate.targetDurationSeconds}s
 
 Story Beats:
-${input.preset.beats.map((b: any, i: number) => `${i + 1}. ${b.phase} (${b.durationSeconds}s): ${b.description} [Emotion: ${b.emotion}${b.contrast ? `, Contrast: ${b.contrast}` : ''}]`).join('\n')}
+${input.storyTemplate.beats.map((b: any, i: number) => `${i + 1}. ${b.phase} (${b.durationSeconds}s): ${b.description} [Emotion: ${b.emotion}${b.contrast ? `, Contrast: ${b.contrast}` : ''}]`).join('\n')}
 `;
-    } else if (input.source === 'trends' && input.trend) {
-      userPrompt += `\nCreate scenarios based on these trending insights:
-Trend: ${input.trend.title}
-${input.trend.description}
-Key Insights: ${input.trend.insights.join(', ')}
-`;
+    } else if (input.source === 'content_format') {
+      userPrompt += `\nProject idea:\n${input.prompt}\n\nContent format constraints:\nDescription: ${input.contentFormat?.description ?? ''}\nHook: ${input.contentFormat?.hookPattern ?? ''}\nStructure: ${input.contentFormat?.structurePattern ?? ''}\nVisual: ${input.contentFormat?.visualPattern ?? ''}\nPacing: ${input.contentFormat?.pacingPattern ?? ''}\nDuration range: ${input.contentFormat?.durationMinSeconds ?? 'unspecified'}-${input.contentFormat?.durationMaxSeconds ?? 'unspecified'} seconds\n`;
+      if (input.storyTemplate) userPrompt += `\nStory template beats (metadata; do not override the content-format duration range):\n${input.storyTemplate.beats.map((b: any) => `${b.phase} (${b.durationSeconds}s): ${b.description}`).join('\n')}\n`;
+    } else if (input.source === 'trends') {
+      userPrompt += `\nCreate scenarios based on legacy trends context.\n`;
     }
 
     userPrompt += `\nIMPORTANT: Call the generate_video_scenarios function with your complete scenario concepts.`;
@@ -447,6 +413,11 @@ export async function startProject(
 
   const validated = startProjectSchema.parse(payload);
 
+  // Legacy wizard compatibility: preserve its existing trend lookup semantics.
+  if (validated.source === 'trends' && !getTrends().some((trend) => trend.id === validated.trendId)) {
+    throw new z.ZodError([{ code: 'custom', path: ['trendId'], message: `Trend not found: ${validated.trendId}` }]);
+  }
+
   logger.info(
     { source: validated.source, ratio: validated.ratio },
     'Starting project generation'
@@ -500,79 +471,16 @@ export async function startProject(
     }
   }
 
-  // Fetch preset data if using preset source
-  let presetData = null;
-  if (validated.source === 'preset' && validated.presetId) {
-    const [template] = await db
-      .select()
-      .from(storyTemplates)
-      .where(eq(storyTemplates.id, validated.presetId));
-
-    if (!template) {
-      throw new Error(`Story template with id ${validated.presetId} not found`);
-    }
-
-    const templateBeats = await db
-      .select()
-      .from(beats)
-      .where(eq(beats.templateId, validated.presetId))
-      .orderBy(beats.order);
-
-    presetData = { ...template, beats: templateBeats };
-    logger.info({ templateId: template.id }, 'Loaded preset template');
-  }
-
-  // Resolve trend data locally (no self-fetch)
-  let trendData: Trend | null = null;
-  if (validated.source === 'trends') {
-    const trends = getTrends();
-    const trend = trends.find((t) => t.id === validated.trendId) ?? null;
-
-    if (!trend) {
-      throw new z.ZodError([
-        {
-          code: 'custom',
-          path: ['trendId'],
-          message: `Trend not found: ${validated.trendId}`,
-        },
-      ]);
-    }
-
-    trendData = trend;
-    logger.info({ trendId: validated.trendId }, 'Loaded trend data');
-  }
-
-  // Generate scenarios using MiniMax-M2
-  const scenarios = await generateScenariosWithMiniMax({
-    source: validated.source,
-    prompt: validated.prompt,
-    preset: presetData,
-    trend: trendData,
-    ratio: validated.ratio,
-    lang: validated.lang,
+  // Context loading, generation, and persistence share one transaction: the exact
+  // snapshot supplied to the model is the snapshot stored on the project.
+  const created = await createProjectWithSnapshot({
+    input: validated, userId, textModelId, imageModelId,
+    generateScenarios: (context) => generateScenariosWithMiniMax({
+      source: validated.source, prompt: validated.prompt ?? (validated.source === 'trends' ? getTrends().find((trend) => trend.id === validated.trendId)?.title ?? validated.trendId : ''), contentFormat: context.contentFormat,
+      storyTemplate: context.storyTemplate, ratio: validated.ratio, lang: validated.lang,
+    }),
   });
-
-  // Create project in database
-  const [project] = await db
-    .insert(generationProjects)
-    .values({
-      ownerId: userId,
-      templateId: validated.presetId,
-      status: 'pending',
-      meta: {
-        title: validated.title || 'Untitled Project',
-        ratio: validated.ratio,
-        lang: validated.lang,
-        source: validated.source,
-        prompt: validated.prompt,
-        trendId: validated.trendId,
-        scenarios,
-        generatedAt: new Date().toISOString(),
-        textModelId,
-        imageModelId,
-      },
-    })
-    .returning();
+  const { project, scenarios } = created;
 
   logger.info(
     {

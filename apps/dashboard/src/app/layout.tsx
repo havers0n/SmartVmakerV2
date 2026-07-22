@@ -5,7 +5,8 @@ import { AuthProvider } from '../shared/providers/auth-provider';
 import { TooltipProvider } from '../shared/components/ui/tooltip';
 import { Toaster } from '../shared/components/ui/toaster';
 import { Button } from '@/shared/components/ui/button';
-import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library, TrendingUp, Users, Search, BookOpen } from 'lucide-react';
+import { RadioReceiver, Microscope, Settings, Clapperboard, Video, Library, TrendingUp, Users, Search, BookOpen, Shapes } from 'lucide-react';
+import { NavLink } from '@/shared/components/layout/nav-link';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -78,6 +79,11 @@ function AppSidebar() {
             Sources
           </Button>
         </Link>
+
+        <NavLink href="/content-formats">
+          <Shapes className="h-4 w-4" />
+          Content Formats
+        </NavLink>
 
         <Link href="/beamng/videos">
           <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50">

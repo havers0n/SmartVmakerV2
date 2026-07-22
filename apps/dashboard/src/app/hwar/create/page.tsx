@@ -9,24 +9,28 @@ import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Plus, FolderOpen, Trash2 } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui/empty-state";
 import { StatusBadge } from "@/shared/components/ui/status-badge";
-import { ActionHttpError, listProjects } from "@/shared/api/actions";
-import { ProjectPreview } from "@scrimspec/shared-types";
+import {
+  ActionHttpError,
+  listProjects,
+  type ProjectPreviewWithProvenance,
+} from "@/shared/api/actions";
 import { type ProjectTabId } from "@/shared/const/projectTabs";
 import { useToast } from "@/shared/hooks/use-toast";
-
 
 export default function CreateIndex() {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(
+    new Set(),
+  );
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCardClick = (id: string, tab?: ProjectTabId) => {
     router.push(tab ? `/hwar/create/${id}?tab=${tab}` : `/hwar/create/${id}`);
   };
 
-  const query = useQuery<ProjectPreview[], Error>({
+  const query = useQuery<ProjectPreviewWithProvenance[], Error>({
     queryKey: ["projects"],
     queryFn: listProjects,
   });
@@ -68,7 +72,7 @@ export default function CreateIndex() {
 
     const count = selectedProjects.size;
     const confirmMessage = `Are you sure you want to delete ${count} project${count > 1 ? "s" : ""}? This action cannot be undone.`;
-    
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -91,7 +95,7 @@ export default function CreateIndex() {
       }
 
       const result = await res.json();
-      
+
       toast({
         title: "Projects deleted",
         description: `Successfully deleted ${result.deletedCount} project${result.deletedCount > 1 ? "s" : ""}.`,
@@ -103,7 +107,10 @@ export default function CreateIndex() {
       console.error("Bulk delete error:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete projects. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete projects. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -117,7 +124,9 @@ export default function CreateIndex() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2">Projects</h1>
-            <p className="text-sm text-muted-foreground">Create and manage video projects</p>
+            <p className="text-sm text-muted-foreground">
+              Create and manage video projects
+            </p>
           </div>
           <div className="flex items-center gap-3">
             {projects.length > 0 && (
@@ -127,7 +136,9 @@ export default function CreateIndex() {
                   onClick={toggleSelectAll}
                   disabled={isDeleting}
                 >
-                  {selectedProjects.size === projects.length ? "Deselect All" : "Select All"}
+                  {selectedProjects.size === projects.length
+                    ? "Deselect All"
+                    : "Select All"}
                 </Button>
                 {selectedProjects.size > 0 && (
                   <Button
@@ -136,12 +147,16 @@ export default function CreateIndex() {
                     disabled={isDeleting}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
-                    Delete {selectedProjects.size} {selectedProjects.size === 1 ? "Project" : "Projects"}
+                    Delete {selectedProjects.size}{" "}
+                    {selectedProjects.size === 1 ? "Project" : "Projects"}
                   </Button>
                 )}
               </>
             )}
-            <Button onClick={() => router.push("/hwar/create/new")} data-testid="button-new-project">
+            <Button
+              onClick={() => router.push("/hwar/create/new")}
+              data-testid="button-new-project"
+            >
               <Plus className="w-4 h-4 mr-2" />
               New Project
             </Button>
@@ -160,7 +175,8 @@ export default function CreateIndex() {
         ) : isError ? (
           <Card className="p-8">
             {(() => {
-              const status = error instanceof ActionHttpError ? error.status : undefined;
+              const status =
+                error instanceof ActionHttpError ? error.status : undefined;
               const title =
                 status === 401
                   ? "Session expired"
@@ -175,16 +191,24 @@ export default function CreateIndex() {
                     ? "You don’t have permission to view projects. Check your access / RLS policies."
                     : "Check your connection or permissions and try again.";
 
-              const primaryAction = status === 401 || status === 403
-                ? { label: "Re-login", onClick: () => router.push("/login") }
-                : { label: "Retry", onClick: () => query.refetch() };
+              const primaryAction =
+                status === 401 || status === 403
+                  ? { label: "Re-login", onClick: () => router.push("/login") }
+                  : { label: "Retry", onClick: () => query.refetch() };
 
               return (
                 <div className="text-center">
                   <h3 className="text-lg font-medium mb-2">{title}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{description}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {description}
+                  </p>
                   <div className="flex items-center justify-center gap-3">
-                    <Button onClick={primaryAction.onClick} variant={status === 401 || status === 403 ? "default" : "default"}>
+                    <Button
+                      onClick={primaryAction.onClick}
+                      variant={
+                        status === 401 || status === 403 ? "default" : "default"
+                      }
+                    >
                       {primaryAction.label}
                     </Button>
                     {status === 401 && (
@@ -200,8 +224,8 @@ export default function CreateIndex() {
         ) : projects.length === 0 ? (
           <EmptyState
             icon={FolderOpen}
-            title="No projects yet"
-            description="Create your first video project using AI-powered scenario generation, presets, or YouTube trends"
+            title="Create your first project"
+            description="Start from your own prompt, an active Content Format, or a Story Template."
             action={{
               label: "Create Project",
               onClick: () => router.push("/hwar/create/new"),
@@ -223,12 +247,14 @@ export default function CreateIndex() {
                       onClick={(e) => e.stopPropagation()}
                       className="mt-1"
                     />
-                    <div 
+                    <div
                       className="flex-1 cursor-pointer"
                       onClick={() => handleCardClick(project.id)}
                     >
                       <h3 className="font-semibold mb-1">{project.title}</h3>
-                      <div className="text-xs text-muted-foreground">{new Date(project.createdAt).toLocaleDateString()}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(project.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
                   <StatusBadge status={project.status} />
@@ -236,25 +262,59 @@ export default function CreateIndex() {
                 <div className="flex flex-wrap gap-2 text-xs">
                   <button
                     className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
-                    onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "script"); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCardClick(project.id, "script");
+                    }}
                   >
                     {project.scenesCount} scenes
                   </button>
                   <button
                     className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
-                    onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "keyframes"); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCardClick(project.id, "keyframes");
+                    }}
                   >
                     {project.keyframesCount} frames
                   </button>
                   {project.hasFinalVideo && (
                     <button
                       className="px-3 py-1 rounded-full bg-secondary text-foreground hover:bg-secondary/80"
-                      onClick={(e) => { e.stopPropagation(); handleCardClick(project.id, "final"); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCardClick(project.id, "final");
+                      }}
                     >
                       Final video
                     </button>
                   )}
                 </div>
+                {(project.contentFormat || project.storyTemplate) && (
+                  <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                    {project.contentFormat && (
+                      <a
+                        className="block hover:underline"
+                        href={`/content-formats/${project.contentFormat.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Content Format · {project.contentFormat.name}
+                        {project.contentFormat.status === "archived"
+                          ? " · Archived"
+                          : ""}
+                      </a>
+                    )}
+                    {project.storyTemplate && (
+                      <a
+                        className="block hover:underline"
+                        href={`/hwar/library/presets`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Story Template · {project.storyTemplate.name}
+                      </a>
+                    )}
+                  </div>
+                )}
               </Card>
             ))}
           </div>

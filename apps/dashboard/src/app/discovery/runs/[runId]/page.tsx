@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowUpDown, Clipboard, Download } from "lucide-react";
 import {
@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/shared/components/ui/table";
+import { AddToContentFormatDialog } from "@/features/discovery-content-formats/add-to-content-format-dialog";
 
 type Run = {
   id: string;
@@ -451,6 +452,12 @@ export default function DiscoveryRunPage({
   const [copiedCandidateId, setCopiedCandidateId] = useState<string | null>(null);
   const [researchPlaceholderId, setResearchPlaceholderId] = useState<string | null>(null);
   const [curatingCandidate, setCuratingCandidate] = useState<ResearchCandidate | null>(null);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(() => new Set());
+  const [contentFormatDialogOpen, setContentFormatDialogOpen] = useState(false);
+  useEffect(() => {
+    setSelectedVideoIds(new Set());
+    setContentFormatDialogOpen(false);
+  }, [params.runId]);
   const [filters, setFilters] = useState({
     maxAge: "",
     minMatched: "",
@@ -511,6 +518,30 @@ export default function DiscoveryRunPage({
         current.key === key ? ((current.direction * -1) as 1 | -1) : -1,
     }));
   const run = runQuery.data;
+  const videos = videosQuery.data ?? [];
+  const selectedVideosOnPage = videos.filter((video) => selectedVideoIds.has(video.videoId));
+  const allVideosOnPageSelected = videos.length > 0 && selectedVideosOnPage.length === videos.length;
+  const toggleVideo = (videoId: string, checked: boolean) => setSelectedVideoIds((current) => {
+    const next = new Set(current);
+    if (checked) {
+      if (next.size >= 250) return next;
+      next.add(videoId);
+    } else next.delete(videoId);
+    return next;
+  });
+  const togglePageVideos = (checked: boolean) => setSelectedVideoIds((current) => {
+    const next = new Set(current);
+    if (!checked) {
+      videos.forEach((video) => next.delete(video.videoId));
+      return next;
+    }
+    for (const video of videos) {
+      if (next.has(video.videoId)) continue;
+      if (next.size >= 250) break;
+      next.add(video.videoId);
+    }
+    return next;
+  });
   const refreshRun = () => queryClient.invalidateQueries({ queryKey: ["discovery-run", params.runId] });
   const cancelRun = useMutation({ mutationFn: () => api(`/api/discovery-runs/${params.runId}/cancel`, { method: "POST" }), onSuccess: refreshRun });
   const resumeRun = useMutation({ mutationFn: () => api(`/api/discovery-runs/${params.runId}/resume`, { method: "POST" }), onSuccess: refreshRun });
@@ -1442,12 +1473,16 @@ export default function DiscoveryRunPage({
         <TabsContent value="videos">
           <Card>
             <CardHeader>
-              <CardTitle>Discovered videos</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><CardTitle>Discovered videos</CardTitle><p className="mt-1 text-sm text-muted-foreground">Select up to 250 videos from this Discovery run for manual Content Format curation.</p></div>
+                {selectedVideoIds.size > 0 && <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2" aria-live="polite"><span className="text-sm font-medium">{selectedVideoIds.size} videos selected</span><Button type="button" size="sm" variant="ghost" onClick={() => setSelectedVideoIds(new Set())}>Clear</Button><Button type="button" size="sm" onClick={() => setContentFormatDialogOpen(true)}>Add to Content Format</Button></div>}
+              </div>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12"><Checkbox aria-label="Select all videos on this page" checked={allVideosOnPageSelected} onCheckedChange={(checked) => togglePageVideos(checked === true)} disabled={!videos.length || (selectedVideoIds.size >= 250 && !allVideosOnPageSelected)} /></TableHead>
                     <TableHead>Query</TableHead>
                     <TableHead>Order</TableHead>
                     <TableHead>#</TableHead>
@@ -1458,10 +1493,12 @@ export default function DiscoveryRunPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(videosQuery.data ?? []).map((video) => (
+                  {videos.map((video) => (
                     <TableRow
                       key={`${video.videoId}-${video.query}-${video.searchOrder}`}
+                      data-state={selectedVideoIds.has(video.videoId) ? "selected" : undefined}
                     >
+                      <TableCell><Checkbox aria-label={`Select ${video.title}`} checked={selectedVideoIds.has(video.videoId)} disabled={!selectedVideoIds.has(video.videoId) && selectedVideoIds.size >= 250} onCheckedChange={(checked) => toggleVideo(video.videoId, checked === true)} /></TableCell>
                       <TableCell>{video.query}</TableCell>
                       <TableCell>{video.searchOrder}</TableCell>
                       <TableCell>{video.resultPosition}</TableCell>
@@ -1486,7 +1523,7 @@ export default function DiscoveryRunPage({
                   ))}
                 </TableBody>
               </Table>
-              {!videosQuery.isLoading && !videosQuery.data?.length && (
+              {!videosQuery.isLoading && !videos.length && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   No discovered videos.
                 </p>
@@ -1737,6 +1774,13 @@ export default function DiscoveryRunPage({
         </TabsContent>
       </Tabs>
       <FormatCurationDialog runId={params.runId} candidate={curatingCandidate} open={Boolean(curatingCandidate)} onOpenChange={(open) => { if (!open) setCuratingCandidate(null); }} />
+      <AddToContentFormatDialog
+        open={contentFormatDialogOpen}
+        onOpenChange={setContentFormatDialogOpen}
+        runId={params.runId}
+        selectedVideoIds={selectedVideoIds}
+        onAttached={() => setSelectedVideoIds(new Set())}
+      />
     </div>
   );
 }

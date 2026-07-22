@@ -23,9 +23,14 @@ export class ActionHttpError extends Error {
   public readonly status: number;
   public readonly details?: unknown;
 
-  constructor(params: { action: string; status: number; message: string; details?: unknown }) {
+  constructor(params: {
+    action: string;
+    status: number;
+    message: string;
+    details?: unknown;
+  }) {
     super(params.message);
-    this.name = 'ActionHttpError';
+    this.name = "ActionHttpError";
     this.action = params.action;
     this.status = params.status;
     this.details = params.details;
@@ -53,12 +58,28 @@ export interface StoryBeat {
   id: string;
   templateId: string;
   order: number;
-  phase: 'HOOK' | 'BUILD' | 'PAYOFF' | 'RESOLUTION';
+  phase: "HOOK" | "BUILD" | "PAYOFF" | "RESOLUTION";
   durationSeconds: string; // Note: This is stored as string in the database
   description: string;
   actionPrompt?: string;
-  emotion: 'joy' | 'sadness' | 'surprise' | 'anticipation' | 'tension' | 'relief' | 'empathy' | 'curiosity' | 'humor' | 'awe';
-  contrast?: 'small_vs_big' | 'slow_vs_fast' | 'alone_vs_together' | 'sad_vs_happy' | 'problem_vs_solution' | 'before_vs_after';
+  emotion:
+    | "joy"
+    | "sadness"
+    | "surprise"
+    | "anticipation"
+    | "tension"
+    | "relief"
+    | "empathy"
+    | "curiosity"
+    | "humor"
+    | "awe";
+  contrast?:
+    | "small_vs_big"
+    | "slow_vs_fast"
+    | "alone_vs_together"
+    | "sad_vs_happy"
+    | "problem_vs_solution"
+    | "before_vs_after";
   intendedImpact?: string;
   meta?: Record<string, unknown>;
 }
@@ -77,20 +98,20 @@ export interface Character {
 
 /**
  * Универсальная функция для вызова Actions через Action Runner
- * 
+ *
  * @param action - Название действия (например, 'ingest.startSearch')
  * @param payload - Данные для обработчика
  * @returns Promise с результатом действия или ошибкой
  */
 export async function callAction<T = unknown>(
-  action: string, 
-  payload: unknown
+  action: string,
+  payload: unknown,
 ): Promise<T> {
   try {
-    const response = await fetch('/api/actions', {
-      method: 'POST',
+    const response = await fetch("/api/actions", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         action,
@@ -104,17 +125,18 @@ export async function callAction<T = unknown>(
       throw new ActionHttpError({
         action,
         status: response.status,
-        message: data.error || `HTTP ${response.status}: ${response.statusText}`,
+        message:
+          data.error || `HTTP ${response.status}: ${response.statusText}`,
         details: data.details,
       });
     }
 
     if (!data.success) {
-      throw new Error(data.error || 'Action failed');
+      throw new Error(data.error || "Action failed");
     }
 
     if (data.result === undefined) {
-      throw new Error('No result returned from action');
+      throw new Error("No result returned from action");
     }
 
     return data.result;
@@ -137,7 +159,10 @@ export async function callAction<T = unknown>(
  * @returns Promise с результатом создания задачи
  */
 export async function startIngestSearch(payload: unknown) {
-  return callAction<{ message: string; jobId: string }>('ingest.startSearch', payload);
+  return callAction<{ message: string; jobId: string }>(
+    "ingest.startSearch",
+    payload,
+  );
 }
 
 // =============================================================================
@@ -145,23 +170,25 @@ export async function startIngestSearch(payload: unknown) {
 // =============================================================================
 
 export async function createStoryTemplate(payload: unknown) {
-  return callAction('storyTemplates.create', payload);
+  return callAction("storyTemplates.create", payload);
 }
 
 export async function listStoryTemplates(): Promise<StoryTemplate[]> {
-  return callAction<StoryTemplate[]>('storyTemplates.list', {});
+  return callAction<StoryTemplate[]>("storyTemplates.list", {});
 }
 
-export async function getStoryTemplateById(id: string): Promise<StoryTemplateWithBeats> {
-  return callAction<StoryTemplateWithBeats>('storyTemplates.getById', { id });
+export async function getStoryTemplateById(
+  id: string,
+): Promise<StoryTemplateWithBeats> {
+  return callAction<StoryTemplateWithBeats>("storyTemplates.getById", { id });
 }
 
 export async function updateStoryTemplate(id: string, payload: unknown) {
-  return callAction('storyTemplates.update', { id, ...(payload as object) });
+  return callAction("storyTemplates.update", { id, ...(payload as object) });
 }
 
 export async function deleteStoryTemplate(id: string) {
-  return callAction('storyTemplates.delete', { id });
+  return callAction("storyTemplates.delete", { id });
 }
 
 // =============================================================================
@@ -169,23 +196,23 @@ export async function deleteStoryTemplate(id: string) {
 // =============================================================================
 
 export async function createCharacter(payload: unknown) {
-  return callAction('characters.create', payload);
+  return callAction("characters.create", payload);
 }
 
 export async function listCharacters(): Promise<Character[]> {
-  return callAction<Character[]>('characters.list', {});
+  return callAction<Character[]>("characters.list", {});
 }
 
 export async function getCharacterById(id: string) {
-  return callAction('characters.getById', { id });
+  return callAction("characters.getById", { id });
 }
 
 export async function updateCharacter(id: string, payload: unknown) {
-  return callAction('characters.update', { id, ...(payload as object) });
+  return callAction("characters.update", { id, ...(payload as object) });
 }
 
 export async function deleteCharacter(id: string) {
-  return callAction('characters.delete', { id });
+  return callAction("characters.delete", { id });
 }
 
 // =============================================================================
@@ -193,23 +220,32 @@ export async function deleteCharacter(id: string) {
 // =============================================================================
 
 export async function startGenerationProject(payload: unknown) {
-  return callAction('generation.startProject', payload);
+  return callAction("generation.startProject", payload);
 }
 
 export async function generateKeyframes(payload: unknown) {
-  return callAction('generation.generateKeyframes', payload);
+  return callAction("generation.generateKeyframes", payload);
 }
 
 export async function startAnimation(payload: unknown) {
-  return callAction('generation.startAnimation', payload);
+  return callAction("generation.startAnimation", payload);
 }
 
 // =============================================================================
 // Projects Actions
 // =============================================================================
 
-export async function listProjects(): Promise<ProjectPreview[]> {
-  return callAction<ProjectPreview[]>('projects.list', {});
+export type ProjectPreviewWithProvenance = ProjectPreview & {
+  contentFormat?: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  } | null;
+  storyTemplate?: { id: string; name: string } | null;
+};
+export async function listProjects(): Promise<ProjectPreviewWithProvenance[]> {
+  return callAction<ProjectPreviewWithProvenance[]>("projects.list", {});
 }
 
 // =============================================================================
@@ -217,14 +253,14 @@ export async function listProjects(): Promise<ProjectPreview[]> {
 // =============================================================================
 
 export type ModelType =
-  | 'text-to-text'
-  | 'text-to-image'
-  | 'image-to-video'
-  | 'text-to-video'
-  | 'image-to-image'
-  | 'audio-to-text'
-  | 'text-to-audio'
-  | 'multimodal';
+  | "text-to-text"
+  | "text-to-image"
+  | "image-to-video"
+  | "text-to-video"
+  | "image-to-image"
+  | "audio-to-text"
+  | "text-to-audio"
+  | "multimodal";
 
 export interface ModelWithProvider {
   id: string;
@@ -239,8 +275,10 @@ export interface ModelWithProvider {
   metadata: unknown;
 }
 
-export async function listModels(type: ModelType): Promise<ModelWithProvider[]> {
-  return callAction('models.list', { type });
+export async function listModels(
+  type: ModelType,
+): Promise<ModelWithProvider[]> {
+  return callAction("models.list", { type });
 }
 
 // =============================================================================
@@ -259,5 +297,5 @@ export async function importBeamngChannel(payload: {
   input: string;
   maxVideos?: number;
 }): Promise<ImportChannelResult> {
-  return callAction<ImportChannelResult>('beamng.importChannel', payload);
+  return callAction<ImportChannelResult>("beamng.importChannel", payload);
 }

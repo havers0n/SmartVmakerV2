@@ -19,6 +19,7 @@ import {
   deleteCharacter,
 } from './handlers/characters';
 import { startProject, generateKeyframes, startAnimation } from './handlers/generation';
+import { ProjectCreationError } from '@/server/project-creation';
 import { listProjects } from './handlers/projects';
 import { listModels } from './handlers/models';
 import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
@@ -154,6 +155,13 @@ export async function POST(req: NextRequest) {
           details: error,
         },
         { status: 400 }
+      );
+    }
+
+    if (error instanceof ProjectCreationError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.status },
       );
     }
 

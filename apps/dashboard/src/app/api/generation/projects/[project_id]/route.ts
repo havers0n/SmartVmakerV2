@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/shared/lib/db';
-import { generationProjects } from '@scrimspec/db';
+import { generationProjects, contentFormats, storyTemplates } from '@scrimspec/db';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getTrustedUserId, unauthorizedResponse } from '@/shared/lib/auth';
 
@@ -28,19 +28,21 @@ export async function GET(
     }
 
     // Fetch project using Drizzle ORM
-    const [project] = await db
-      .select()
+    const [row] = await db
+      .select({ project: generationProjects, contentFormat: { id: contentFormats.id, name: contentFormats.name, slug: contentFormats.slug, status: contentFormats.status }, storyTemplate: { id: storyTemplates.id, name: storyTemplates.name } })
       .from(generationProjects)
+      .leftJoin(contentFormats, eq(contentFormats.id, generationProjects.contentFormatId))
+      .leftJoin(storyTemplates, eq(storyTemplates.id, generationProjects.templateId))
       .where(and(eq(generationProjects.id, projectId), eq(generationProjects.ownerId, userId)));
 
-    if (!project) {
+    if (!row) {
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(project);
+    return NextResponse.json({ ...row.project, contentFormat: row.contentFormat?.id ? row.contentFormat : null, storyTemplate: row.storyTemplate?.id ? row.storyTemplate : null });
   } catch (error) {
     console.error('Failed to fetch project:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';

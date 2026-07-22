@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/shared/lib/db";
 import {
@@ -69,7 +69,6 @@ const durationFields = {
 const contentFormatFields = z.object({
   name: z.string().trim().min(1).max(160),
   description: shortText,
-  status: formatStatusSchema.default("draft"),
   formatType: formatTypeSchema.default("mixed"),
   hookPattern: shortText,
   structurePattern: shortText,
@@ -77,7 +76,7 @@ const contentFormatFields = z.object({
   pacingPattern: shortText,
   notes: shortText,
   ...durationFields,
-});
+}).strict();
 export const createContentFormatSchema = contentFormatFields.refine(
   (v) =>
     v.targetDurationMinSeconds == null ||
@@ -90,7 +89,14 @@ export const createContentFormatSchema = contentFormatFields.refine(
 );
 export const updateContentFormatSchema = contentFormatFields
   .partial()
-  .refine((v) => Object.keys(v).length > 0, "At least one field is required");
+  .refine((v) => Object.keys(v).length > 0, "At least one field is required")
+  .refine(
+    (v) =>
+      v.targetDurationMinSeconds == null ||
+      v.targetDurationMaxSeconds == null ||
+      v.targetDurationMinSeconds <= v.targetDurationMaxSeconds,
+    { message: "Minimum duration cannot exceed maximum duration", path: ["targetDurationMinSeconds"] },
+  );
 export const videoAssociationSchema = z.object({
   videoId: uuid,
   role: videoRoleSchema.default("supporting"),
@@ -134,8 +140,9 @@ export const bulkVideoAssociationSchema = z
   .strict();
 
 export class ContentFormatConflictError extends Error {}
+export class ContentFormatNotFoundError extends ContentFormatConflictError {}
 export function notFound(value: unknown): never {
-  throw new ContentFormatConflictError(
+  throw new ContentFormatNotFoundError(
     typeof value === "string" ? value : "Not found",
   );
 }
@@ -205,12 +212,12 @@ export async function createContentFormat(input: unknown) {
   const slug = await slugFor(values.name);
   const [row] = await db
     .insert(contentFormats)
-    .values({ ...values, slug })
+    .values({ ...values, status: "draft", slug })
     .returning();
   return row;
 }
 export async function updateContentFormat(id: string, input: unknown) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const values = updateContentFormatSchema.parse(input);
   const [row] = await db
     .update(contentFormats)
@@ -220,7 +227,9 @@ export async function updateContentFormat(id: string, input: unknown) {
   return row;
 }
 export async function archiveContentFormat(id: string) {
-  await requireFormat(id);
+  const format = await requireFormat(id);
+  if (format.status !== "active")
+    throw new ContentFormatConflictError("Only active content formats can be archived");
   const [row] = await db
     .update(contentFormats)
     .set({ status: "archived", updatedAt: new Date().toISOString() })
@@ -229,13 +238,41 @@ export async function archiveContentFormat(id: string) {
   return row;
 }
 export async function restoreContentFormat(id: string) {
-  await requireFormat(id);
+  const format = await requireFormat(id);
+  if (format.status !== "archived")
+    throw new ContentFormatConflictError("Only archived content formats can be restored");
   const [row] = await db
     .update(contentFormats)
     .set({ status: "draft", updatedAt: new Date().toISOString() })
     .where(eq(contentFormats.id, id))
     .returning();
   return row;
+}
+export async function activateContentFormat(id: string) {
+  return db.transaction(async (tx) => {
+    const [format] = await tx
+      .select()
+      .from(contentFormats)
+      .where(eq(contentFormats.id, uuid.parse(id)))
+      .limit(1);
+    if (!format) notFound("Content format not found");
+    if (format.status !== "draft")
+      throw new ContentFormatConflictError("Only draft content formats can be activated");
+    const [row] = await tx
+      .select({ videoCount: count(contentFormatVideos.videoId) })
+      .from(contentFormatVideos)
+      .where(eq(contentFormatVideos.contentFormatId, id));
+    if (Number(row.videoCount) < 1)
+      throw new ContentFormatConflictError("Add at least one video before activating this format");
+    const [updated] = await tx
+      .update(contentFormats)
+      .set({ status: "active", updatedAt: new Date().toISOString() })
+      .where(and(eq(contentFormats.id, id), eq(contentFormats.status, "draft")))
+      .returning();
+    if (!updated)
+      throw new ContentFormatConflictError("Content format status changed before activation");
+    return updated;
+  });
 }
 export async function listContentFormats(
   input: { status?: string; search?: string; limit?: string } = {},
@@ -261,11 +298,7 @@ export async function listContentFormats(
       contentFormatChannels,
       eq(contentFormatChannels.contentFormatId, contentFormats.id),
     )
-    .where(
-      status
-        ? eq(contentFormats.status, status)
-        : ne(contentFormats.status, "archived"),
-    )
+    .where(status ? eq(contentFormats.status, status) : undefined)
     .groupBy(contentFormats.id)
     .orderBy(desc(contentFormats.updatedAt))
     .limit(search ? 100 : limit);
@@ -335,7 +368,7 @@ export async function detachVideoFromContentFormat(
   id: string,
   videoId: string,
 ) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const [row] = await db
     .delete(contentFormatVideos)
     .where(
@@ -437,7 +470,7 @@ export async function updateChannelAssociation(
   channelId: string,
   input: unknown,
 ) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const values = channelAssociationSchema
     .omit({ channelId: true })
     .partial()
@@ -464,7 +497,7 @@ export async function detachChannelFromContentFormat(
   id: string,
   channelId: string,
 ) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const [row] = await db
     .delete(contentFormatChannels)
     .where(
@@ -499,7 +532,7 @@ export async function updateContentFormatEvidence(
   evidenceId: string,
   input: unknown,
 ) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const values = z
     .object({
       videoId: uuid.nullable().optional(),
@@ -534,7 +567,7 @@ export async function deleteContentFormatEvidence(
   id: string,
   evidenceId: string,
 ) {
-  await requireFormat(id);
+  await requireFormat(id, true);
   const [row] = await db
     .delete(contentFormatEvidence)
     .where(

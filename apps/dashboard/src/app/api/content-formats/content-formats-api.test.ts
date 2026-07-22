@@ -19,6 +19,7 @@ import * as formats from "./route";
 import * as detail from "./[id]/route";
 import * as archive from "./[id]/archive/route";
 import * as restore from "./[id]/restore/route";
+import * as activate from "./[id]/activate/route";
 import * as videos from "./[id]/videos/route";
 import * as videoMutation from "./[id]/videos/[videoId]/route";
 import * as bulk from "./[id]/videos/bulk/route";
@@ -110,6 +111,10 @@ async function create(name = `Api format ${randomUUID()}`) {
   made.f.push(body.id);
   return body;
 }
+async function activateFormat(id: string, videoId: string) {
+  await videos.POST(json("http://x", { videoId }), { params: { id } });
+  return activate.POST(new Request("http://x", { method: "POST" }), { params: { id } });
+}
 afterEach(async () => {
   for (const x of made.f.splice(0))
     await db.delete(contentFormats).where(eq(contentFormats.id, x));
@@ -161,13 +166,11 @@ describe("Content Formats HTTP contracts", () => {
       (await detail.GET(new Request("http://x"), { params: { id: "bad" } }))
         .status,
     ).toBe(400);
-    expect(
-      (
-        await archive.POST(new Request("http://x", { method: "POST" }), {
-          params: { id: f.id },
-        })
-      ).status,
-    ).toBe(200);
+    expect((await archive.POST(new Request("http://x", { method: "POST" }), { params: { id: f.id } })).status).toBe(409);
+    const x = await fixture();
+    expect((await activateFormat(f.id, x.vs[0])).status).toBe(200);
+    expect((await activate.POST(new Request("http://x", { method: "POST" }), { params: { id: f.id } })).status).toBe(409);
+    expect((await archive.POST(new Request("http://x", { method: "POST" }), { params: { id: f.id } })).status).toBe(200);
     expect(
       (
         await restore.POST(new Request("http://x", { method: "POST" }), {
@@ -309,9 +312,8 @@ describe("Content Formats HTTP contracts", () => {
         )
       ).status,
     ).toBe(404);
-    await archive.POST(new Request("http://x", { method: "POST" }), {
-      params: { id: f.id },
-    });
+    await activateFormat(f.id, x.vs[1]);
+    await archive.POST(new Request("http://x", { method: "POST" }), { params: { id: f.id } });
     const res = await evidence.POST(
       json("http://x", {
         videoId: x.vs[0],
@@ -552,6 +554,7 @@ describe("Content Formats HTTP contracts", () => {
         )
       ).status,
     ).toBe(404);
+    await activateFormat(f.id, x.vs[0]);
     await archive.POST(new Request("http://x", { method: "POST" }), ctx);
     expect(
       (
