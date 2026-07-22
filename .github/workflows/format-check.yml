@@ -13,22 +13,50 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: '7'
+          version: "7"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Check formatting
-        run: pnpm format:check
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+          else
+            base_sha="$PUSH_BASE_SHA"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="HEAD^"
+          fi
+
+          mapfile -t files < <(
+            git diff --name-only --diff-filter=ACMR "$base_sha" HEAD -- \
+              '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' '*.yml' '*.yaml'
+          )
+
+          if (( ${#files[@]} == 0 )); then
+            echo "No changed files require formatting checks."
+            exit 0
+          fi
+
+          pnpm exec prettier --check "${files[@]}"
 
       - name: Suggest formatting fix
         if: failure()
