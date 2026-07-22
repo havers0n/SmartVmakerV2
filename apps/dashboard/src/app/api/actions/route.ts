@@ -27,6 +27,7 @@ import {
   FEATURE_NOT_AVAILABLE,
   FeatureNotAvailableError,
 } from '@/server/generation-availability';
+import { ScenarioGenerationError } from '@/shared/scenarios';
 
 type ActionContext = { userId?: string };
 type ActionHandler = (payload: unknown, ctx?: ActionContext) => Promise<unknown> | unknown;
@@ -169,6 +170,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: error.message, code: FEATURE_NOT_AVAILABLE },
         { status: 503 },
+      );
+    }
+
+    if (error instanceof ScenarioGenerationError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: error.code,
+          details: error.details,
+        },
+        { status: error.status },
       );
     }
 

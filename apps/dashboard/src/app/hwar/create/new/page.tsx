@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
@@ -24,8 +24,10 @@ import {
 import { Textarea } from "@/shared/components/ui/textarea";
 import { ModelSelector } from "@/shared/components/ai/ModelSelector";
 import {
+  ActionHttpError,
   listStoryTemplates,
   startGenerationProject,
+  type StartGenerationProjectResult,
   type StoryTemplate,
 } from "@/shared/api/actions";
 import { useToast } from "@/shared/hooks/use-toast";
@@ -73,6 +75,7 @@ export default function NewProject() {
   const [textModelId, setTextModelId] = useState<string | null>(null);
   const [imageModelId, setImageModelId] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const formatsQuery = useQuery({
     queryKey: ["content-formats", { status: "active", search }],
     queryFn: () =>
@@ -120,13 +123,14 @@ export default function NewProject() {
   });
   const create = useMutation({
     mutationFn: () => {
+      setGenerationError(null);
       if (!payload)
         throw new Error(
           "Choose a valid starting point and provide a specific video idea.",
         );
       return startGenerationProject(payload);
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: StartGenerationProjectResult) => {
       toast({
         title: "Success",
         description: result.message || "Project created successfully",
@@ -134,13 +138,21 @@ export default function NewProject() {
       router.push(`/hwar/create/${result.project.id}`);
     },
     onError: (error: Error) => {
-      const message = error.message;
+      const code = error instanceof ActionHttpError ? error.code : undefined;
+      const message = code === "SCENARIO_GENERATION_TRUNCATED"
+        ? "The model response was incomplete. Your settings are preserved; retry to generate the scenarios again."
+        : code?.startsWith("SCENARIO_GENERATION_")
+          ? "The model returned invalid scenario data. Your settings are preserved; please retry."
+          : error.message;
       if (/content format.*(draft|archived|not found)/i.test(message)) {
         setSourceError(`${message}. Choose another active Content Format.`);
         setContentFormatId(null);
       }
+      if (code?.startsWith("SCENARIO_GENERATION_")) setGenerationError(message);
       toast({
-        title: "Could not create project",
+        title: code?.startsWith("SCENARIO_GENERATION_")
+          ? "Scenario generation failed"
+          : "Could not create project",
         description: message,
         variant: "destructive",
       });
@@ -436,11 +448,17 @@ export default function NewProject() {
             {create.isPending
               ? "Creating..."
               : step === 3
-                ? "Create Project"
+                ? generationError ? "Retry" : "Create Project"
                 : "Continue"}
             {!create.isPending && <ArrowRight className="ml-2 h-4 w-4" />}
           </Button>
         </div>
+        {generationError && step === 3 && (
+          <Card className="mt-4 border-destructive/40 bg-destructive/5 p-4" role="alert">
+            <p className="font-medium text-destructive">Scenario generation failed</p>
+            <p className="mt-1 text-sm text-muted-foreground">{generationError}</p>
+          </Card>
+        )}
       </div>
     </div>
   );

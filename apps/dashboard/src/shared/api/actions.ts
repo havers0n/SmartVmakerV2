@@ -10,6 +10,7 @@ export interface ActionResponse<T = unknown> {
   action: string;
   result?: T;
   error?: string;
+  code?: string;
   details?: unknown;
 }
 
@@ -22,11 +23,13 @@ export class ActionHttpError extends Error {
   public readonly action: string;
   public readonly status: number;
   public readonly details?: unknown;
+  public readonly code?: string;
 
   constructor(params: {
     action: string;
     status: number;
     message: string;
+    code?: string;
     details?: unknown;
   }) {
     super(params.message);
@@ -34,6 +37,7 @@ export class ActionHttpError extends Error {
     this.action = params.action;
     this.status = params.status;
     this.details = params.details;
+    this.code = params.code;
   }
 }
 
@@ -127,6 +131,7 @@ export async function callAction<T = unknown>(
         status: response.status,
         message:
           data.error || `HTTP ${response.status}: ${response.statusText}`,
+        code: data.code,
         details: data.details,
       });
     }
@@ -219,8 +224,13 @@ export async function deleteCharacter(id: string) {
 // Generation Actions
 // =============================================================================
 
+export interface StartGenerationProjectResult {
+  message?: string;
+  project: { id: string; status: string; createdAt: string };
+}
+
 export async function startGenerationProject(payload: unknown) {
-  return callAction("generation.startProject", payload);
+  return callAction<StartGenerationProjectResult>("generation.startProject", payload);
 }
 
 export async function generateKeyframes(payload: unknown) {
