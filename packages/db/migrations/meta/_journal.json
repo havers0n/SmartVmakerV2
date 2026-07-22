@@ -211,6 +211,13 @@
       "when": 1785169003000,
       "tag": "0029_durable_scenario_execution",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785169004000,
+      "tag": "0030_creation_wizard_v2_content_formats",
+      "breakpoints": true
     }
   ]
 }

@@ -313,12 +313,10 @@ export function ContentFormatDetailPage() {
           {d.format.status === "active" && (
             <Button
               onClick={() =>
-                router.push(
-                  `/hwar/create/new?source=content_format&contentFormatId=${d.format.id}`,
-                )
+                router.push(`/hwar/create/v2?contentFormatId=${d.format.id}`)
               }
             >
-              Create Project from Format
+              Create with Wizard V2
             </Button>
           )}
           {d.format.status === "draft" && (

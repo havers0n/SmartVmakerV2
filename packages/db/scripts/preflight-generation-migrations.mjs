@@ -20,10 +20,29 @@ const TARGETS = [
       "jobs.scenario_generation_job_queue",
     ],
   },
+  {
+    tag: "0030_creation_wizard_v2_content_formats",
+    objects: [],
+    columns: [
+      "public.content_formats.example_output",
+      "public.content_formats.input_schema",
+      "public.content_formats.production_defaults",
+      "public.content_formats.production_rules",
+      "generation_pipeline.video_projects.client_submission_id",
+      "generation_pipeline.generation_runs.client_submission_id",
+    ],
+    constraints: [
+      "public.content_formats.content_formats_input_schema_object_check",
+      "public.content_formats.content_formats_production_defaults_object_check",
+      "public.content_formats.content_formats_production_rules_array_check",
+      "generation_pipeline.video_projects.video_projects_owner_submission_unique",
+      "generation_pipeline.generation_runs.generation_runs_project_submission_unique",
+    ],
+  },
 ];
 
 export function classifyGenerationMigrationState(targets) {
-  const [migration0028, migration0029] = targets;
+  const [migration0028, migration0029, migration0030] = targets;
   for (const target of targets) {
     if (target.hashMismatch) {
       return {
@@ -61,6 +80,13 @@ export function classifyGenerationMigrationState(targets) {
       message: "0029 objects exist without the 0028 foundation",
     };
   }
+  if (migration0030.schemaPresent && !migration0029.schemaPresent) {
+    return {
+      safe: false,
+      code: "0030_WITHOUT_0029",
+      message: "0030 objects exist without the 0029 durable scenario pipeline",
+    };
+  }
   if (
     migration0028.journalPresent &&
     migration0029.journalPresent &&
@@ -72,24 +98,42 @@ export function classifyGenerationMigrationState(targets) {
       message: "0028 must precede 0029 in the Drizzle journal",
     };
   }
+  if (
+    migration0029.journalPresent &&
+    migration0030.journalPresent &&
+    migration0029.createdAt >= migration0030.createdAt
+  ) {
+    return {
+      safe: false,
+      code: "MIGRATION_ORDER_INVALID",
+      message: "0029 must precede 0030 in the Drizzle journal",
+    };
+  }
   if (!migration0028.schemaPresent && !migration0028.journalPresent) {
     return {
       safe: true,
-      code: "APPLY_0028_THEN_0029",
-      message: "Safe to apply 0028 followed by 0029",
+      code: "APPLY_0028_THEN_0029_THEN_0030",
+      message: "Safe to apply 0028 followed by 0029 and 0030",
     };
   }
   if (migration0028.schemaPresent && !migration0029.schemaPresent) {
     return {
       safe: true,
-      code: "APPLY_0029",
-      message: "Safe to apply 0029",
+      code: "APPLY_0029_THEN_0030",
+      message: "Safe to apply 0029 followed by 0030",
+    };
+  }
+  if (migration0029.schemaPresent && !migration0030.schemaPresent) {
+    return {
+      safe: true,
+      code: "APPLY_0030",
+      message: "Safe to apply 0030",
     };
   }
   return {
     safe: true,
     code: "UP_TO_DATE",
-    message: "0028 and 0029 are present in schema and journal",
+    message: "0028, 0029 and 0030 are present in schema and journal",
   };
 }
 
@@ -146,6 +190,30 @@ async function inspectDatabase(client, localTargets) {
       .filter(({ relation: value }) => value)
       .map(({ target }) => target),
   );
+  const columnNames = localTargets.flatMap(({ columns = [] }) => columns);
+  const columns = columnNames.length
+    ? await client.query(
+        `select table_schema || '.' || table_name || '.' || column_name as target
+         from information_schema.columns
+         where table_schema || '.' || table_name || '.' || column_name = any($1::text[])`,
+        [columnNames],
+      )
+    : { rows: [] };
+  for (const { target } of columns.rows) present.add(target);
+  const constraintNames = localTargets.flatMap(
+    ({ constraints = [] }) => constraints,
+  );
+  const constraints = constraintNames.length
+    ? await client.query(
+        `select n.nspname || '.' || c.relname || '.' || p.conname as target
+         from pg_constraint p
+         join pg_class c on c.oid = p.conrelid
+         join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname || '.' || c.relname || '.' || p.conname = any($1::text[])`,
+        [constraintNames],
+      )
+    : { rows: [] };
+  for (const { target } of constraints.rows) present.add(target);
   return localTargets.map((target) => {
     const matches = journal.rows.filter(
       ({ hash }) => hash === target.localHash,
@@ -155,7 +223,12 @@ async function inspectDatabase(client, localTargets) {
     );
     if (matches.length > 1)
       throw new Error(`Duplicate journal entry for ${target.tag}`);
-    const objectCount = target.objects.filter((object) =>
+    const expectedObjects = [
+      ...target.objects,
+      ...(target.columns ?? []),
+      ...(target.constraints ?? []),
+    ];
+    const objectCount = expectedObjects.filter((object) =>
       present.has(object),
     ).length;
     return {
@@ -169,9 +242,9 @@ async function inspectDatabase(client, localTargets) {
       createdAt:
         matches[0]?.created_at == null ? null : Number(matches[0].created_at),
       objectCount,
-      objectTotal: target.objects.length,
-      schemaPresent: objectCount === target.objects.length,
-      objects: target.objects.map((name) => ({
+      objectTotal: expectedObjects.length,
+      schemaPresent: objectCount === expectedObjects.length,
+      objects: expectedObjects.map((name) => ({
         name,
         present: present.has(name),
       })),

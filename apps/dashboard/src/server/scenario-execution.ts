@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { scenariosSchema } from "@scrimspec/shared-types";
 import { db } from "@/shared/lib/db";
 import {
   generationRuns,
@@ -21,7 +22,8 @@ export type ScenarioStageStatus =
   | "queued"
   | "running"
   | "ready"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 type AttemptState = { status: string; attemptNumber: number } | undefined;
 
@@ -33,12 +35,102 @@ export function deriveScenarioStageStatus(input: {
   if (!input.latestAttempt) return "not_started";
   if (input.latestAttempt.status === "queued") return "queued";
   if (input.latestAttempt.status === "running") return "running";
+  if (input.latestAttempt.status === "cancelled") return "cancelled";
   return "failed";
 }
 
-function publicAttempt<T extends { diagnosticPayload?: unknown }>(attempt: T) {
-  const { diagnosticPayload: _serverOnly, ...safe } = attempt;
-  return safe;
+function publicAttempt<
+  T extends {
+    diagnosticPayload?: unknown;
+    idempotencyKey?: unknown;
+    validationResult?: unknown;
+    usage?: unknown;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  },
+>(attempt: T) {
+  const {
+    diagnosticPayload: _diagnostic,
+    idempotencyKey: _idempotencyKey,
+    validationResult: _validationResult,
+    usage: _usage,
+    errorCode,
+    errorMessage: _internalErrorMessage,
+    ...safe
+  } = attempt;
+  const publicMessages: Record<string, string> = {
+    SCENARIO_GENERATION_TRUNCATED: "The model response was incomplete.",
+    SCENARIO_GENERATION_JSON_PARSE_FAILED:
+      "The model returned malformed scenario data.",
+    SCENARIO_GENERATION_SCHEMA_VALIDATION_FAILED:
+      "The generated scenarios did not pass validation.",
+    SCENARIO_GENERATION_EMPTY: "The model returned no scenario candidates.",
+    SCENARIO_PROVIDER_NOT_CONFIGURED:
+      "The scenario provider is not configured.",
+    SCENARIO_PROVIDER_CALL_FAILED: "The scenario provider request failed.",
+  };
+  return {
+    ...safe,
+    errorCode,
+    errorMessage: errorCode
+      ? (publicMessages[errorCode] ?? "Scenario generation failed.")
+      : null,
+  };
+}
+
+export class ScenarioArtifactReadError extends Error {
+  readonly status: 422 | 404;
+  constructor(
+    readonly code:
+      | "SCENARIO_ARTIFACT_NOT_FOUND"
+      | "SCENARIO_ARTIFACT_CORRUPTED",
+    message: string,
+  ) {
+    super(message);
+    this.name = "ScenarioArtifactReadError";
+    this.status = code === "SCENARIO_ARTIFACT_NOT_FOUND" ? 404 : 422;
+  }
+}
+
+export async function getValidatedScenarioArtifact(
+  ownerId: string,
+  projectId: string,
+  runId: string,
+) {
+  const run = await getGenerationRun(ownerId, projectId, runId);
+  const [artifact] = await db
+    .select({
+      id: scenarioArtifacts.id,
+      runId: scenarioArtifacts.runId,
+      attemptId: scenarioArtifacts.attemptId,
+      schemaVersion: scenarioArtifacts.schemaVersion,
+      payload: scenarioArtifacts.payload,
+      createdAt: scenarioArtifacts.createdAt,
+    })
+    .from(scenarioArtifacts)
+    .where(eq(scenarioArtifacts.runId, run.id))
+    .limit(1);
+  if (!artifact) {
+    throw new ScenarioArtifactReadError(
+      "SCENARIO_ARTIFACT_NOT_FOUND",
+      "Scenario artifact is not available yet",
+    );
+  }
+  const parsed = scenariosSchema.safeParse(artifact.payload);
+  if (!parsed.success) {
+    throw new ScenarioArtifactReadError(
+      "SCENARIO_ARTIFACT_CORRUPTED",
+      "Stored scenario artifact failed validation",
+    );
+  }
+  return {
+    id: artifact.id,
+    runId: artifact.runId,
+    attemptId: artifact.attemptId,
+    schemaVersion: artifact.schemaVersion,
+    createdAt: artifact.createdAt,
+    scenarios: parsed.data,
+  };
 }
 
 export async function getScenarioAttempt(
@@ -89,7 +181,14 @@ export async function getScenarioExecution(
     }),
     latestAttempt: attempts[0] ? publicAttempt(attempts[0]) : null,
     attempts: attempts.map(publicAttempt),
-    artifact: artifact ?? null,
+    artifact: artifact
+      ? {
+          id: artifact.id,
+          attemptId: artifact.attemptId,
+          schemaVersion: artifact.schemaVersion,
+          createdAt: artifact.createdAt,
+        }
+      : null,
   };
 }
 

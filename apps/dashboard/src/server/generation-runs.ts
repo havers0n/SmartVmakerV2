@@ -1,5 +1,11 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  contentFormatInputSchema,
+  contentFormatProductionDefaultsSchema,
+  formatInputsSchema,
+  validateFormatInputs,
+} from "@scrimspec/shared-types";
 import { db } from "@/shared/lib/db";
 import {
   aiModels,
@@ -73,6 +79,7 @@ const projectDefaultsInputSchema = z
     schemaVersion: z.literal(GENERATION_RUN_SCHEMA_VERSION).optional(),
     production: productionDefaultsSchema.optional(),
     models: modelDefaultsSchema.optional(),
+    formatInputs: formatInputsSchema.optional(),
   })
   .strict();
 
@@ -81,6 +88,7 @@ export const projectDefaultsSchema = projectDefaultsInputSchema.transform(
     schemaVersion: GENERATION_RUN_SCHEMA_VERSION,
     production: value.production ?? {},
     models: value.models ?? {},
+    formatInputs: value.formatInputs ?? {},
   }),
 );
 
@@ -122,6 +130,7 @@ export const sourceSnapshotSchema = z
 
 export const createVideoProjectSchema = z
   .object({
+    clientSubmissionId: z.string().trim().min(1).max(200).optional(),
     title: z.string().trim().min(1).max(200),
     idea: z.string().trim().min(1).max(10_000),
     contentFormatId: z.string().uuid().nullable().optional(),
@@ -146,6 +155,7 @@ export const updateVideoProjectSchema = z
 
 export const createGenerationRunSchema = z
   .object({
+    clientSubmissionId: z.string().trim().min(1).max(200).optional(),
     overrides: generationRunOverridesSchema.optional(),
     sourceSnapshot: sourceSnapshotSchema.nullable().optional(),
   })
@@ -202,6 +212,10 @@ type ContentFormatForSnapshot = {
   pacingPattern: string | null;
   targetDurationMinSeconds: number | null;
   targetDurationMaxSeconds: number | null;
+  exampleOutput?: string | null;
+  inputSchema?: unknown;
+  productionDefaults?: unknown;
+  productionRules?: unknown;
 };
 
 type StoryTemplateForSnapshot = {
@@ -265,6 +279,11 @@ export function resolveGenerationRunSnapshot(input: {
   );
   const overrides = generationRunOverridesSchema.parse(input.overrides ?? {});
   const systemDefaults = input.systemDefaults ?? SYSTEM_GENERATION_DEFAULTS;
+  const formatDefaults = input.contentFormat
+    ? contentFormatProductionDefaultsSchema.parse(
+        input.contentFormat.productionDefaults ?? {},
+      )
+    : {};
   const models = {
     text:
       overrides.models?.text ??
@@ -283,24 +302,29 @@ export function resolveGenerationRunSnapshot(input: {
     ratio:
       overrides.production?.ratio ??
       projectDefaults.production.ratio ??
+      formatDefaults.ratio ??
       systemDefaults.production.ratio,
     language:
       overrides.production?.language ??
       projectDefaults.production.language ??
+      formatDefaults.language ??
       systemDefaults.production.language,
     targetDurationSeconds:
       overrides.production?.targetDurationSeconds ??
       projectDefaults.production.targetDurationSeconds ??
+      formatDefaults.targetDurationSeconds ??
       formatDuration(input.contentFormat) ??
       input.storyTemplate?.targetDurationSeconds ??
       systemDefaults.production.targetDurationSeconds,
     platform:
       overrides.production?.platform ??
       projectDefaults.production.platform ??
+      formatDefaults.platform ??
       systemDefaults.production.platform,
     audioMode:
       overrides.production?.audioMode ??
       projectDefaults.production.audioMode ??
+      formatDefaults.audioMode ??
       systemDefaults.production.audioMode,
   };
   const modelSnapshot = {
@@ -312,6 +336,7 @@ export function resolveGenerationRunSnapshot(input: {
       schemaVersion: GENERATION_RUN_SCHEMA_VERSION,
       models,
       production,
+      formatInputs: projectDefaults.formatInputs,
     },
     projectSnapshot: {
       schemaVersion: GENERATION_RUN_SCHEMA_VERSION,
@@ -379,12 +404,17 @@ async function validateReferences(input: {
 }) {
   if (input.contentFormatId) {
     const [format] = await db
-      .select({ id: contentFormats.id })
+      .select({ id: contentFormats.id, status: contentFormats.status })
       .from(contentFormats)
       .where(eq(contentFormats.id, input.contentFormatId))
       .limit(1);
     if (!format)
       throw new GenerationFoundationError(404, "Content format not found");
+    if (format.status !== "active")
+      throw new GenerationFoundationError(
+        409,
+        "Only active content formats can be used for a video project",
+      );
   }
   if (input.storyTemplateId) {
     const [template] = await db
@@ -406,6 +436,7 @@ export async function createVideoProject(ownerIdInput: string, input: unknown) {
     .insert(videoProjects)
     .values({
       ownerId,
+      clientSubmissionId: values.clientSubmissionId,
       title: values.title,
       idea: values.idea,
       status: "draft",
@@ -413,8 +444,25 @@ export async function createVideoProject(ownerIdInput: string, input: unknown) {
       storyTemplateId: values.storyTemplateId ?? null,
       projectDefaults: defaults,
     })
+    .onConflictDoNothing({
+      target: [videoProjects.ownerId, videoProjects.clientSubmissionId],
+    })
     .returning();
-  return project;
+  if (project) return project;
+  if (values.clientSubmissionId) {
+    const [existing] = await db
+      .select()
+      .from(videoProjects)
+      .where(
+        and(
+          eq(videoProjects.ownerId, ownerId),
+          eq(videoProjects.clientSubmissionId, values.clientSubmissionId),
+        ),
+      )
+      .limit(1);
+    if (existing) return existing;
+  }
+  throw new Error("Video project could not be created");
 }
 
 export async function listVideoProjects(ownerIdInput: string) {
@@ -503,11 +551,32 @@ async function loadSnapshotContext(
         .where(eq(contentFormats.id, project.contentFormatId))
         .limit(1)
     : [null];
-  if (contentFormat?.status === "archived") {
+  if (contentFormat && contentFormat.status !== "active") {
     throw new GenerationFoundationError(
       409,
-      "Archived content formats cannot be used for a new run",
+      "Only active content formats can be used for a new run",
     );
+  }
+
+  if (contentFormat) {
+    const schema = contentFormatInputSchema.safeParse(
+      contentFormat.inputSchema,
+    );
+    if (!schema.success)
+      throw new GenerationFoundationError(
+        409,
+        "Content format input schema is unsupported",
+      );
+    const defaults = projectDefaultsSchema.parse(project.projectDefaults);
+    const formatInputs = validateFormatInputs(
+      schema.data,
+      defaults.formatInputs,
+    );
+    if (!formatInputs.success)
+      throw new GenerationFoundationError(
+        409,
+        "Content format inputs are invalid",
+      );
   }
 
   const [template] = project.storyTemplateId
@@ -542,6 +611,8 @@ async function validateResolvedModels(
       id: aiModels.id,
       providerId: aiModels.providerId,
       isEnabled: aiModels.isEnabled,
+      type: aiModels.type,
+      capabilities: aiModels.capabilities,
     })
     .from(aiModels)
     .where(
@@ -559,6 +630,18 @@ async function validateResolvedModels(
         `Model ${reference.provider}/${reference.modelId} is not available`,
       );
     }
+  }
+  const text = byId.get(models.text.modelId);
+  if (
+    !text ||
+    text.type !== "text-to-text" ||
+    text.providerId !== "minimax" ||
+    !text.capabilities?.includes("function_calling")
+  ) {
+    throw new GenerationFoundationError(
+      409,
+      "Selected text model does not support durable scenario generation",
+    );
   }
 }
 
@@ -581,6 +664,19 @@ export async function createGenerationRun(
       throw new GenerationFoundationError(404, "Video project not found");
 
     const context = await loadSnapshotContext(tx, projectId, ownerId);
+    if (values.clientSubmissionId) {
+      const [existing] = await tx
+        .select()
+        .from(generationRuns)
+        .where(
+          and(
+            eq(generationRuns.projectId, projectId),
+            eq(generationRuns.clientSubmissionId, values.clientSubmissionId),
+          ),
+        )
+        .limit(1);
+      if (existing) return existing;
+    }
     const snapshots = resolveGenerationRunSnapshot({
       ...context,
       overrides: values.overrides,
@@ -598,6 +694,7 @@ export async function createGenerationRun(
       .insert(generationRuns)
       .values({
         projectId,
+        clientSubmissionId: values.clientSubmissionId,
         runNumber,
         status: "draft",
         stage: "scenario",

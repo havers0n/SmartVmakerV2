@@ -4,8 +4,12 @@ import { resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
 const root = process.cwd();
-const container = "scrimspec_generation_runs_integration";
-const port = "55439";
+const container =
+  process.env.SCRIMSPEC_INTEGRATION_CONTAINER ??
+  "scrimspec_generation_runs_integration";
+const port = process.env.SCRIMSPEC_INTEGRATION_PORT ?? "55439";
+const setupOnly = process.env.SCRIMSPEC_INTEGRATION_SETUP_ONLY === "1";
+const keepDatabase = process.env.SCRIMSPEC_INTEGRATION_KEEP_DB === "1";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 let containerCreated = false;
 const foundationMigration = readFileSync(
@@ -14,6 +18,13 @@ const foundationMigration = readFileSync(
 );
 const scenarioMigration = readFileSync(
   resolve(root, "packages/db/migrations/0029_durable_scenario_execution.sql"),
+  "utf8",
+);
+const creationWizardMigration = readFileSync(
+  resolve(
+    root,
+    "packages/db/migrations/0030_creation_wizard_v2_content_formats.sql",
+  ),
   "utf8",
 );
 const migrationJournal = JSON.parse(
@@ -28,9 +39,16 @@ const foundationJournalEntry = migrationJournal.entries.find(
 const scenarioJournalEntry = migrationJournal.entries.find(
   ({ tag }) => tag === "0029_durable_scenario_execution",
 );
-if (!foundationJournalEntry || !scenarioJournalEntry) {
+const creationWizardJournalEntry = migrationJournal.entries.find(
+  ({ tag }) => tag === "0030_creation_wizard_v2_content_formats",
+);
+if (
+  !foundationJournalEntry ||
+  !scenarioJournalEntry ||
+  !creationWizardJournalEntry
+) {
   throw new Error(
-    "0028 and 0029 must be present in the local migration journal",
+    "0028, 0029 and 0030 must be present in the local migration journal",
   );
 }
 const migrationHistory = `
@@ -40,7 +58,8 @@ CREATE TABLE drizzle.__drizzle_migrations (
 );
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
   ('${createHash("sha256").update(foundationMigration).digest("hex")}', ${foundationJournalEntry.when}),
-  ('${createHash("sha256").update(scenarioMigration).digest("hex")}', ${scenarioJournalEntry.when});
+  ('${createHash("sha256").update(scenarioMigration).digest("hex")}', ${scenarioJournalEntry.when}),
+  ('${createHash("sha256").update(creationWizardMigration).digest("hex")}', ${creationWizardJournalEntry.when});
 `;
 
 const bootstrap = `
@@ -68,9 +87,14 @@ CREATE TABLE aes_core.beats (
   "order" integer NOT NULL, phase text NOT NULL, duration_seconds numeric NOT NULL, description text NOT NULL,
   action_prompt text, emotion text NOT NULL, contrast text, intended_impact text, meta jsonb DEFAULT '{}'::jsonb
 );
-CREATE TABLE aes_core.ai_models (id text PRIMARY KEY, provider_id text NOT NULL, is_enabled boolean NOT NULL DEFAULT true);
-INSERT INTO aes_core.ai_models (id, provider_id) VALUES
-  ('minimax-m2', 'minimax'), ('gemini-2.5-flash-image', 'google_gemini'), ('minimax-halu-video', 'minimax');
+CREATE TABLE aes_core.ai_models (
+  id text PRIMARY KEY, provider_id text NOT NULL, is_enabled boolean NOT NULL DEFAULT true,
+  type text NOT NULL, capabilities text[] NOT NULL DEFAULT '{}'
+);
+INSERT INTO aes_core.ai_models (id, provider_id, type, capabilities) VALUES
+  ('minimax-m2', 'minimax', 'text-to-text', ARRAY['function_calling']),
+  ('gemini-2.5-flash-image', 'google_gemini', 'text-to-image', ARRAY[]::text[]),
+  ('minimax-halu-video', 'minimax', 'image-to-video', ARRAY[]::text[]);
 CREATE TABLE generation_pipeline.generation_projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid, template_id uuid, content_format_id uuid,
   status text NOT NULL DEFAULT 'pending', stage text NOT NULL DEFAULT 'init', final_video_url text,
@@ -157,6 +181,7 @@ try {
   psql(bootstrap);
   psql(foundationMigration);
   psql(scenarioMigration);
+  psql(creationWizardMigration);
   psql(migrationHistory);
   run(pnpm, ["--filter", "@scrimspec/db", "migrations:preflight:generation"], {
     shell: process.platform === "win32",
@@ -168,47 +193,55 @@ try {
   run(pnpm, ["--filter", "@scrimspec/db", "build"], {
     shell: process.platform === "win32",
   });
-  run(
-    pnpm,
-    [
-      "--filter",
-      "dashboard",
-      "exec",
-      "vitest",
-      "run",
-      "src/server/generation-runs.integration.test.ts",
-    ],
-    {
-      shell: process.platform === "win32",
-      env: {
-        ...process.env,
-        DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
-        DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+  if (setupOnly) {
+    console.log(
+      `Temporary PostgreSQL is ready at postgresql://postgres@127.0.0.1:${port}/postgres`,
+    );
+  } else {
+    run(
+      pnpm,
+      [
+        "--filter",
+        "dashboard",
+        "exec",
+        "vitest",
+        "run",
+        "src/server/generation-runs.integration.test.ts",
+        "src/server/creation-v2.integration.test.ts",
+      ],
+      {
+        shell: process.platform === "win32",
+        env: {
+          ...process.env,
+          CREATION_V2_INTEGRATION: "1",
+          DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+          DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+        },
       },
-    },
-  );
-  run(
-    pnpm,
-    [
-      "--filter",
-      "@scrimspec/workers",
-      "exec",
-      "vitest",
-      "run",
-      "src/__tests__/scenario-worker.integration.test.ts",
-    ],
-    {
-      shell: process.platform === "win32",
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
-        DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+    );
+    run(
+      pnpm,
+      [
+        "--filter",
+        "@scrimspec/workers",
+        "exec",
+        "vitest",
+        "run",
+        "src/__tests__/scenario-worker.integration.test.ts",
+      ],
+      {
+        shell: process.platform === "win32",
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+          DRIZZLE_DATABASE_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+        },
       },
-    },
-  );
+    );
+  }
 } finally {
-  if (containerCreated) {
+  if (containerCreated && !keepDatabase) {
     spawnSync("docker", ["rm", "-f", container], {
       cwd: root,
       stdio: "ignore",
