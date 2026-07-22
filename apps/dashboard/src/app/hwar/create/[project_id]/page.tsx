@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/shared/components/ui/button";
@@ -15,21 +15,7 @@ import Image from "next/image";
 import { PROJECT_TABS, type ProjectTabId } from "@/shared/const/projectTabs";
 import { MissionControlTab } from "./MissionControlTab";
 import { useAnimationOverview } from "@/hooks/useAnimationOverview";
-
-interface Scene {
-  phase: string;
-  duration: number;
-  description: string;
-}
-
-interface Scenario {
-  title: string;
-  description: string;
-  aesScore: number;
-  hookStrength: number;
-  emotionalCurve: string[];
-  scenes: Scene[];
-}
+import { getScenarioWorkspaceState, parseStoredScenarios } from "@/shared/scenarios";
 
 interface Project {
   id: string;
@@ -37,9 +23,10 @@ interface Project {
   meta: {
     title?: string;
     ratio?: string;
-    scenarios?: Scenario[];
+    scenarios?: unknown;
     selectedScenarioIndex?: number;
     keyframeGenerationStartedAt?: string;
+    scenarioGenerationFailure?: { code?: string };
   };
   createdAt: string;
 }
@@ -112,15 +99,6 @@ export default function ProjectDetailPage() {
   // --- ВОТ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
   // Если у нас еще нет projectId, мы не можем ничего делать дальше.
   // Показываем заглушку и ждем следующего рендера.
-  if (!projectId) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-  // --------------------------------
-
   // Fetch project data
   const { data: project, isLoading, refetch } = useQuery<Project>({
     queryKey: ["project", projectId],
@@ -160,11 +138,12 @@ export default function ProjectDetailPage() {
     enabled: !!project?.meta?.keyframeGenerationStartedAt,
   });
 
-  const animationOverview = useAnimationOverview(projectId);
+  const animationOverview = useAnimationOverview(projectId ?? "");
 
   // Auto-select first scenario on load
   useEffect(() => {
-    if (project?.meta?.scenarios && selectedScenarioIndex === null) {
+    const result = parseStoredScenarios(project?.meta?.scenarios);
+    if (project && result.success && selectedScenarioIndex === null) {
       setSelectedScenarioIndex(project.meta.selectedScenarioIndex ?? 0);
     }
   }, [project, selectedScenarioIndex]);
@@ -198,6 +177,14 @@ export default function ProjectDetailPage() {
       });
     },
   });
+
+  if (!projectId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
@@ -316,7 +303,27 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const scenarios = project.meta.scenarios || [];
+  const scenarioState = getScenarioWorkspaceState(
+    project.meta.scenarios,
+    project.meta.scenarioGenerationFailure,
+  );
+  if (scenarioState.status === "corrupted") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+        <Card className="max-w-lg p-8 text-center" role="alert">
+          <h1 className="text-2xl font-semibold">Scenario data is corrupted</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            This project does not contain a valid generated scenario. Create it again to continue safely.
+          </p>
+          <Button className="mt-6" onClick={() => router.push("/hwar/create/new")}>
+            Create a new project
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const scenarios = scenarioState.status === "ready" ? scenarioState.scenarios : [];
   const selectedScenario = selectedScenarioIndex !== null ? scenarios[selectedScenarioIndex] : null;
 
   // Group assets by scene

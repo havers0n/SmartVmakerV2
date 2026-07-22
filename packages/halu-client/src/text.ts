@@ -49,6 +49,8 @@ export interface TextGenerationResponse {
   message: OpenAI.Chat.Completions.ChatCompletionMessage;
   /** Usage statistics */
   usage?: OpenAI.Completions.CompletionUsage;
+  /** Why the provider stopped generating the selected choice. */
+  finishReason: string | null;
 }
 
 /**
@@ -66,7 +68,7 @@ export interface ToolCall {
     /** Arguments as JSON string */
     arguments: string;
     /** Parsed arguments object */
-    argumentsParsed?: Record<string, any>;
+    argumentsParsed?: Record<string, unknown>;
   };
 }
 
@@ -185,6 +187,7 @@ export async function generateScenariosWithTools(
     }) as OpenAI.Chat.Completions.ChatCompletion;
 
     const message = completion.choices[0].message;
+    const finishReason = completion.choices[0].finish_reason ?? null;
     const usage = completion.usage;
 
     // Parse tool calls if present
@@ -195,11 +198,14 @@ export async function generateScenariosWithTools(
             const functionCall = tc as OpenAI.Chat.Completions.ChatCompletionMessageToolCall & {
               function: { name: string; arguments: string };
             };
-            let argumentsParsed: Record<string, any> | undefined;
+            let argumentsParsed: Record<string, unknown> | undefined;
             try {
               argumentsParsed = JSON.parse(functionCall.function.arguments);
-            } catch (error) {
-              console.warn('Failed to parse tool call arguments:', functionCall.function.arguments);
+            } catch {
+              console.warn('Failed to parse tool call arguments', {
+                toolName: functionCall.function.name,
+                rawResponseLength: functionCall.function.arguments.length,
+              });
             }
 
             return {
@@ -219,6 +225,7 @@ export async function generateScenariosWithTools(
       toolCalls,
       message,
       usage,
+      finishReason,
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -293,9 +300,13 @@ export async function generateScenariosWithToolsStreaming(
 
     let fullContent = '';
     let toolCallsAccumulated: any[] = [];
+    let finishReason: string | null = null;
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta;
+      if (chunk.choices[0]?.finish_reason) {
+        finishReason = chunk.choices[0].finish_reason;
+      }
 
       if (delta?.content) {
         fullContent += delta.content;
@@ -329,11 +340,14 @@ export async function generateScenariosWithToolsStreaming(
     // Parse tool calls
     const toolCalls: ToolCall[] | null = toolCallsAccumulated.length
       ? toolCallsAccumulated.map((tc) => {
-          let argumentsParsed: Record<string, any> | undefined;
+          let argumentsParsed: Record<string, unknown> | undefined;
           try {
             argumentsParsed = JSON.parse(tc.function.arguments);
-          } catch (error) {
-            console.warn('Failed to parse tool call arguments:', tc.function.arguments);
+          } catch {
+            console.warn('Failed to parse tool call arguments', {
+              toolName: tc.function.name,
+              rawResponseLength: tc.function.arguments.length,
+            });
           }
 
           return {
@@ -363,6 +377,7 @@ export async function generateScenariosWithToolsStreaming(
       toolCalls,
       message: finalMessage,
       usage: undefined, // Streaming doesn't provide usage stats
+      finishReason,
     };
   } catch (error) {
     if (error instanceof Error) {
