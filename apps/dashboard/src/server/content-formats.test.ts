@@ -4,6 +4,7 @@ import {
   bulkVideoAssociationSchema,
   createContentFormatSchema,
   evidenceSchema,
+  updateContentFormatSchema,
   videoAssociationSchema,
 } from "./content-formats";
 
@@ -23,6 +24,10 @@ describe("content format validation", () => {
         targetDurationMaxSeconds: 10,
       }).success,
     ).toBe(false);
+  });
+  it("never accepts lifecycle status through create or generic update", () => {
+    expect(createContentFormatSchema.safeParse({ name: "Format", status: "active" }).success).toBe(false);
+    expect(updateContentFormatSchema.safeParse({ status: "archived" }).success).toBe(false);
   });
   it("rejects invalid association confidence and roles", () => {
     expect(

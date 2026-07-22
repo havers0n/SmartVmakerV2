@@ -29,10 +29,11 @@ describe.sequential('project API integration', () => {
     ];
     for (const payload of payloads) { const response = await actions(req(payload)); expect(response.status).toBe(200); made.p.push((await response.json()).result.project.id); }
     const rows = await db.select().from(generationProjects).where(eq(generationProjects.ownerId, owner)); expect(rows).toHaveLength(6);
-    expect(rows.map((x: any) => x.contentFormatId)).toEqual([null, null, f.id, f.id, null, null]); expect(rows.map((x: any) => x.templateId)).toEqual([null, t.id, null, t.id, t.id, null]);
+    const byId = new Map(rows.map((row: any) => [row.id, row])); const created = made.p.map((id) => byId.get(id)!);
+    expect(created.map((x: any) => x.contentFormatId)).toEqual([null, null, f.id, f.id, null, null]); expect(created.map((x: any) => x.templateId)).toEqual([null, t.id, null, t.id, t.id, null]);
     const list = await actions(new NextRequest('http://test/api/actions', { method: 'POST', headers: { 'content-type': 'application/json', 'x-scrimspec-user-id': owner }, body: JSON.stringify({ action: 'projects.list', payload: {} }) })); const listed = (await list.json()).result;
     expect(listed).toHaveLength(6); expect(listed.find((x: any) => x.title === 'Combined title')).toMatchObject({ contentFormat: { id: f.id }, storyTemplate: { id: t.id } });
-    const archivedProject = rows[2]; await db.update(contentFormats).set({ status: 'archived' }).where(eq(contentFormats.id, f.id)); const response = await detail(new NextRequest(`http://test/api/generation/projects/${archivedProject.id}`, { headers: { 'x-scrimspec-user-id': owner } }), { params: { project_id: archivedProject.id } }); const body = await response.json();
+    const archivedProject = created[2]; await db.update(contentFormats).set({ status: 'archived' }).where(eq(contentFormats.id, f.id)); const response = await detail(new NextRequest(`http://test/api/generation/projects/${archivedProject.id}`, { headers: { 'x-scrimspec-user-id': owner } }), { params: { project_id: archivedProject.id } }); const body = await response.json();
     expect(response.status).toBe(200); expect(body).toMatchObject({ contentFormat: { id: f.id, status: 'archived' }, storyTemplate: null }); expect(body.meta).toMatchObject({ prompt: idea, generationContext: { contentFormat: { hookPattern: 'hook' } } }); expect(body.meta.title).toBe('Format title');
   });
   it('maps strict validation, relation errors, and rollback through the route', async () => {

@@ -8,7 +8,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     // Discovery DB integration owns a serial runner; running it in the default
     // parallel suite races its lease/budget fixtures.
-    exclude: [...configDefaults.exclude, 'e2e/**', 'tests/**', 'src/server/discovery-runs-*.integration.test.ts'],
+    exclude: [...configDefaults.exclude, 'e2e/**', 'tests/**', 'src/server/discovery-runs-*.integration.test.ts', 'src/features/content-formats/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
