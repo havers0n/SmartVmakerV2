@@ -7,8 +7,8 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '7.33.7'
+  NODE_VERSION: "20"
+  PNPM_VERSION: "7.33.7"
 
 jobs:
   # ============================================================================
@@ -115,6 +115,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace dependencies
+        run: pnpm build:packages
+
       - name: Run production type-check
         run: pnpm type-check:all
 
@@ -152,16 +155,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace runtime packages
+        run: pnpm build:packages
+
       - name: Build dashboard production runtime
         env:
           DATABASE_URL: postgresql://user:password@localhost:5432/scrimspec
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
-          NODE_TLS_REJECT_UNAUTHORIZED: '1'
+          NODE_TLS_REJECT_UNAUTHORIZED: "1"
         run: pnpm --filter dashboard build
-
-      - name: Build workspace runtime packages
-        run: pnpm build:packages
 
       - name: Verify build artifacts
         run: |
@@ -180,4 +183,3 @@ jobs:
             apps/*/out
             apps/*/.next
           retention-days: 7
-

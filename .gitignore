@@ -31,6 +31,8 @@ pnpm-debug.log*
 
 # Generated
 supabase/
+!apps/dashboard/src/shared/lib/supabase/
+!apps/dashboard/src/shared/lib/supabase/*.ts
 .drizzle/
 
 # Output files
