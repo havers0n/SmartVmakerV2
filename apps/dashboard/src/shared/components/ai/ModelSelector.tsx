@@ -2,7 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Label } from "@/shared/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { listModels, ModelType, ModelWithProvider } from "@/shared/api/actions";
 import { Badge } from "@/shared/components/ui/badge";
@@ -38,6 +44,8 @@ export interface ModelSelectorProps {
    * Optional test ID for the selector
    */
   testId?: string;
+  filter?: (model: ModelWithProvider) => boolean;
+  emptyMessage?: string;
 }
 
 /**
@@ -53,11 +61,18 @@ export function ModelSelector({
   value,
   onChange,
   testId,
+  filter,
+  emptyMessage,
 }: ModelSelectorProps) {
-  const { data: models = [], isLoading, error } = useQuery<ModelWithProvider[]>({
+  const {
+    data: registryModels = [],
+    isLoading,
+    error,
+  } = useQuery<ModelWithProvider[]>({
     queryKey: ["models", type],
     queryFn: () => listModels(type),
   });
+  const models = filter ? registryModels.filter(filter) : registryModels;
 
   // Find the default model to use as initial selection if no value is set
   const defaultModel = models.find((m) => m.isDefault);
@@ -71,22 +86,28 @@ export function ModelSelector({
 
   return (
     <div>
-      <Label htmlFor={`model-${type}`} className="text-sm font-medium mb-2 block">
+      <Label
+        htmlFor={`model-${type}`}
+        className="text-sm font-medium mb-2 block"
+      >
         {label}
       </Label>
 
       {error ? (
         <div className="text-sm text-destructive">
-          Failed to load models: {error instanceof Error ? error.message : "Unknown error"}
+          Failed to load models:{" "}
+          {error instanceof Error ? error.message : "Unknown error"}
         </div>
       ) : isLoading ? (
         <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted/50">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Loading models...</span>
+          <span className="text-sm text-muted-foreground">
+            Loading models...
+          </span>
         </div>
       ) : models.length === 0 ? (
         <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/50">
-          No models available for type: {type}
+          {emptyMessage ?? `No models available for type: ${type}`}
         </div>
       ) : (
         <Select value={value || undefined} onValueChange={onChange}>
@@ -126,16 +147,21 @@ export function ModelSelector({
             return (
               <div className="text-xs text-muted-foreground">
                 <div className="flex gap-2 flex-wrap">
-                  {selectedModel.capabilities && selectedModel.capabilities.length > 0 && (
-                    <>
-                      <span>Capabilities:</span>
-                      {selectedModel.capabilities.map((cap) => (
-                        <Badge key={cap} variant="outline" className="text-xs">
-                          {cap}
-                        </Badge>
-                      ))}
-                    </>
-                  )}
+                  {selectedModel.capabilities &&
+                    selectedModel.capabilities.length > 0 && (
+                      <>
+                        <span>Capabilities:</span>
+                        {selectedModel.capabilities.map((cap) => (
+                          <Badge
+                            key={cap}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {cap}
+                          </Badge>
+                        ))}
+                      </>
+                    )}
                 </div>
               </div>
             );

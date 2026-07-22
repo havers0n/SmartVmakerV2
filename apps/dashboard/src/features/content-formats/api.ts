@@ -13,6 +13,10 @@ export type Format = {
   notes?: string | null;
   targetDurationMinSeconds?: number | null;
   targetDurationMaxSeconds?: number | null;
+  exampleOutput?: string | null;
+  inputSchema?: unknown;
+  productionDefaults?: unknown;
+  productionRules?: unknown;
   updatedAt: string;
 };
 export type Counts = {
@@ -30,7 +34,10 @@ export type Detail = {
 };
 
 export class ContentFormatsApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
     super(message);
   }
 }
@@ -42,7 +49,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new ContentFormatsApiError(body.error || "Request failed", response.status);
+    throw new ContentFormatsApiError(
+      body.error || "Request failed",
+      response.status,
+    );
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

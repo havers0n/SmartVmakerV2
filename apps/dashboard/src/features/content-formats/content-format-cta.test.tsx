@@ -58,10 +58,10 @@ describe("Content Format project CTA", () => {
     renderDetail();
     await screen.findByText("Explainer");
     await screen
-      .findByRole("button", { name: "Create Project from Format" })
+      .findByRole("button", { name: "Create with Wizard V2" })
       .then((button) => button.click());
     expect(push).toHaveBeenCalledWith(
-      "/hwar/create/new?source=content_format&contentFormatId=format-1",
+      "/hwar/create/v2?contentFormatId=format-1",
     );
   });
   it("explains why draft and archived formats cannot create projects", async () => {
@@ -73,7 +73,7 @@ describe("Content Format project CTA", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Create Project from Format" }),
+      screen.queryByRole("button", { name: "Create with Wizard V2" }),
     ).not.toBeInTheDocument();
     unmount();
     detail.mockResolvedValue(base("archived"));
@@ -84,7 +84,7 @@ describe("Content Format project CTA", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Create Project from Format" }),
+      screen.queryByRole("button", { name: "Create with Wizard V2" }),
     ).not.toBeInTheDocument();
   });
 });

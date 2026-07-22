@@ -1,5 +1,10 @@
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  contentFormatInputSchema,
+  contentFormatProductionDefaultsSchema,
+  contentFormatProductionRulesSchema,
+} from "@scrimspec/shared-types";
 import { db } from "@/shared/lib/db";
 import {
   contentFormatChannels,
@@ -66,27 +71,61 @@ const durationFields = {
   targetDurationMinSeconds: z.number().int().min(0).nullable().optional(),
   targetDurationMaxSeconds: z.number().int().min(0).nullable().optional(),
 };
-const contentFormatFields = z.object({
-  name: z.string().trim().min(1).max(160),
-  description: shortText,
-  formatType: formatTypeSchema.default("mixed"),
-  hookPattern: shortText,
-  structurePattern: shortText,
-  visualPattern: shortText,
-  pacingPattern: shortText,
-  notes: shortText,
-  ...durationFields,
-}).strict();
-export const createContentFormatSchema = contentFormatFields.refine(
-  (v) =>
-    v.targetDurationMinSeconds == null ||
-    v.targetDurationMaxSeconds == null ||
-    v.targetDurationMinSeconds <= v.targetDurationMaxSeconds,
-  {
-    message: "Minimum duration cannot exceed maximum duration",
-    path: ["targetDurationMinSeconds"],
-  },
-);
+const contentFormatFields = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+    description: shortText,
+    formatType: formatTypeSchema.default("mixed"),
+    hookPattern: shortText,
+    structurePattern: shortText,
+    visualPattern: shortText,
+    pacingPattern: shortText,
+    notes: shortText,
+    exampleOutput: shortText,
+    inputSchema: contentFormatInputSchema.optional(),
+    productionDefaults: contentFormatProductionDefaultsSchema.optional(),
+    productionRules: contentFormatProductionRulesSchema.optional(),
+    ...durationFields,
+  })
+  .strict();
+function validateContentFormatDefaults(
+  value: Partial<z.infer<typeof contentFormatFields>>,
+  ctx: z.RefinementCtx,
+) {
+  const duration = value.productionDefaults?.targetDurationSeconds;
+  if (
+    duration != null &&
+    value.targetDurationMinSeconds != null &&
+    duration < value.targetDurationMinSeconds
+  )
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["productionDefaults", "targetDurationSeconds"],
+      message: "Default duration is below the Content Format minimum",
+    });
+  if (
+    duration != null &&
+    value.targetDurationMaxSeconds != null &&
+    duration > value.targetDurationMaxSeconds
+  )
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["productionDefaults", "targetDurationSeconds"],
+      message: "Default duration exceeds the Content Format maximum",
+    });
+}
+export const createContentFormatSchema = contentFormatFields
+  .refine(
+    (v) =>
+      v.targetDurationMinSeconds == null ||
+      v.targetDurationMaxSeconds == null ||
+      v.targetDurationMinSeconds <= v.targetDurationMaxSeconds,
+    {
+      message: "Minimum duration cannot exceed maximum duration",
+      path: ["targetDurationMinSeconds"],
+    },
+  )
+  .superRefine(validateContentFormatDefaults);
 export const updateContentFormatSchema = contentFormatFields
   .partial()
   .refine((v) => Object.keys(v).length > 0, "At least one field is required")
@@ -95,8 +134,12 @@ export const updateContentFormatSchema = contentFormatFields
       v.targetDurationMinSeconds == null ||
       v.targetDurationMaxSeconds == null ||
       v.targetDurationMinSeconds <= v.targetDurationMaxSeconds,
-    { message: "Minimum duration cannot exceed maximum duration", path: ["targetDurationMinSeconds"] },
-  );
+    {
+      message: "Minimum duration cannot exceed maximum duration",
+      path: ["targetDurationMinSeconds"],
+    },
+  )
+  .superRefine(validateContentFormatDefaults);
 export const videoAssociationSchema = z.object({
   videoId: uuid,
   role: videoRoleSchema.default("supporting"),
@@ -229,7 +272,9 @@ export async function updateContentFormat(id: string, input: unknown) {
 export async function archiveContentFormat(id: string) {
   const format = await requireFormat(id);
   if (format.status !== "active")
-    throw new ContentFormatConflictError("Only active content formats can be archived");
+    throw new ContentFormatConflictError(
+      "Only active content formats can be archived",
+    );
   const [row] = await db
     .update(contentFormats)
     .set({ status: "archived", updatedAt: new Date().toISOString() })
@@ -240,7 +285,9 @@ export async function archiveContentFormat(id: string) {
 export async function restoreContentFormat(id: string) {
   const format = await requireFormat(id);
   if (format.status !== "archived")
-    throw new ContentFormatConflictError("Only archived content formats can be restored");
+    throw new ContentFormatConflictError(
+      "Only archived content formats can be restored",
+    );
   const [row] = await db
     .update(contentFormats)
     .set({ status: "draft", updatedAt: new Date().toISOString() })
@@ -257,20 +304,26 @@ export async function activateContentFormat(id: string) {
       .limit(1);
     if (!format) notFound("Content format not found");
     if (format.status !== "draft")
-      throw new ContentFormatConflictError("Only draft content formats can be activated");
+      throw new ContentFormatConflictError(
+        "Only draft content formats can be activated",
+      );
     const [row] = await tx
       .select({ videoCount: count(contentFormatVideos.videoId) })
       .from(contentFormatVideos)
       .where(eq(contentFormatVideos.contentFormatId, id));
     if (Number(row.videoCount) < 1)
-      throw new ContentFormatConflictError("Add at least one video before activating this format");
+      throw new ContentFormatConflictError(
+        "Add at least one video before activating this format",
+      );
     const [updated] = await tx
       .update(contentFormats)
       .set({ status: "active", updatedAt: new Date().toISOString() })
       .where(and(eq(contentFormats.id, id), eq(contentFormats.status, "draft")))
       .returning();
     if (!updated)
-      throw new ContentFormatConflictError("Content format status changed before activation");
+      throw new ContentFormatConflictError(
+        "Content format status changed before activation",
+      );
     return updated;
   });
 }

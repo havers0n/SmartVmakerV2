@@ -9,6 +9,7 @@ describe("scenario prompt compiler", () => {
     const compiled = compileScenarioPrompt({
       inputSnapshot: {
         production: { ratio: "1:1", language: "he", targetDurationSeconds: 24 },
+        formatInputs: { environment: "suspension bridge", vehicleCount: 8 },
       },
       projectSnapshot: { title: "Crusher test", idea: "Escalate vehicle size" },
       contentFormatSnapshot: { hookPattern: "Outcome first" },
@@ -21,6 +22,7 @@ describe("scenario prompt compiler", () => {
     expect(compiled.prompt).toContain("24 seconds");
     expect(compiled.prompt).toContain("Escalate vehicle size");
     expect(compiled.prompt).toContain("Outcome first");
+    expect(compiled.prompt).toContain("suspension bridge");
   });
 
   it("maps the immutable catalog id to the MiniMax provider model id", () => {

@@ -136,6 +136,7 @@ export function compileScenarioPrompt(
 ) {
   const input = record(job.inputSnapshot);
   const production = record(input.production);
+  const formatInputs = record(input.formatInputs);
   const project = record(job.projectSnapshot);
   const format = record(job.contentFormatSnapshot);
   const template = record(job.storyTemplateSnapshot);
@@ -161,6 +162,9 @@ export function compileScenarioPrompt(
     `Creative brief: ${String(project.idea ?? "")}`,
     Object.keys(format).length
       ? `Content format snapshot: ${JSON.stringify(format)}`
+      : "",
+    Object.keys(formatInputs).length
+      ? `Resolved format inputs: ${JSON.stringify(formatInputs)}`
       : "",
     Object.keys(template).length
       ? `Story template snapshot: ${JSON.stringify(template)}`

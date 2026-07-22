@@ -44,6 +44,7 @@ describe("generation run foundation contracts", () => {
       schemaVersion: 1,
       production: {},
       models: {},
+      formatInputs: {},
     });
     expect(
       projectDefaultsSchema.safeParse({

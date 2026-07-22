@@ -7,6 +7,7 @@
 export * from "./hwar";
 export * from "./hwarWorkers";
 export * from "./scenario-generation";
+export * from "./creation-wizard";
 
 // ============================================================================
 // TASK TYPES

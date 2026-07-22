@@ -638,6 +638,7 @@ export const videoProjects = generationPipeline.table(
   {
     id: uuid("id").defaultRandom().primaryKey().notNull(),
     ownerId: uuid("owner_id").notNull(),
+    clientSubmissionId: text("client_submission_id"),
     title: text("title").notNull(),
     idea: text("idea").notNull(),
     status: text("status", { enum: ["draft", "active", "archived"] })
@@ -668,6 +669,10 @@ export const videoProjects = generationPipeline.table(
       table.ownerId,
       table.updatedAt,
     ),
+    ownerSubmissionUnique: unique("video_projects_owner_submission_unique").on(
+      table.ownerId,
+      table.clientSubmissionId,
+    ),
     contentFormatIdx: index("video_projects_content_format_idx").on(
       table.contentFormatId,
     ),
@@ -684,6 +689,7 @@ export const generationRuns = generationPipeline.table(
     projectId: uuid("project_id")
       .notNull()
       .references(() => videoProjects.id, { onDelete: "cascade" }),
+    clientSubmissionId: text("client_submission_id"),
     runNumber: integer("run_number").notNull(),
     status: text("status", {
       enum: [
@@ -730,6 +736,9 @@ export const generationRuns = generationPipeline.table(
       table.projectId,
       table.runNumber,
     ),
+    projectSubmissionUnique: unique(
+      "generation_runs_project_submission_unique",
+    ).on(table.projectId, table.clientSubmissionId),
     projectIdIdUnique: unique("generation_runs_project_id_id_unique").on(
       table.projectId,
       table.id,
@@ -1689,6 +1698,17 @@ export const contentFormats = pgTable(
     pacingPattern: text("pacing_pattern"),
     targetDurationMinSeconds: integer("target_duration_min_seconds"),
     targetDurationMaxSeconds: integer("target_duration_max_seconds"),
+    exampleOutput: text("example_output"),
+    inputSchema: jsonb("input_schema")
+      .default({
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      })
+      .notNull(),
+    productionDefaults: jsonb("production_defaults").default({}).notNull(),
+    productionRules: jsonb("production_rules").default([]).notNull(),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()

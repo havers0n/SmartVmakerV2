@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyGenerationMigrationState } from "./preflight-generation-migrations.mjs";
 
-function state(schema0028, journal0028, schema0029, journal0029) {
+function state(
+  schema0028,
+  journal0028,
+  schema0029,
+  journal0029,
+  schema0030 = false,
+  journal0030 = false,
+) {
   return [
     {
       tag: "0028",
@@ -22,20 +29,38 @@ function state(schema0028, journal0028, schema0029, journal0029) {
       objectTotal: 3,
       createdAt: journal0029 ? 29 : null,
     },
+    {
+      tag: "0030",
+      schemaPresent: schema0030,
+      journalPresent: journal0030,
+      hashMismatch: false,
+      objectCount: schema0030 ? 11 : 0,
+      objectTotal: 11,
+      createdAt: journal0030 ? 30 : null,
+    },
   ];
 }
 
-test("allows a normal 0028 then 0029 migration", () => {
+test("allows a normal 0028 then 0029 then 0030 migration", () => {
   assert.equal(
     classifyGenerationMigrationState(state(false, false, false, false)).code,
-    "APPLY_0028_THEN_0029",
+    "APPLY_0028_THEN_0029_THEN_0030",
   );
 });
 
-test("allows 0029 after a fully journalled 0028", () => {
+test("allows 0029 and 0030 after a fully journalled 0028", () => {
   assert.equal(
     classifyGenerationMigrationState(state(true, true, false, false)).code,
-    "APPLY_0029",
+    "APPLY_0029_THEN_0030",
+  );
+});
+
+test("allows 0030 after fully journalled 0028 and 0029", () => {
+  assert.equal(
+    classifyGenerationMigrationState(
+      state(true, true, true, true, false, false),
+    ).code,
+    "APPLY_0030",
   );
 });
 
@@ -74,7 +99,8 @@ test("blocks a journal timestamp with a different local hash", () => {
 
 test("accepts a fully applied state", () => {
   assert.equal(
-    classifyGenerationMigrationState(state(true, true, true, true)).code,
+    classifyGenerationMigrationState(state(true, true, true, true, true, true))
+      .code,
     "UP_TO_DATE",
   );
 });
