@@ -5,8 +5,11 @@
  * with support for Function Calling (OpenAI-compatible).
  */
 
-import OpenAI from 'openai';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+import OpenAI from "openai";
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+} from "openai/resources/chat/completions";
 
 // ============================================================================
 // Types
@@ -19,12 +22,17 @@ export interface TextClientConfig {
   apiKey: string;
   baseUrl?: string; // Default: 'https://api.minimax.io/v1'
   model?: string; // Default: 'MiniMax-M2'
+  /** SDK-level retries are disabled by default so one queue event makes one provider call. */
+  maxRetries?: number;
+  timeoutMs?: number;
 }
 
 /**
  * Options for generateScenariosWithTools function
  */
 export interface GenerateWithToolsOptions {
+  /** Provider model identifier captured in the immutable Run snapshot. */
+  model?: string;
   /** System message to set context */
   systemMessage?: string;
   /** Maximum tokens to generate */
@@ -34,13 +42,18 @@ export interface GenerateWithToolsOptions {
   /** Whether to enable streaming */
   stream?: boolean;
   /** Tool choice: 'auto' | 'none' | specific tool */
-  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  toolChoice?:
+    | "auto"
+    | "none"
+    | { type: "function"; function: { name: string } };
 }
 
 /**
  * Response from text generation with tools
  */
 export interface TextGenerationResponse {
+  /** Provider response identifier, safe to persist for correlation. */
+  providerRequestId: string | null;
   /** Generated text content (if no tool calls) */
   content: string | null;
   /** Tool calls requested by the model */
@@ -60,7 +73,7 @@ export interface ToolCall {
   /** Unique ID for this tool call */
   id: string;
   /** Type of tool (always 'function' for now) */
-  type: 'function';
+  type: "function";
   /** Function call details */
   function: {
     /** Name of the function to call */
@@ -76,10 +89,11 @@ export interface ToolCall {
 // Default Values
 // ============================================================================
 
-const DEFAULT_BASE_URL = 'https://api.minimax.io/v1';
-const DEFAULT_MODEL = 'MiniMax-M2';
+const DEFAULT_BASE_URL = "https://api.minimax.io/v1";
+const DEFAULT_MODEL = "MiniMax-M2";
 const DEFAULT_MAX_TOKENS = 4096;
-const DEFAULT_SYSTEM_MESSAGE = 'You are a helpful AI assistant developed by MiniMax.';
+const DEFAULT_SYSTEM_MESSAGE =
+  "You are a helpful AI assistant developed by MiniMax.";
 
 // ============================================================================
 // Text Generation Client
@@ -90,12 +104,14 @@ const DEFAULT_SYSTEM_MESSAGE = 'You are a helpful AI assistant developed by Mini
  */
 export function createTextClient(config: TextClientConfig): OpenAI {
   if (!config.apiKey) {
-    throw new Error('MiniMax API key is required');
+    throw new Error("MiniMax API key is required");
   }
 
   return new OpenAI({
     apiKey: config.apiKey,
     baseURL: config.baseUrl || DEFAULT_BASE_URL,
+    maxRetries: config.maxRetries ?? 0,
+    timeout: config.timeoutMs ?? 120_000,
   });
 }
 
@@ -152,39 +168,40 @@ export async function generateScenariosWithTools(
   client: OpenAI,
   prompt: string,
   tools: ChatCompletionTool[],
-  options: GenerateWithToolsOptions = {}
+  options: GenerateWithToolsOptions = {},
 ): Promise<TextGenerationResponse> {
   const {
+    model = DEFAULT_MODEL,
     systemMessage = DEFAULT_SYSTEM_MESSAGE,
     maxTokens = DEFAULT_MAX_TOKENS,
     temperature = 0.7,
     stream = false,
-    toolChoice = 'auto',
+    toolChoice = "auto",
   } = options;
 
   // Build messages array
   const messages: ChatCompletionMessageParam[] = [
     {
-      role: 'system',
+      role: "system",
       content: systemMessage,
     },
     {
-      role: 'user',
+      role: "user",
       content: prompt,
     },
   ];
 
   try {
     // Call OpenAI Chat Completions API
-    const completion = await client.chat.completions.create({
-      model: DEFAULT_MODEL,
+    const completion = (await client.chat.completions.create({
+      model,
       messages,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
       max_tokens: maxTokens,
       temperature,
       stream: false,
-    }) as OpenAI.Chat.Completions.ChatCompletion;
+    })) as OpenAI.Chat.Completions.ChatCompletion;
 
     const message = completion.choices[0].message;
     const finishReason = completion.choices[0].finish_reason ?? null;
@@ -193,16 +210,23 @@ export async function generateScenariosWithTools(
     // Parse tool calls if present
     const toolCalls: ToolCall[] | null = message.tool_calls
       ? message.tool_calls
-          .filter((tc): tc is OpenAI.Chat.Completions.ChatCompletionMessageToolCall & { type: 'function' } => tc.type === 'function')
+          .filter(
+            (
+              tc,
+            ): tc is OpenAI.Chat.Completions.ChatCompletionMessageToolCall & {
+              type: "function";
+            } => tc.type === "function",
+          )
           .map((tc) => {
-            const functionCall = tc as OpenAI.Chat.Completions.ChatCompletionMessageToolCall & {
-              function: { name: string; arguments: string };
-            };
+            const functionCall =
+              tc as OpenAI.Chat.Completions.ChatCompletionMessageToolCall & {
+                function: { name: string; arguments: string };
+              };
             let argumentsParsed: Record<string, unknown> | undefined;
             try {
               argumentsParsed = JSON.parse(functionCall.function.arguments);
             } catch {
-              console.warn('Failed to parse tool call arguments', {
+              console.warn("Failed to parse tool call arguments", {
                 toolName: functionCall.function.name,
                 rawResponseLength: functionCall.function.arguments.length,
               });
@@ -210,7 +234,7 @@ export async function generateScenariosWithTools(
 
             return {
               id: tc.id,
-              type: 'function' as const,
+              type: "function" as const,
               function: {
                 name: functionCall.function.name,
                 arguments: functionCall.function.arguments,
@@ -221,6 +245,7 @@ export async function generateScenariosWithTools(
       : null;
 
     return {
+      providerRequestId: completion.id ?? null,
       content: message.content || null,
       toolCalls,
       message,
@@ -231,7 +256,7 @@ export async function generateScenariosWithTools(
     if (error instanceof Error) {
       throw new Error(`MiniMax text generation failed: ${error.message}`);
     }
-    throw new Error('MiniMax text generation failed with unknown error');
+    throw new Error("MiniMax text generation failed with unknown error");
   }
 }
 
@@ -267,29 +292,30 @@ export async function generateScenariosWithToolsStreaming(
   prompt: string,
   tools: ChatCompletionTool[],
   options: GenerateWithToolsOptions = {},
-  onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void,
 ): Promise<TextGenerationResponse> {
   const {
+    model = DEFAULT_MODEL,
     systemMessage = DEFAULT_SYSTEM_MESSAGE,
     maxTokens = DEFAULT_MAX_TOKENS,
     temperature = 0.7,
-    toolChoice = 'auto',
+    toolChoice = "auto",
   } = options;
 
   const messages: ChatCompletionMessageParam[] = [
     {
-      role: 'system',
+      role: "system",
       content: systemMessage,
     },
     {
-      role: 'user',
+      role: "user",
       content: prompt,
     },
   ];
 
   try {
     const stream = await client.chat.completions.create({
-      model: DEFAULT_MODEL,
+      model,
       messages,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: tools.length > 0 ? toolChoice : undefined,
@@ -298,7 +324,7 @@ export async function generateScenariosWithToolsStreaming(
       stream: true,
     });
 
-    let fullContent = '';
+    let fullContent = "";
     let toolCallsAccumulated: any[] = [];
     let finishReason: string | null = null;
 
@@ -320,11 +346,11 @@ export async function generateScenariosWithToolsStreaming(
         for (const tcDelta of delta.tool_calls) {
           if (!toolCallsAccumulated[tcDelta.index]) {
             toolCallsAccumulated[tcDelta.index] = {
-              id: tcDelta.id || '',
-              type: 'function' as const,
+              id: tcDelta.id || "",
+              type: "function" as const,
               function: {
-                name: tcDelta.function?.name || '',
-                arguments: tcDelta.function?.arguments || '',
+                name: tcDelta.function?.name || "",
+                arguments: tcDelta.function?.arguments || "",
               },
             };
           } else {
@@ -344,7 +370,7 @@ export async function generateScenariosWithToolsStreaming(
           try {
             argumentsParsed = JSON.parse(tc.function.arguments);
           } catch {
-            console.warn('Failed to parse tool call arguments', {
+            console.warn("Failed to parse tool call arguments", {
               toolName: tc.function.name,
               rawResponseLength: tc.function.arguments.length,
             });
@@ -364,7 +390,7 @@ export async function generateScenariosWithToolsStreaming(
 
     // Construct final message object
     const finalMessage: OpenAI.Chat.Completions.ChatCompletionMessage = {
-      role: 'assistant',
+      role: "assistant",
       content: fullContent || null,
       refusal: null,
       tool_calls: toolCallsAccumulated.length
@@ -373,6 +399,7 @@ export async function generateScenariosWithToolsStreaming(
     };
 
     return {
+      providerRequestId: null,
       content: fullContent || null,
       toolCalls,
       message: finalMessage,
@@ -383,7 +410,7 @@ export async function generateScenariosWithToolsStreaming(
     if (error instanceof Error) {
       throw new Error(`MiniMax streaming generation failed: ${error.message}`);
     }
-    throw new Error('MiniMax streaming generation failed with unknown error');
+    throw new Error("MiniMax streaming generation failed with unknown error");
   }
 }
 
@@ -409,8 +436,16 @@ export async function generateScenariosWithToolsStreaming(
 export async function generateSimpleText(
   client: OpenAI,
   prompt: string,
-  options: Pick<GenerateWithToolsOptions, 'systemMessage' | 'maxTokens' | 'temperature'> = {}
+  options: Pick<
+    GenerateWithToolsOptions,
+    "systemMessage" | "maxTokens" | "temperature"
+  > = {},
 ): Promise<string> {
-  const response = await generateScenariosWithTools(client, prompt, [], options);
-  return response.content || '';
+  const response = await generateScenariosWithTools(
+    client,
+    prompt,
+    [],
+    options,
+  );
+  return response.content || "";
 }

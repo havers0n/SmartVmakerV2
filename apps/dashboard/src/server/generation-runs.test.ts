@@ -144,6 +144,9 @@ describe("generation run foundation contracts", () => {
       assertGenerationRunTransition("draft", "queued"),
     ).not.toThrow();
     expect(() =>
+      assertGenerationRunTransition("draft", "active"),
+    ).not.toThrow();
+    expect(() =>
       assertGenerationRunTransition("queued", "running"),
     ).not.toThrow();
     expect(() =>

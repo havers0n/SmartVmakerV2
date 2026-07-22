@@ -1,36 +1,31 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import {
-  GenerationFoundationError,
-  getGenerationRun,
-} from "@/server/generation-runs";
-import { getScenarioExecution } from "@/server/scenario-execution";
+import { getScenarioAttempt } from "@/server/scenario-execution";
+import { GenerationFoundationError } from "@/server/generation-runs";
 import { getTrustedUserId, unauthorizedResponse } from "@/shared/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  request: Request,
-  { params }: { params: { project_id: string; run_id: string } },
-) {
+type Context = {
+  params: { project_id: string; run_id: string; attempt_id: string };
+};
+
+export async function GET(request: Request, { params }: Context) {
   const userId = getTrustedUserId(request);
   if (!userId) return unauthorizedResponse();
   try {
-    const run = await getGenerationRun(
-      userId,
-      params.project_id,
-      params.run_id,
+    return NextResponse.json(
+      await getScenarioAttempt(
+        userId,
+        params.project_id,
+        params.run_id,
+        params.attempt_id,
+      ),
     );
-    const scenarioExecution = await getScenarioExecution(
-      userId,
-      params.project_id,
-      params.run_id,
-    );
-    return NextResponse.json({ ...run, scenarioExecution });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Invalid generation run id" },
+        { error: "Invalid scenario attempt identifier" },
         { status: 400 },
       );
     }

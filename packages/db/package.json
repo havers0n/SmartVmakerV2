@@ -22,7 +22,7 @@
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "type-check": "tsc --noEmit",
-    "test": "echo 'No tests yet' && exit 0",
+    "test": "node --test scripts/*.test.mjs",
     "lint": "echo 'No linting configured' && exit 0",
     "format": "echo 'No formatting configured' && exit 0",
     "format:check": "echo 'No formatting configured' && exit 0",
@@ -35,6 +35,7 @@
     "introspect": "tsx introspect-database.ts",
     "schema:pull": "drizzle-kit introspect",
     "types:pull": "tsx scripts/generate-supabase-types.ts",
+    "migrations:preflight:generation": "node scripts/preflight-generation-migrations.mjs",
     "storage:setup": "tsx scripts/setup-storage-buckets.ts",
     "seed": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 tsx src/seed.ts"
   },

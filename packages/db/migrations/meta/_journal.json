@@ -197,6 +197,20 @@
       "when": 1785169001000,
       "tag": "0027_content_format_project_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785169002000,
+      "tag": "0028_generation_run_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1785169003000,
+      "tag": "0029_durable_scenario_execution",
+      "breakpoints": true
     }
   ]
 }

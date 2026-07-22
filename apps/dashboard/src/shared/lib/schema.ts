@@ -26,6 +26,9 @@ export const auditLog = schema.auditLog;
 export const generationProjects = schema.generationProjects;
 export const videoProjects = schema.videoProjects;
 export const generationRuns = schema.generationRuns;
+export const scenarioGenerationAttempts = schema.scenarioGenerationAttempts;
+export const scenarioArtifacts = schema.scenarioArtifacts;
+export const scenarioGenerationJobQueue = schema.scenarioGenerationJobQueue;
 export const assets = schema.assets;
 
 // AES Core - use tables mapping for consistency
