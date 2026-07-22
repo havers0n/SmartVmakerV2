@@ -1,23 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Card } from "@/shared/components/ui/card";
-import { Label } from "@/shared/components/ui/label";
 import { Input } from "@/shared/components/ui/input";
+import { Label } from "@/shared/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs";
 import { Textarea } from "@/shared/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
-import { Badge } from "@/shared/components/ui/badge";
-import { ArrowLeft, ArrowRight, Sparkles, Clock, Loader2 } from "lucide-react";
+import { ModelSelector } from "@/shared/components/ai/ModelSelector";
+import {
+  listStoryTemplates,
+  startGenerationProject,
+  type StoryTemplate,
+} from "@/shared/api/actions";
 import { useToast } from "@/shared/hooks/use-toast";
 import { cn } from "@/shared/lib/utils";
-import { listStoryTemplates, startGenerationProject, StoryTemplate } from "@/shared/api/actions";
-import { ModelSelector } from "@/shared/components/ai/ModelSelector";
+import { contentFormatsApi, type Format } from "@/features/content-formats/api";
+import {
+  buildProjectCreationPayload,
+  type ProjectSource,
+} from "@/features/hwar-create/project-creation-payload";
 
-// Mock data for now
 const ratios = ["16:9", "9:16", "4:3", "3:4"] as const;
 const languages = [
   { value: "none", label: "No audio track" },
@@ -26,53 +44,87 @@ const languages = [
   { value: "he", label: "Hebrew" },
   { value: "es", label: "Spanish" },
 ];
+const duration = (format: Format) =>
+  format.targetDurationMinSeconds || format.targetDurationMaxSeconds
+    ? `${format.targetDurationMinSeconds ?? "?"}–${format.targetDurationMaxSeconds ?? "?"}s`
+    : "Not specified";
 
 export default function NewProject() {
   const router = useRouter();
+  const params = useSearchParams();
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
+  const initialFormatId =
+    params.get("source") === "content_format"
+      ? params.get("contentFormatId")
+      : null;
+  const [step, setStep] = useState(initialFormatId ? 2 : 1);
   const [title, setTitle] = useState("");
-  const [ratio, setRatio] = useState<typeof ratios[number]>("16:9");
+  const [ratio, setRatio] = useState<(typeof ratios)[number]>("16:9");
   const [lang, setLang] = useState("none");
-  const [source, setSource] = useState<"prompt" | "preset" | "trends">("prompt");
+  const [source, setSource] = useState<ProjectSource>(
+    initialFormatId ? "content_format" : "prompt",
+  );
   const [prompt, setPrompt] = useState("");
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [selectedTrendId, setSelectedTrendId] = useState<string | null>(null);
-  const [textModel, setTextModel] = useState<string | null>(null);
-  const [imageModel, setImageModel] = useState<string | null>(null);
-
-  // Load story templates
-  const { data: storyTemplates = [], isLoading: isLoadingTemplates } = useQuery<StoryTemplate[]>({
+  const [contentFormatId, setContentFormatId] = useState<string | null>(
+    initialFormatId,
+  );
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [textModelId, setTextModelId] = useState<string | null>(null);
+  const [imageModelId, setImageModelId] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const formatsQuery = useQuery({
+    queryKey: ["content-formats", { status: "active", search }],
+    queryFn: () =>
+      contentFormatsApi.list({ status: "active", search, limit: 100 }),
+    enabled: step === 2 || Boolean(initialFormatId),
+  });
+  const templatesQuery = useQuery<StoryTemplate[]>({
     queryKey: ["storyTemplates"],
     queryFn: listStoryTemplates,
+    enabled: step === 2,
   });
-
-  // Load trends
-  const { data: trends = [], isLoading: isLoadingTrends } = useQuery({
-    queryKey: ["trends"],
-    queryFn: async () => {
-      const res = await fetch("/api/analytics/trends");
-      if (!res.ok) throw new Error("Failed to load trends");
-      const { trends } = await res.json();
-      return trends;
-    },
+  const formats = (formatsQuery.data ?? []).filter(
+    (row) => row.format.status === "active",
+  );
+  const templates = templatesQuery.data ?? [];
+  const selectedFormat = useMemo(
+    () =>
+      formats.find((row) => row.format.id === contentFormatId)?.format ?? null,
+    [formats, contentFormatId],
+  );
+  const selectedTemplate =
+    templates.find((template) => template.id === templateId) ?? null;
+  useEffect(() => {
+    if (initialFormatId && formatsQuery.isSuccess && !selectedFormat)
+      setSourceError(
+        "This Content Format is unavailable. It may not exist or is no longer active.",
+      );
+  }, [initialFormatId, formatsQuery.isSuccess, selectedFormat]);
+  const changeSource = (value: string) => {
+    setSource(value as ProjectSource);
+    setSourceError(null);
+    if (value !== "content_format") setContentFormatId(null);
+    if (value === "prompt") setTemplateId(null);
+  };
+  const payload = buildProjectCreationPayload({
+    source,
+    title,
+    ratio,
+    lang,
+    prompt,
+    textModelId,
+    imageModelId,
+    contentFormatId: selectedFormat ? contentFormatId : null,
+    templateId,
   });
-
-  const createProjectMutation = useMutation({
-    mutationFn: async () => {
-      const result = await startGenerationProject({
-        title: title || "Untitled Project",
-        ratio,
-        lang,
-        source,
-        prompt: source === "prompt" ? prompt : undefined,
-        presetId: source === "preset" ? selectedPresetId : undefined,
-        trendId: source === "trends" ? selectedTrendId : undefined,
-        textModelId: textModel,
-        imageModelId: imageModel,
-      });
-
-      return result;
+  const create = useMutation({
+    mutationFn: () => {
+      if (!payload)
+        throw new Error(
+          "Choose a valid starting point and provide a specific video idea.",
+        );
+      return startGenerationProject(payload);
     },
     onSuccess: (result: any) => {
       toast({
@@ -82,366 +134,464 @@ export default function NewProject() {
       router.push(`/hwar/create/${result.project.id}`);
     },
     onError: (error: Error) => {
+      const message = error.message;
+      if (/content format.*(draft|archived|not found)/i.test(message)) {
+        setSourceError(`${message}. Choose another active Content Format.`);
+        setContentFormatId(null);
+      }
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Could not create project",
+        description: message,
         variant: "destructive",
       });
     },
   });
-
-  const handleNext = () => {
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      createProjectMutation.mutate();
-    }
+  const next = () => {
+    if (step < 3) setStep((value) => value + 1);
+    else create.mutate();
   };
-
-  const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    } else {
-      router.push("/hwar/create");
-    }
-  };
-
+  const ideaPlaceholder =
+    source === "content_format"
+      ? "What happens if Earth loses oxygen for five seconds?"
+      : source === "story_template"
+        ? "Describe the specific video idea this story structure should implement."
+        : "Describe the specific video idea you want to create.";
+  const compatible =
+    !selectedFormat ||
+    !selectedTemplate ||
+    ((!selectedFormat.targetDurationMinSeconds ||
+      selectedTemplate.targetDurationSeconds >=
+        selectedFormat.targetDurationMinSeconds) &&
+      (!selectedFormat.targetDurationMaxSeconds ||
+        selectedTemplate.targetDurationSeconds <=
+          selectedFormat.targetDurationMaxSeconds));
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Progress indicator */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-2">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={cn(
-                  "flex items-center justify-center w-10 h-10 rounded-full border-2 font-medium text-sm",
-                  s <= step
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-muted-foreground"
-                )}
-              >
-                {s}
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={cn(
-                  "flex-1 h-2 rounded-full",
-                  s <= step ? "bg-primary" : "bg-border"
-                )}
-              />
-            ))}
-          </div>
+      <div className="mx-auto max-w-[900px] px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mb-8 flex gap-2">
+          {[1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className={cn(
+                "h-2 flex-1 rounded",
+                item <= step ? "bg-primary" : "bg-muted",
+              )}
+            />
+          ))}
         </div>
-
-        <Card className="p-8 border rounded-xl">
+        <Card className="rounded-xl border p-5 sm:p-8">
           {step === 1 && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-2">Project Details</h2>
-              <p className="text-sm text-muted-foreground mb-8">Configure your video project</p>
-
-              <div className="space-y-6">
-                <div>
-                  <Label htmlFor="title" className="text-sm font-medium mb-2 block">Project Title</Label>
-                  <Input
-                    id="title"
-                    placeholder="e.g., Motivational Story"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    data-testid="input-title"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-3 block">Aspect Ratio</Label>
-                  <div className="inline-flex gap-2">
-                    {ratios.map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => setRatio(r)}
-                        className={cn(
-                          "px-4 py-2 rounded-full border text-sm font-medium transition-colors",
-                          ratio === r
-                            ? "border-primary bg-primary text-primary-foreground font-semibold"
-                            : "border-border bg-background hover:bg-accent"
-                        )}
-                        data-testid={`button-ratio-${r}`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Recommended duration: {ratio === "9:16" ? "16-30s (Stories)" : "40-70s (Landscape)"}
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="language" className="text-sm font-medium mb-2 block">Language</Label>
-                  <Select value={lang} onValueChange={setLang}>
-                    <SelectTrigger className="h-10" id="language" data-testid="select-language">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {languages.map((l) => (
-                        <SelectItem key={l.value} value={l.value}>
-                          {l.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* AI Model Selectors */}
-                <div>
-                  <ModelSelector
-                    type="text-to-text"
-                    label="Text Generation Model"
-                    placeholder="Select a text model..."
-                    value={textModel}
-                    onChange={setTextModel}
-                    testId="select-text-model"
-                  />
-                </div>
-
-                <div>
-                  <ModelSelector
-                    type="text-to-image"
-                    label="Image Generation Model"
-                    placeholder="Select an image model..."
-                    value={imageModel}
-                    onChange={setImageModel}
-                    testId="select-image-model"
-                  />
-                </div>
-
-                {/* Ratio preview */}
-                <div className="flex justify-center">
-                  <div className="border-2 border-dashed border-border rounded-lg p-4">
-                    <div
-                      className="bg-muted rounded flex items-center justify-center"
-                      style={{
-                        width: ratio === "16:9" ? "240px" : ratio === "9:16" ? "135px" : ratio === "4:3" ? "200px" : "150px",
-                        height: ratio === "16:9" ? "135px" : ratio === "9:16" ? "240px" : ratio === "4:3" ? "150px" : "200px",
-                      }}
+            <section className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-semibold">Project Details</h1>
+                <p className="text-sm text-muted-foreground">
+                  Configure your video project
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="title">Project Title</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., Motivational Story"
+                />
+              </div>
+              <div>
+                <Label>Aspect Ratio</Label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ratios.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      aria-pressed={ratio === item}
+                      onClick={() => setRatio(item)}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-sm",
+                        ratio === item &&
+                          "border-primary bg-primary text-primary-foreground",
+                      )}
                     >
-                      <span className="text-sm font-mono text-muted-foreground">{ratio}</span>
-                    </div>
-                  </div>
+                      {item}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
+              <div>
+                <Label htmlFor="language">Language</Label>
+                <Select value={lang} onValueChange={setLang}>
+                  <SelectTrigger id="language">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <ModelSelector
+                type="text-to-text"
+                label="Text Generation Model"
+                placeholder="Select a text model..."
+                value={textModelId}
+                onChange={setTextModelId}
+              />
+              <ModelSelector
+                type="text-to-image"
+                label="Image Generation Model"
+                placeholder="Select an image model..."
+                value={imageModelId}
+                onChange={setImageModelId}
+              />
+            </section>
           )}
-
           {step === 2 && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-2">Content Source</h2>
-              <p className="text-sm text-muted-foreground mb-8">How would you like to generate your video?</p>
-
-              <Tabs value={source} onValueChange={(v) => setSource(v as "prompt" | "preset" | "trends")}>
+            <section>
+              <div className="mb-6">
+                <h1 className="text-2xl font-semibold">Starting Point</h1>
+                <p className="text-sm text-muted-foreground">
+                  Choose a production pattern, story structure, or begin with
+                  your own idea.
+                </p>
+              </div>
+              <Tabs value={source} onValueChange={changeSource}>
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="prompt" data-testid="tab-prompt">Prompt</TabsTrigger>
-                  <TabsTrigger value="preset" data-testid="tab-presets">Presets</TabsTrigger>
-                  <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
+                  <TabsTrigger value="prompt">Prompt</TabsTrigger>
+                  <TabsTrigger value="content_format">
+                    Content Formats
+                  </TabsTrigger>
+                  <TabsTrigger value="story_template">
+                    Story Templates
+                  </TabsTrigger>
                 </TabsList>
-
                 <TabsContent value="prompt" className="mt-6">
-                  <Label htmlFor="prompt" className="text-sm font-medium mb-2 block">Describe your video</Label>
-                  <Textarea
-                    id="prompt"
-                    placeholder="Example: A dramatic story about a person overcoming challenges. Start with a close-up of emotion, build tension through quick cuts, and end with a triumphant payoff..."
-                    className="min-h-32 resize-none"
+                  <Idea
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    data-testid="input-prompt"
+                    onChange={setPrompt}
+                    placeholder={ideaPlaceholder}
                   />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Tip: Include AES structure (Attention → Emotion → Solution), emotional arc, and pacing details
-                  </p>
                 </TabsContent>
-
-                <TabsContent value="preset" className="mt-6">
-                  {isLoadingTemplates ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : storyTemplates.length === 0 ? (
-                    <Card className="p-8 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        No story templates available. Create one in the Library first.
-                      </p>
-                      <Button
-                        variant="outline"
-                        className="mt-4"
-                        onClick={() => router.push("/hwar/library/presets")}
+                <TabsContent value="content_format" className="mt-6 space-y-5">
+                  <Input
+                    aria-label="Search active Content Formats"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search active Content Formats"
+                  />
+                  {formatsQuery.isLoading ? (
+                    <Loading />
+                  ) : formatsQuery.isError ? (
+                    <Retry onRetry={() => formatsQuery.refetch()} />
+                  ) : formats.length === 0 ? (
+                    <Card className="p-6 text-center text-sm text-muted-foreground">
+                      No active Content Formats yet.
+                      <br />
+                      Create and activate a format before using it for a
+                      project.
+                      <br />
+                      <a
+                        className="mt-3 inline-block text-primary underline"
+                        href="/content-formats"
                       >
-                        Go to Library
-                      </Button>
+                        Browse Content Formats
+                      </a>
                     </Card>
                   ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      {storyTemplates.map((template: StoryTemplate) => (
-                        <Card
-                          key={template.id}
-                          className={cn(
-                            "p-4 cursor-pointer transition-all",
-                            selectedPresetId === template.id
-                              ? "ring-2 ring-primary bg-primary/5"
-                              : "hover-elevate"
-                          )}
-                          onClick={() => setSelectedPresetId(template.id)}
-                          data-testid={`card-preset-${template.id}`}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-medium">{template.name}</h4>
-                            <Clock className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                          {template.description && (
-                            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                              {template.description}
-                            </p>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <div className="flex gap-1 flex-wrap">
-                              {template.tags?.slice(0, 2).map((tag: string) => (
-                                <Badge key={tag} variant="secondary" className="text-xs">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {template.targetDurationSeconds}s
-                            </span>
-                          </div>
-                        </Card>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {formats.map((row) => (
+                        <FormatCard
+                          key={row.format.id}
+                          row={row}
+                          selected={contentFormatId === row.format.id}
+                          onSelect={() => {
+                            setContentFormatId(row.format.id);
+                            setSourceError(null);
+                          }}
+                        />
                       ))}
                     </div>
                   )}
-                </TabsContent>
-
-                <TabsContent value="trends" className="mt-6">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Generate scenarios based on successful YouTube video patterns
-                  </p>
-                  {isLoadingTrends ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : trends.length === 0 ? (
-                    <Card className="p-8 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        No trends data available.
+                  {sourceError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {sourceError}
+                    </p>
+                  )}
+                  {selectedFormat && (
+                    <Card className="space-y-2 border-primary/40 bg-primary/5 p-4">
+                      <div className="flex items-center justify-between">
+                        <strong>{selectedFormat.name}</strong>
+                        <a
+                          className="text-sm text-primary underline"
+                          href={`/content-formats/${selectedFormat.id}`}
+                        >
+                          View format
+                        </a>
+                      </div>
+                      <p className="text-sm">{selectedFormat.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Hook: {selectedFormat.hookPattern || "—"} · Structure:{" "}
+                        {selectedFormat.structurePattern || "—"} · Visual:{" "}
+                        {selectedFormat.visualPattern || "—"} · Pacing:{" "}
+                        {selectedFormat.pacingPattern || "—"} ·{" "}
+                        {duration(selectedFormat)}
                       </p>
                     </Card>
-                  ) : (
-                    <div className="space-y-4">
-                      {trends.map((trend: any) => (
-                        <Card
-                          key={trend.id}
-                          className={cn(
-                            "p-4 cursor-pointer transition-all",
-                            selectedTrendId === trend.id
-                              ? "ring-2 ring-primary bg-primary/5 border-l-4 border-l-primary"
-                              : "hover-elevate border-l-4 border-l-transparent"
-                          )}
-                          onClick={() => setSelectedTrendId(trend.id)}
-                          data-testid={`card-trend-${trend.id}`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <Sparkles className={cn(
-                              "w-5 h-5 mt-0.5",
-                              selectedTrendId === trend.id ? "text-primary" : "text-muted-foreground"
-                            )} />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium mb-1">{trend.title}</p>
-                              <p className="text-xs text-muted-foreground mb-2">
-                                {trend.description}
-                              </p>
-                              <div className="flex gap-2 flex-wrap">
-                                {trend.insights?.map((insight: string, idx: number) => (
-                                  <Badge key={idx} variant="secondary" className="text-xs">
-                                    {insight}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
                   )}
+                  {selectedFormat && (
+                    <TemplatePicker
+                      templates={templates}
+                      loading={templatesQuery.isLoading}
+                      selectedId={templateId}
+                      onSelect={setTemplateId}
+                      optional
+                    />
+                  )}
+                  {!compatible && (
+                    <p
+                      role="alert"
+                      className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                    >
+                      This template targets{" "}
+                      {selectedTemplate?.targetDurationSeconds}s, outside the
+                      Content Format range ({duration(selectedFormat!)}). The
+                      Content Format duration remains the primary constraint.
+                    </p>
+                  )}
+                  <Idea
+                    value={prompt}
+                    onChange={setPrompt}
+                    placeholder={ideaPlaceholder}
+                  />
+                </TabsContent>
+                <TabsContent value="story_template" className="mt-6 space-y-5">
+                  <TemplatePicker
+                    templates={templates}
+                    loading={templatesQuery.isLoading}
+                    selectedId={templateId}
+                    onSelect={setTemplateId}
+                  />
+                  <Idea
+                    value={prompt}
+                    onChange={setPrompt}
+                    placeholder={ideaPlaceholder}
+                  />
                 </TabsContent>
               </Tabs>
-            </div>
+            </section>
           )}
-
           {step === 3 && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-2">Review & Generate</h2>
-              <p className="text-sm text-muted-foreground mb-8">Confirm your settings before generating scenarios</p>
-
-              <div className="space-y-4">
-                <div className="flex justify-between py-3 border-b">
-                  <span className="text-sm text-muted-foreground">Aspect Ratio</span>
-                  <span className="text-sm font-medium">{ratio}</span>
-                </div>
-                <div className="flex justify-between py-3 border-b">
-                  <span className="text-sm text-muted-foreground">Language</span>
-                  <span className="text-sm font-medium capitalize">
-                    {languages.find((l) => l.value === lang)?.label}
-                  </span>
-                </div>
-                <div className="flex justify-between py-3 border-b">
-                  <span className="text-sm text-muted-foreground">Source</span>
-                  <span className="text-sm font-medium capitalize">{source}</span>
-                </div>
-                {source === "prompt" && prompt && (
-                  <div className="py-3">
-                    <span className="text-sm text-muted-foreground block mb-2">Prompt</span>
-                    <p className="text-sm bg-muted p-3 rounded-lg">{prompt}</p>
-                  </div>
-                )}
-              </div>
-
-              <Card className="p-4 bg-primary/5 border-primary/20 mt-6">
-                <p className="text-sm">
-                  <span className="font-medium">Next step:</span> AI will generate 5 scenario concepts with scoring. You can pick one or mix scenes from multiple concepts.
+            <section className="space-y-4">
+              <h1 className="text-2xl font-semibold">Review & Create</h1>
+              <p className="text-sm text-muted-foreground">
+                Your specific idea is required for every starting point.
+              </p>
+              <Card className="space-y-2 p-4 text-sm">
+                <p>
+                  <b>Source:</b>{" "}
+                  {source === "content_format"
+                    ? selectedFormat?.name
+                    : source === "story_template"
+                      ? selectedTemplate?.name
+                      : "Prompt"}
+                </p>
+                <p>
+                  <b>Idea:</b> {prompt.trim() || "Missing"}
+                </p>
+                <p>
+                  <b>Ratio:</b> {ratio} · <b>Language:</b>{" "}
+                  {languages.find((item) => item.value === lang)?.label}
                 </p>
               </Card>
-            </div>
+              {!payload && (
+                <p role="alert" className="text-sm text-destructive">
+                  Provide a specific idea and select the required starting point
+                  before creating the project.
+                </p>
+              )}
+            </section>
           )}
         </Card>
-
-        <div className="mt-8 flex justify-between">
-          <Button variant="outline" onClick={handleBack} data-testid="button-back">
-            <ArrowLeft className="w-4 h-4 mr-2" />
+        <div className="mt-6 flex justify-between">
+          <Button
+            variant="outline"
+            onClick={() =>
+              step === 1
+                ? router.push("/hwar/create")
+                : setStep((value) => value - 1)
+            }
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
             {step === 1 ? "Cancel" : "Back"}
           </Button>
           <Button
-            onClick={handleNext}
+            onClick={next}
             disabled={
-              (step === 2 && source === "prompt" && !prompt) ||
-              (step === 2 && source === "preset" && !selectedPresetId) ||
-              (step === 2 && source === "trends" && !selectedTrendId) ||
-              createProjectMutation.isPending
+              (step === 2 && !payload) ||
+              (step === 3 && (!payload || create.isPending))
             }
-            data-testid="button-next"
           >
-            {createProjectMutation.isPending ? (
-              "Creating..."
-            ) : step === 3 ? (
-              "Create Project"
-            ) : (
-              "Continue"
-            )}
-            {!createProjectMutation.isPending && <ArrowRight className="w-4 h-4 ml-2" />}
+            {create.isPending
+              ? "Creating..."
+              : step === 3
+                ? "Create Project"
+                : "Continue"}
+            {!create.isPending && <ArrowRight className="ml-2 h-4 w-4" />}
           </Button>
         </div>
       </div>
     </div>
+  );
+}
+function Idea({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+      <Label htmlFor="project-idea">Specific video idea</Label>
+      <Textarea
+        id="project-idea"
+        className="mt-2 min-h-28"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <p className="mt-1 text-xs text-muted-foreground">
+        A Content Format or Story Template is not a complete video topic.
+      </p>
+    </div>
+  );
+}
+function Loading() {
+  return (
+    <div className="flex justify-center py-10">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  );
+}
+function Retry({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card className="p-6 text-center text-sm">
+      Could not load active Content Formats.{" "}
+      <Button variant="ghost" onClick={onRetry}>
+        Retry
+      </Button>
+    </Card>
+  );
+}
+function FormatCard({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: { format: Format; videoCount: number; evidenceCount: number };
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const f = row.format;
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        "rounded-lg border p-4 text-left",
+        selected && "ring-2 ring-primary",
+      )}
+    >
+      <div className="flex justify-between gap-2">
+        <strong>{f.name}</strong>
+        {selected && <Check className="h-4 w-4" />}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {f.formatType} · {f.description || "No description"}
+      </p>
+      <p className="mt-2 text-xs">
+        Hook: {f.hookPattern || "—"}
+        <br />
+        Structure: {f.structurePattern || "—"}
+        <br />
+        Duration: {duration(f)} · {row.videoCount} videos · {row.evidenceCount}{" "}
+        evidence
+      </p>
+    </button>
+  );
+}
+function TemplatePicker({
+  templates,
+  loading,
+  selectedId,
+  onSelect,
+  optional = false,
+}: {
+  templates: StoryTemplate[];
+  loading: boolean;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  optional?: boolean;
+}) {
+  return (
+    <section>
+      <div className="mb-2 flex items-end justify-between">
+        <div>
+          <h2 className="font-medium">
+            Story Template{optional ? " — Optional" : ""}
+          </h2>
+          {optional && (
+            <p className="text-xs text-muted-foreground">
+              Content Format defines the proven production pattern; Story
+              Template adds narrative beats.
+            </p>
+          )}
+        </div>
+        {optional && selectedId && (
+          <Button variant="ghost" onClick={() => onSelect(null)}>
+            Clear
+          </Button>
+        )}
+      </div>
+      {loading ? (
+        <Loading />
+      ) : templates.length === 0 ? (
+        <Card className="p-4 text-sm text-muted-foreground">
+          No Story Templates available. Create one in the Library first.
+        </Card>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={selectedId === t.id}
+              onClick={() => onSelect(t.id)}
+              className={cn(
+                "rounded-lg border p-4 text-left",
+                selectedId === t.id && "ring-2 ring-primary",
+              )}
+            >
+              <div className="flex justify-between">
+                <strong>{t.name}</strong>
+                {selectedId === t.id && <Check className="h-4 w-4" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t.description || "No description"}
+              </p>
+              <p className="mt-2 text-xs">
+                Target duration: {t.targetDurationSeconds}s · Beats:{" "}
+                {t.tags?.join(", ") || "See template"}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

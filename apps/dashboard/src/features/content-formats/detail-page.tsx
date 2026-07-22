@@ -310,6 +310,27 @@ export function ContentFormatDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {d.format.status === "active" && (
+            <Button
+              onClick={() =>
+                router.push(
+                  `/hwar/create/new?source=content_format&contentFormatId=${d.format.id}`,
+                )
+              }
+            >
+              Create Project from Format
+            </Button>
+          )}
+          {d.format.status === "draft" && (
+            <p className="w-full text-xs text-muted-foreground">
+              Activate this format before creating projects from it.
+            </p>
+          )}
+          {archived && (
+            <p className="w-full text-xs text-muted-foreground">
+              Archived formats cannot be used for new projects.
+            </p>
+          )}
           {d.format.status === "draft" && (
             <Confirm
               label="Activate"
