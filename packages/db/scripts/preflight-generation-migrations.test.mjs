@@ -1,6 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyGenerationMigrationState } from "./preflight-generation-migrations.mjs";
+import {
+  canonicalizeMigrationSql,
+  classifyGenerationMigrationState,
+  hashMigrationSql,
+} from "./preflight-generation-migrations.mjs";
+
+test("canonical migration hash normalizes LF and CRLF without hiding content changes", () => {
+  const lf = "select 1;\nselect 2;\n";
+  const crlf = "select 1;\r\nselect 2;\r\n";
+
+  assert.equal(canonicalizeMigrationSql(crlf), lf);
+  assert.equal(
+    hashMigrationSql(lf).canonicalHash,
+    hashMigrationSql(crlf).canonicalHash,
+  );
+  assert.notEqual(
+    hashMigrationSql(lf).executionHash,
+    hashMigrationSql(crlf).executionHash,
+  );
+  assert.notEqual(
+    hashMigrationSql(lf).canonicalHash,
+    hashMigrationSql("select 1;\nselect 3;\n").canonicalHash,
+  );
+  assert.notEqual(
+    hashMigrationSql("select 1;").canonicalHash,
+    hashMigrationSql("select 1;\n").canonicalHash,
+  );
+});
 
 function state(
   schema0028,

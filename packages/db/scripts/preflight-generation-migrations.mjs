@@ -41,6 +41,23 @@ const TARGETS = [
   },
 ];
 
+/**
+ * Normalise only line endings. Trailing newlines remain significant so that
+ * the canonical hash still changes for an actual file-content change.
+ */
+export function canonicalizeMigrationSql(sql) {
+  return sql.replace(/\r\n|\r/g, "\n");
+}
+
+export function hashMigrationSql(sql) {
+  return {
+    executionHash: createHash("sha256").update(sql, "utf8").digest("hex"),
+    canonicalHash: createHash("sha256")
+      .update(canonicalizeMigrationSql(sql), "utf8")
+      .digest("hex"),
+  };
+}
+
 export function classifyGenerationMigrationState(targets) {
   const [migration0028, migration0029, migration0030] = targets;
   for (const target of targets) {
@@ -150,9 +167,13 @@ async function loadLocalTargets(migrationsDir) {
         path.join(migrationsDir, `${target.tag}.sql`),
         "utf8",
       );
+      const hashes = hashMigrationSql(sql);
       return {
         ...target,
-        localHash: createHash("sha256").update(sql).digest("hex"),
+        // Drizzle records the raw bytes it executes. Keep that comparison
+        // exact, while also retaining an LF-normalised repository identity
+        // for diagnostics across Windows and Unix checkouts.
+        ...hashes,
         localCreatedAt: entry.when,
       };
     }),
@@ -215,9 +236,17 @@ async function inspectDatabase(client, localTargets) {
     : { rows: [] };
   for (const { target } of constraints.rows) present.add(target);
   return localTargets.map((target) => {
-    const matches = journal.rows.filter(
-      ({ hash }) => hash === target.localHash,
+    const executionMatches = journal.rows.filter(
+      ({ hash }) => hash === target.executionHash,
     );
+    const canonicalMatches = journal.rows.filter(
+      ({ hash }) => hash === target.canonicalHash,
+    );
+    const matches = [
+      ...new Map(
+        [...executionMatches, ...canonicalMatches].map((row) => [row.id, row]),
+      ).values(),
+    ];
     const timestampMatches = journal.rows.filter(
       ({ created_at }) => Number(created_at) === target.localCreatedAt,
     );
@@ -233,12 +262,21 @@ async function inspectDatabase(client, localTargets) {
     ).length;
     return {
       tag: target.tag,
-      localHash: target.localHash,
+      executionHash: target.executionHash,
+      canonicalHash: target.canonicalHash,
       localCreatedAt: target.localCreatedAt,
       journalPresent: matches.length === 1,
+      hashMatchKind: executionMatches.length
+        ? "execution"
+        : canonicalMatches.length
+          ? "canonical_line_endings"
+          : null,
       hashMismatch:
         timestampMatches.length > 0 &&
-        !timestampMatches.some(({ hash }) => hash === target.localHash),
+        !timestampMatches.some(
+          ({ hash }) =>
+            hash === target.executionHash || hash === target.canonicalHash,
+        ),
       createdAt:
         matches[0]?.created_at == null ? null : Number(matches[0].created_at),
       objectCount,
