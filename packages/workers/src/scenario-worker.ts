@@ -104,13 +104,30 @@ const scenarioTool: Parameters<typeof generateScenariosWithTools>[2][number] = {
               productionPlan: {
                 type: "object",
                 properties: {
-                  sceneCount: { type: "integer" }, sceneDurations: { type: "array", items: { type: "number" } },
-                  cameraMovement: { type: "string", enum: ["static", "dynamic", "unspecified"] }, cameraAngleDegrees: { type: "number" },
-                  framingChanges: { type: "boolean" }, cuts: { type: "boolean" }, slowMotion: { type: "boolean" },
-                  previousFrameContinuity: { type: "boolean" }, persistentWreckage: { type: "boolean" },
-                  vehicleEntryDirection: { type: "string" }, obstaclePosition: { type: "string" },
+                  sceneCount: { type: "integer" },
+                  sceneDurations: { type: "array", items: { type: "number" } },
+                  cameraMovement: {
+                    type: "string",
+                    enum: ["static", "dynamic", "unspecified"],
+                  },
+                  cameraAngleDegrees: { type: "number" },
+                  framingChanges: { type: "boolean" },
+                  cuts: { type: "boolean" },
+                  slowMotion: { type: "boolean" },
+                  previousFrameContinuity: { type: "boolean" },
+                  persistentWreckage: { type: "boolean" },
+                  vehicleEntryDirection: { type: "string" },
+                  obstaclePosition: { type: "string" },
                 },
-                required: ["sceneCount", "sceneDurations", "cameraMovement", "framingChanges", "cuts", "slowMotion"], additionalProperties: false,
+                required: [
+                  "sceneCount",
+                  "sceneDurations",
+                  "cameraMovement",
+                  "framingChanges",
+                  "cuts",
+                  "slowMotion",
+                ],
+                additionalProperties: false,
               },
             },
             required: [
@@ -171,18 +188,31 @@ export function compileScenarioPrompt(
   ].join(" ");
   const prompt = [
     "[1. MANDATORY IMMUTABLE CONTENT FORMAT RULES]",
-    Object.keys(rules).length ? JSON.stringify(rules) : "No versioned production contract applies.",
-    typeof format.hookPattern === "string" ? `Frozen format context: ${format.hookPattern}` : "",
+    Object.keys(rules).length
+      ? JSON.stringify(rules)
+      : "No versioned production contract applies.",
+    typeof format.hookPattern === "string"
+      ? `Frozen format context: ${format.hookPattern}`
+      : "",
     "These rules are mandatory, not suggestions. Resolve every conflict in their favor. Output is invalid if any mandatory rule is violated. All candidates follow the same contract.",
-    rules.camera && (rules.camera as Record<string, unknown>).movement === "static"
+    rules.camera &&
+    (rules.camera as Record<string, unknown>).movement === "static"
       ? "FIXED CAMERA REQUIREMENT: use one identical camera position for the entire sequence; no zoom, pan, tilt, shake, cut, reframing, lens change, pull back, push in, frame tightening, or wide final shot. Keep environment, obstacle, lighting, wreckage and debris continuous; preserve exact clip continuity."
       : "",
-    "[2. STORY TEMPLATE SNAPSHOT]", Object.keys(template).length ? JSON.stringify(template) : "None.",
-    "[3. RESOLVED FORMAT-SPECIFIC VALUES]", Object.keys(formatInputs).length ? JSON.stringify(formatInputs) : "None.",
-    "[4. CONCRETE VIDEO IDEA]", String(project.idea ?? ""),
-    "[5. PRODUCTION SETTINGS]", `Target duration: ${duration} seconds. ${JSON.stringify({ ratio, language, platform: production.platform, audioMode: production.audioMode })}`,
-    "[6. EXAMPLE OUTPUT — STYLE REFERENCE ONLY; DO NOT COPY]", typeof format.exampleOutput === "string" ? format.exampleOutput : "None.",
-    retryFeedback ? "[7. SAFE RETRY REPAIR FEEDBACK]" : "", retryFeedback ? `Previous attempt issue codes: ${retryFeedback}. Regenerate without those violations.` : "",
+    "[2. STORY TEMPLATE SNAPSHOT]",
+    Object.keys(template).length ? JSON.stringify(template) : "None.",
+    "[3. RESOLVED FORMAT-SPECIFIC VALUES]",
+    Object.keys(formatInputs).length ? JSON.stringify(formatInputs) : "None.",
+    "[4. CONCRETE VIDEO IDEA]",
+    String(project.idea ?? ""),
+    "[5. PRODUCTION SETTINGS]",
+    `Target duration: ${duration} seconds. ${JSON.stringify({ ratio, language, platform: production.platform, audioMode: production.audioMode })}`,
+    "[6. EXAMPLE OUTPUT — STYLE REFERENCE ONLY; DO NOT COPY]",
+    typeof format.exampleOutput === "string" ? format.exampleOutput : "None.",
+    retryFeedback ? "[7. SAFE RETRY REPAIR FEEDBACK]" : "",
+    retryFeedback
+      ? `Previous attempt issue codes: ${retryFeedback}. Regenerate without those violations.`
+      : "",
     "Use HOOK, BUILD, PAYOFF, and RESOLUTION phases; include AES score, hook strength, emotional curve, and camera commands.",
   ]
     .filter(Boolean)
@@ -302,12 +332,22 @@ async function claimScenarioJob(): Promise<ClaimedScenarioJob | null> {
       .update(scenarioGenerationAttempts)
       .set({ status: "running", startedAt: now })
       .where(eq(scenarioGenerationAttempts.id, String(row.attempt_id)));
-    const previous = Number(row.attempt_number) > 1
-      ? await tx.execute(sql<{ validation_result: unknown }>`SELECT validation_result FROM generation_pipeline.scenario_generation_attempts WHERE run_id = ${String(row.run_id)} AND attempt_number = ${Number(row.attempt_number) - 1}`)
-      : null;
-    const details = record(record(previous?.rows[0]?.validation_result).details);
+    const previous =
+      Number(row.attempt_number) > 1
+        ? await tx.execute(
+            sql<{
+              validation_result: unknown;
+            }>`SELECT validation_result FROM generation_pipeline.scenario_generation_attempts WHERE run_id = ${String(row.run_id)} AND attempt_number = ${Number(row.attempt_number) - 1}`,
+          )
+        : null;
+    const details = record(
+      record(previous?.rows[0]?.validation_result).details,
+    );
     const retryFeedbackCodes = Array.isArray(details.issues)
-      ? details.issues.map((entry) => record(entry).code).filter((code): code is string => typeof code === "string").slice(0, 20)
+      ? details.issues
+          .map((entry) => record(entry).code)
+          .filter((code): code is string => typeof code === "string")
+          .slice(0, 20)
       : [];
     return {
       jobId: String(row.job_id),

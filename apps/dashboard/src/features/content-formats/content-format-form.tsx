@@ -7,25 +7,356 @@ import { Textarea } from "@/shared/components/ui/textarea";
 import type { Format } from "./api";
 export type FormValue = Partial<Format>;
 type RecordValue = Record<string, unknown>;
-const object = (value: unknown): RecordValue => value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
-const lines = (value: unknown) => Array.isArray(value) ? value.join("\n") : "";
-const fields: Array<[keyof FormValue, string]> = [["description","Description"],["hookPattern","Hook pattern"],["structurePattern","Structure pattern"],["visualPattern","Visual pattern"],["pacingPattern","Pacing pattern"],["notes","Notes"],["exampleOutput","Example output (style reference only)"]];
-export function ContentFormatForm({ initial = {}, disabled, submitLabel, saving, onSubmit, onCancel }: { initial?: FormValue; disabled?: boolean; submitLabel: string; saving?: boolean; onSubmit: (value: FormValue) => void; onCancel?: () => void }) {
- const initialRules = object(initial.productionRules); const initialTiming = object(initialRules.timing); const initialCamera = object(initialRules.camera); const initialContinuity = object(initialRules.continuity); const initialForbidden = object(initialRules.forbidden);
- const [value, setValue] = useState<FormValue>(initial); const [error, setError] = useState<string>();
- const [instructions, setInstructions] = useState(lines(initialRules.instructions)); const [concepts, setConcepts] = useState(lines(initialRules.requiredConcepts));
- const [rules, setRules] = useState<RecordValue>({ version: 1, timing: initialTiming, camera: initialCamera, continuity: initialContinuity, forbidden: initialForbidden });
- const update = (key: keyof FormValue, next: unknown) => setValue((old) => ({...old, [key]: next}));
- const nested = (section: string, key: string, next: unknown) => setRules(old => ({...old, [section]: {...object(old[section]), [key]: next}}));
- const number = (section: string, key: string, next: string) => nested(section, key, next === "" ? undefined : Number(next));
- const check = (section: string, key: string, label: string) => <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={disabled} checked={Boolean(object(rules[section])[key])} onChange={e => nested(section,key,e.target.checked)} />{label}</label>;
- return <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); if (!String(value.name || "").trim()) return setError("Name is required"); const min=Number(value.targetDurationMinSeconds), max=Number(value.targetDurationMaxSeconds); if ((min && min < 0) || (max && max < 0) || (min && max && min > max)) return setError("Minimum duration cannot exceed maximum duration"); const contract: RecordValue = {...rules, instructions: instructions.split("\n").map(v=>v.trim()).filter(Boolean), requiredConcepts: concepts.split("\n").map(v=>v.trim()).filter(Boolean)}; const angle=object(contract.camera).angleDegrees as RecordValue | undefined; if (angle && Number(angle.min) > Number(angle.max)) return setError("Minimum camera angle cannot exceed maximum"); setError(undefined); onSubmit({...value, productionRules: contract}); }}>
-  {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-  <div><Label htmlFor="format-name">Name</Label><Input id="format-name" required disabled={disabled} value={value.name || ""} onChange={(e) => update("name", e.target.value)} /></div>
-  <div><Label htmlFor="format-type">Format type</Label><select id="format-type" disabled={disabled} className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={value.formatType || "mixed"} onChange={(e) => update("formatType", e.target.value)}><option value="mixed">Mixed</option><option value="short_form">Short form</option><option value="long_form">Long form</option></select></div>
-  {fields.map(([key,label]) => <div key={String(key)}><Label htmlFor={String(key)}>{label}</Label><Textarea id={String(key)} disabled={disabled} value={String(value[key] || "")} onChange={(e) => update(key, e.target.value || null)} /></div>)}
-  <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="min-duration">Minimum duration (seconds)</Label><Input id="min-duration" type="number" min="0" disabled={disabled} value={value.targetDurationMinSeconds ?? ""} onChange={(e) => update("targetDurationMinSeconds", e.target.value ? Number(e.target.value) : null)} /></div><div><Label htmlFor="max-duration">Maximum duration (seconds)</Label><Input id="max-duration" type="number" min="0" disabled={disabled} value={value.targetDurationMaxSeconds ?? ""} onChange={(e) => update("targetDurationMaxSeconds", e.target.value ? Number(e.target.value) : null)} /></div></div>
-  <fieldset className="space-y-4 rounded-md border p-4"><legend className="px-1 font-semibold">Generation contract</legend><p className="text-sm text-muted-foreground">These mandatory rules are frozen into each new Run.</p><div><Label>Master instructions (one per line)</Label><Textarea disabled={disabled} value={instructions} onChange={e=>setInstructions(e.target.value)} /></div><div className="grid gap-3 sm:grid-cols-3"><div><Label>Exact scenes</Label><Input type="number" min="1" disabled={disabled} value={(object(rules.timing).exactSceneCount as number) ?? ""} onChange={e=>number("timing","exactSceneCount",e.target.value)} /></div><div><Label>Scene seconds</Label><Input type="number" min="0.1" disabled={disabled} value={(object(rules.timing).sceneDurationSeconds as number) ?? ""} onChange={e=>number("timing","sceneDurationSeconds",e.target.value)} /></div><div><Label>Total seconds</Label><Input type="number" min="0.1" disabled={disabled} value={(object(rules.timing).totalDurationSeconds as number) ?? ""} onChange={e=>number("timing","totalDurationSeconds",e.target.value)} /></div></div><div className="grid gap-3 sm:grid-cols-3"><div><Label>Camera movement</Label><select className="h-10 w-full rounded border bg-background px-2" disabled={disabled} value={String(object(rules.camera).movement ?? "unspecified")} onChange={e=>nested("camera","movement",e.target.value)}><option value="unspecified">Unspecified</option><option value="static">Static</option><option value="dynamic">Dynamic</option></select></div><div><Label>Angle min</Label><Input type="number" disabled={disabled} value={(object(object(rules.camera).angleDegrees).min as number) ?? ""} onChange={e=>nested("camera","angleDegrees",{...object(object(rules.camera).angleDegrees),min:Number(e.target.value)})}/></div><div><Label>Angle max</Label><Input type="number" disabled={disabled} value={(object(object(rules.camera).angleDegrees).max as number) ?? ""} onChange={e=>nested("camera","angleDegrees",{...object(object(rules.camera).angleDegrees),max:Number(e.target.value)})}/></div></div><div className="grid gap-2 sm:grid-cols-3">{check("camera","framingLocked","Locked framing")}{check("camera","noZoom","No zoom")}{check("camera","noPan","No pan")}{check("camera","noTilt","No tilt")}{check("camera","noShake","No shake")}{check("camera","noCuts","No cuts")}</div><div className="grid gap-3 sm:grid-cols-2"><div><Label>Vehicle entry direction</Label><Input disabled={disabled} value={String(object(rules.continuity).vehicleEntryDirection ?? "")} onChange={e=>nested("continuity","vehicleEntryDirection",e.target.value || undefined)}/></div><div><Label>Obstacle position</Label><Input disabled={disabled} value={String(object(rules.continuity).obstaclePosition ?? "")} onChange={e=>nested("continuity","obstaclePosition",e.target.value || undefined)}/></div></div><div className="grid gap-2 sm:grid-cols-3">{check("continuity","sameSceneAcrossClips","Persistent continuity")}{check("continuity","usePreviousFinalFrame","Previous final frame")}{check("continuity","persistentWreckage","Persistent wreckage")}{check("forbidden","slowMotion","No slow motion")}{check("forbidden","fireExplosions","No fire/explosions")}{check("forbidden","humans","No humans")}{check("forbidden","gore","No gore")}{check("forbidden","hud","No HUD")}{check("forbidden","watermarks","No watermarks")}{check("forbidden","textOverlays","No text overlays")}</div><div><Label>Required concepts (one per line)</Label><Textarea disabled={disabled} value={concepts} onChange={e=>setConcepts(e.target.value)} /></div></fieldset>
-  {!disabled && <div className="flex gap-3"><Button type="submit" disabled={saving}>{saving ? "Saving…" : submitLabel}</Button>{onCancel && <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>}</div>}
- </form>;
+const object = (value: unknown): RecordValue =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as RecordValue)
+    : {};
+const lines = (value: unknown) =>
+  Array.isArray(value) ? value.join("\n") : "";
+const fields: Array<[keyof FormValue, string]> = [
+  ["description", "Description"],
+  ["hookPattern", "Hook pattern"],
+  ["structurePattern", "Structure pattern"],
+  ["visualPattern", "Visual pattern"],
+  ["pacingPattern", "Pacing pattern"],
+  ["notes", "Notes"],
+  ["exampleOutput", "Example output (style reference only)"],
+];
+export function ContentFormatForm({
+  initial = {},
+  disabled,
+  submitLabel,
+  saving,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: FormValue;
+  disabled?: boolean;
+  submitLabel: string;
+  saving?: boolean;
+  onSubmit: (value: FormValue) => void;
+  onCancel?: () => void;
+}) {
+  const initialRules = object(initial.productionRules);
+  const initialTiming = object(initialRules.timing);
+  const initialCamera = object(initialRules.camera);
+  const initialContinuity = object(initialRules.continuity);
+  const initialForbidden = object(initialRules.forbidden);
+  const [value, setValue] = useState<FormValue>(initial);
+  const [error, setError] = useState<string>();
+  const [instructions, setInstructions] = useState(
+    lines(initialRules.instructions),
+  );
+  const [concepts, setConcepts] = useState(
+    lines(initialRules.requiredConcepts),
+  );
+  const [rules, setRules] = useState<RecordValue>({
+    version: 1,
+    timing: initialTiming,
+    camera: initialCamera,
+    continuity: initialContinuity,
+    forbidden: initialForbidden,
+  });
+  const update = (key: keyof FormValue, next: unknown) =>
+    setValue((old) => ({ ...old, [key]: next }));
+  const nested = (section: string, key: string, next: unknown) =>
+    setRules((old) => ({
+      ...old,
+      [section]: { ...object(old[section]), [key]: next },
+    }));
+  const number = (section: string, key: string, next: string) =>
+    nested(section, key, next === "" ? undefined : Number(next));
+  const check = (section: string, key: string, label: string) => (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        disabled={disabled}
+        checked={Boolean(object(rules[section])[key])}
+        onChange={(e) => nested(section, key, e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+  return (
+    <form
+      className="space-y-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!String(value.name || "").trim())
+          return setError("Name is required");
+        const min = Number(value.targetDurationMinSeconds),
+          max = Number(value.targetDurationMaxSeconds);
+        if ((min && min < 0) || (max && max < 0) || (min && max && min > max))
+          return setError("Minimum duration cannot exceed maximum duration");
+        const contract: RecordValue = {
+          ...rules,
+          instructions: instructions
+            .split("\n")
+            .map((v) => v.trim())
+            .filter(Boolean),
+          requiredConcepts: concepts
+            .split("\n")
+            .map((v) => v.trim())
+            .filter(Boolean),
+        };
+        const angle = object(contract.camera).angleDegrees as
+          | RecordValue
+          | undefined;
+        if (angle && Number(angle.min) > Number(angle.max))
+          return setError("Minimum camera angle cannot exceed maximum");
+        setError(undefined);
+        onSubmit({ ...value, productionRules: contract });
+      }}
+    >
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      <div>
+        <Label htmlFor="format-name">Name</Label>
+        <Input
+          id="format-name"
+          required
+          disabled={disabled}
+          value={value.name || ""}
+          onChange={(e) => update("name", e.target.value)}
+        />
+      </div>
+      <div>
+        <Label htmlFor="format-type">Format type</Label>
+        <select
+          id="format-type"
+          disabled={disabled}
+          className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+          value={value.formatType || "mixed"}
+          onChange={(e) => update("formatType", e.target.value)}
+        >
+          <option value="mixed">Mixed</option>
+          <option value="short_form">Short form</option>
+          <option value="long_form">Long form</option>
+        </select>
+      </div>
+      {fields.map(([key, label]) => (
+        <div key={String(key)}>
+          <Label htmlFor={String(key)}>{label}</Label>
+          <Textarea
+            id={String(key)}
+            disabled={disabled}
+            value={String(value[key] || "")}
+            onChange={(e) => update(key, e.target.value || null)}
+          />
+        </div>
+      ))}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="min-duration">Minimum duration (seconds)</Label>
+          <Input
+            id="min-duration"
+            type="number"
+            min="0"
+            disabled={disabled}
+            value={value.targetDurationMinSeconds ?? ""}
+            onChange={(e) =>
+              update(
+                "targetDurationMinSeconds",
+                e.target.value ? Number(e.target.value) : null,
+              )
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="max-duration">Maximum duration (seconds)</Label>
+          <Input
+            id="max-duration"
+            type="number"
+            min="0"
+            disabled={disabled}
+            value={value.targetDurationMaxSeconds ?? ""}
+            onChange={(e) =>
+              update(
+                "targetDurationMaxSeconds",
+                e.target.value ? Number(e.target.value) : null,
+              )
+            }
+          />
+        </div>
+      </div>
+      <fieldset className="space-y-4 rounded-md border p-4">
+        <legend className="px-1 font-semibold">Generation contract</legend>
+        <p className="text-sm text-muted-foreground">
+          These mandatory rules are frozen into each new Run.
+        </p>
+        <div>
+          <Label>Master instructions (one per line)</Label>
+          <Textarea
+            disabled={disabled}
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label>Exact scenes</Label>
+            <Input
+              type="number"
+              min="1"
+              disabled={disabled}
+              value={(object(rules.timing).exactSceneCount as number) ?? ""}
+              onChange={(e) =>
+                number("timing", "exactSceneCount", e.target.value)
+              }
+            />
+          </div>
+          <div>
+            <Label>Scene seconds</Label>
+            <Input
+              type="number"
+              min="0.1"
+              disabled={disabled}
+              value={
+                (object(rules.timing).sceneDurationSeconds as number) ?? ""
+              }
+              onChange={(e) =>
+                number("timing", "sceneDurationSeconds", e.target.value)
+              }
+            />
+          </div>
+          <div>
+            <Label>Total seconds</Label>
+            <Input
+              type="number"
+              min="0.1"
+              disabled={disabled}
+              value={
+                (object(rules.timing).totalDurationSeconds as number) ?? ""
+              }
+              onChange={(e) =>
+                number("timing", "totalDurationSeconds", e.target.value)
+              }
+            />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label>Camera movement</Label>
+            <select
+              className="h-10 w-full rounded border bg-background px-2"
+              disabled={disabled}
+              value={String(object(rules.camera).movement ?? "unspecified")}
+              onChange={(e) => nested("camera", "movement", e.target.value)}
+            >
+              <option value="unspecified">Unspecified</option>
+              <option value="static">Static</option>
+              <option value="dynamic">Dynamic</option>
+            </select>
+          </div>
+          <div>
+            <Label>Angle min</Label>
+            <Input
+              type="number"
+              disabled={disabled}
+              value={
+                (object(object(rules.camera).angleDegrees).min as number) ?? ""
+              }
+              onChange={(e) =>
+                nested("camera", "angleDegrees", {
+                  ...object(object(rules.camera).angleDegrees),
+                  min: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Angle max</Label>
+            <Input
+              type="number"
+              disabled={disabled}
+              value={
+                (object(object(rules.camera).angleDegrees).max as number) ?? ""
+              }
+              onChange={(e) =>
+                nested("camera", "angleDegrees", {
+                  ...object(object(rules.camera).angleDegrees),
+                  max: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {check("camera", "framingLocked", "Locked framing")}
+          {check("camera", "noZoom", "No zoom")}
+          {check("camera", "noPan", "No pan")}
+          {check("camera", "noTilt", "No tilt")}
+          {check("camera", "noShake", "No shake")}
+          {check("camera", "noCuts", "No cuts")}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Vehicle entry direction</Label>
+            <Input
+              disabled={disabled}
+              value={String(
+                object(rules.continuity).vehicleEntryDirection ?? "",
+              )}
+              onChange={(e) =>
+                nested(
+                  "continuity",
+                  "vehicleEntryDirection",
+                  e.target.value || undefined,
+                )
+              }
+            />
+          </div>
+          <div>
+            <Label>Obstacle position</Label>
+            <Input
+              disabled={disabled}
+              value={String(object(rules.continuity).obstaclePosition ?? "")}
+              onChange={(e) =>
+                nested(
+                  "continuity",
+                  "obstaclePosition",
+                  e.target.value || undefined,
+                )
+              }
+            />
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {check("continuity", "sameSceneAcrossClips", "Persistent continuity")}
+          {check("continuity", "usePreviousFinalFrame", "Previous final frame")}
+          {check("continuity", "persistentWreckage", "Persistent wreckage")}
+          {check("forbidden", "slowMotion", "No slow motion")}
+          {check("forbidden", "fireExplosions", "No fire/explosions")}
+          {check("forbidden", "humans", "No humans")}
+          {check("forbidden", "gore", "No gore")}
+          {check("forbidden", "hud", "No HUD")}
+          {check("forbidden", "watermarks", "No watermarks")}
+          {check("forbidden", "textOverlays", "No text overlays")}
+        </div>
+        <div>
+          <Label>Required concepts (one per line)</Label>
+          <Textarea
+            disabled={disabled}
+            value={concepts}
+            onChange={(e) => setConcepts(e.target.value)}
+          />
+        </div>
+      </fieldset>
+      {!disabled && (
+        <div className="flex gap-3">
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : submitLabel}
+          </Button>
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      )}
+    </form>
+  );
 }

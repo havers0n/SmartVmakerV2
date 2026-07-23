@@ -71,15 +71,34 @@ function publicAttempt<
     SCENARIO_FORMAT_ADHERENCE_FAILED:
       "The generated scenarios did not follow the Content Format rules.",
   };
-  const details = _validationResult && typeof _validationResult === "object"
-    ? (_validationResult as Record<string, unknown>).details
-    : undefined;
-  const rawIssues = details && typeof details === "object" ? (details as Record<string, unknown>).issues : undefined;
+  const details =
+    _validationResult && typeof _validationResult === "object"
+      ? (_validationResult as Record<string, unknown>).details
+      : undefined;
+  const rawIssues =
+    details && typeof details === "object"
+      ? (details as Record<string, unknown>).issues
+      : undefined;
   const issues = Array.isArray(rawIssues)
-    ? rawIssues.map((issue: unknown) => {
-        const value = issue && typeof issue === "object" ? issue as Record<string, unknown> : {};
-        return { code: typeof value.code === "string" ? value.code : "UNKNOWN", candidateIndex: typeof value.candidateIndex === "number" ? value.candidateIndex : undefined, sceneIndex: typeof value.sceneIndex === "number" ? value.sceneIndex : undefined };
-      }).slice(0, 50)
+    ? rawIssues
+        .map((issue: unknown) => {
+          const value =
+            issue && typeof issue === "object"
+              ? (issue as Record<string, unknown>)
+              : {};
+          return {
+            code: typeof value.code === "string" ? value.code : "UNKNOWN",
+            candidateIndex:
+              typeof value.candidateIndex === "number"
+                ? value.candidateIndex
+                : undefined,
+            sceneIndex:
+              typeof value.sceneIndex === "number"
+                ? value.sceneIndex
+                : undefined,
+          };
+        })
+        .slice(0, 50)
     : [];
   return {
     ...safe,
