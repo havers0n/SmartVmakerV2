@@ -307,14 +307,6 @@ export async function activateContentFormat(id: string) {
       throw new ContentFormatConflictError(
         "Only draft content formats can be activated",
       );
-    const [row] = await tx
-      .select({ videoCount: count(contentFormatVideos.videoId) })
-      .from(contentFormatVideos)
-      .where(eq(contentFormatVideos.contentFormatId, id));
-    if (Number(row.videoCount) < 1)
-      throw new ContentFormatConflictError(
-        "Add at least one video before activating this format",
-      );
     const [updated] = await tx
       .update(contentFormats)
       .set({ status: "active", updatedAt: new Date().toISOString() })

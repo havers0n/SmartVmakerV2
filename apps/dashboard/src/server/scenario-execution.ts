@@ -68,13 +68,45 @@ function publicAttempt<
     SCENARIO_PROVIDER_NOT_CONFIGURED:
       "The scenario provider is not configured.",
     SCENARIO_PROVIDER_CALL_FAILED: "The scenario provider request failed.",
+    SCENARIO_FORMAT_ADHERENCE_FAILED:
+      "The generated scenarios did not follow the Content Format rules.",
   };
+  const details =
+    _validationResult && typeof _validationResult === "object"
+      ? (_validationResult as Record<string, unknown>).details
+      : undefined;
+  const rawIssues =
+    details && typeof details === "object"
+      ? (details as Record<string, unknown>).issues
+      : undefined;
+  const issues = Array.isArray(rawIssues)
+    ? rawIssues
+        .map((issue: unknown) => {
+          const value =
+            issue && typeof issue === "object"
+              ? (issue as Record<string, unknown>)
+              : {};
+          return {
+            code: typeof value.code === "string" ? value.code : "UNKNOWN",
+            candidateIndex:
+              typeof value.candidateIndex === "number"
+                ? value.candidateIndex
+                : undefined,
+            sceneIndex:
+              typeof value.sceneIndex === "number"
+                ? value.sceneIndex
+                : undefined,
+          };
+        })
+        .slice(0, 50)
+    : [];
   return {
     ...safe,
     errorCode,
     errorMessage: errorCode
       ? (publicMessages[errorCode] ?? "Scenario generation failed.")
       : null,
+    formatIssues: issues,
   };
 }
 

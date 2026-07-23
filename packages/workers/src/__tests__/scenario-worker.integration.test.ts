@@ -12,6 +12,13 @@ import {
 } from "@scrimspec/db";
 import { ScenarioGenerationError } from "@scrimspec/shared-types";
 import { processScenarioJob, SCENARIO_WORKER_ID } from "../scenario-worker";
+import {
+  beamNgContract,
+  compliantScenario,
+  fakeSuccess,
+  invalidScenario,
+  missingPlanScenario,
+} from "./scenario-fixtures";
 
 const db = getDrizzleClient();
 const ownerId = randomUUID();
@@ -27,7 +34,7 @@ const validScenario = {
   ],
 };
 
-async function queuedExecution() {
+async function queuedExecution(contentFormatSnapshot: unknown = null) {
   const [project] = await db
     .insert(videoProjects)
     .values({
@@ -56,6 +63,7 @@ async function queuedExecution() {
       schemaVersion: 1,
       scenario: { compilerVersion: "scenario-prompt-compiler:v1" },
     },
+    contentFormatSnapshot,
   };
   const [run] = await db
     .insert(generationRuns)
@@ -167,5 +175,102 @@ describe.sequential("durable scenario worker", () => {
       errorCode: "SCENARIO_GENERATION_TRUNCATED",
     });
     expect(artifacts).toHaveLength(0);
+  });
+
+  it.each([
+    [
+      "invalid camera response",
+      [invalidScenario()],
+      ["CAMERA_ANGLE_OUT_OF_RANGE", "SLOW_MOTION_FORBIDDEN"],
+    ],
+    [
+      "missing productionPlan response",
+      [missingPlanScenario()],
+      ["STRUCTURED_COMPLIANCE_MISSING"],
+    ],
+    [
+      "mixed response",
+      [compliantScenario(), invalidScenario()],
+      ["CAMERA_ANGLE_OUT_OF_RANGE"],
+    ],
+  ])(
+    "rejects a contracted %s before any artifact is inserted",
+    async (_name, scenarios, expectedCodes) => {
+      const durable = await queuedExecution({
+        productionRules: beamNgContract,
+      });
+      const provider = vi.fn(async () => fakeSuccess(scenarios));
+      expect(await processScenarioJob(provider)).toBe(true);
+      expect(provider).toHaveBeenCalledTimes(1);
+      const [attempt] = await db
+        .select()
+        .from(scenarioGenerationAttempts)
+        .where(eq(scenarioGenerationAttempts.id, durable.attempt.id));
+      const [job] = await db
+        .select()
+        .from(scenarioGenerationJobQueue)
+        .where(eq(scenarioGenerationJobQueue.id, durable.job.id));
+      const artifacts = await db
+        .select()
+        .from(scenarioArtifacts)
+        .where(eq(scenarioArtifacts.runId, durable.run.id));
+      expect(attempt).toMatchObject({
+        status: "failed",
+        errorCode: "SCENARIO_FORMAT_ADHERENCE_FAILED",
+      });
+      expect(
+        ((attempt.validationResult as any).details.issues as any[]).map(
+          (issue) => issue.code,
+        ),
+      ).toEqual(expect.arrayContaining(expectedCodes));
+      expect(job.status).toBe("failed");
+      expect(artifacts).toHaveLength(0);
+      expect(await processScenarioJob(provider)).toBe(false);
+      expect(provider).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("uses the immutable Run contract and supports legacy uncontracted artifacts", async () => {
+    const contracted = await queuedExecution({
+      productionRules: beamNgContract,
+    });
+    const legacy = await queuedExecution();
+    const provider = vi
+      .fn()
+      .mockResolvedValueOnce(fakeSuccess([compliantScenario()]))
+      .mockResolvedValueOnce(fakeSuccess([missingPlanScenario()]));
+    expect(await processScenarioJob(provider)).toBe(true);
+    expect(await processScenarioJob(provider)).toBe(true);
+    expect(provider).toHaveBeenCalledTimes(2);
+    const attempts = await db
+      .select()
+      .from(scenarioGenerationAttempts)
+      .where(eq(scenarioGenerationAttempts.runId, contracted.run.id));
+    const legacyAttempts = await db
+      .select()
+      .from(scenarioGenerationAttempts)
+      .where(eq(scenarioGenerationAttempts.runId, legacy.run.id));
+    expect(attempts[0].status).toBe("succeeded");
+    expect(legacyAttempts[0].status).toBe("succeeded");
+    const legacyArtifacts = await db
+      .select()
+      .from(scenarioArtifacts)
+      .where(eq(scenarioArtifacts.runId, legacy.run.id));
+    expect(
+      (legacyArtifacts[0].payload as any)[0].productionPlan,
+    ).toBeUndefined();
+  });
+
+  it("never calls the provider a second time after terminal success", async () => {
+    const durable = await queuedExecution({ productionRules: beamNgContract });
+    const provider = vi.fn(async () => fakeSuccess([compliantScenario()]));
+    await processScenarioJob(provider);
+    await processScenarioJob(provider);
+    const artifacts = await db
+      .select()
+      .from(scenarioArtifacts)
+      .where(eq(scenarioArtifacts.runId, durable.run.id));
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(artifacts).toHaveLength(1);
   });
 });

@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { validateScenarioFormatAdherence } from "@scrimspec/shared-types";
 import {
   compileScenarioPrompt,
   resolveScenarioProviderModelId,
 } from "../scenario-worker";
+import {
+  beamNgContract,
+  compliantScenario,
+  invalidScenario,
+  missingPlanScenario,
+} from "./scenario-fixtures";
 
 describe("scenario prompt compiler", () => {
   it("compiles only immutable run snapshots", () => {
@@ -29,5 +36,39 @@ describe("scenario prompt compiler", () => {
     expect(resolveScenarioProviderModelId("minimax", "minimax-m2")).toBe(
       "MiniMax-M2",
     );
+  });
+});
+
+describe("Content Format adherence", () => {
+  it("rejects fixed-camera BeamNG contradictions independently", () => {
+    const issues = validateScenarioFormatAdherence(
+      [invalidScenario()],
+      beamNgContract,
+    );
+    expect(issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "CAMERA_MOVEMENT_FORBIDDEN",
+        "CAMERA_ANGLE_OUT_OF_RANGE",
+        "CAMERA_FRAMING_CHANGED",
+        "SLOW_MOTION_FORBIDDEN",
+      ]),
+    );
+  });
+  it("accepts compliant output and does not treat a debris burst as fire", () => {
+    expect(
+      validateScenarioFormatAdherence([compliantScenario()], beamNgContract),
+    ).toEqual([]);
+  });
+  it("requires productionPlan only for contracted runs", () => {
+    expect(
+      validateScenarioFormatAdherence([missingPlanScenario()], beamNgContract),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "STRUCTURED_COMPLIANCE_MISSING" }),
+      ]),
+    );
+    expect(
+      validateScenarioFormatAdherence([missingPlanScenario()], null),
+    ).toEqual([]);
   });
 });

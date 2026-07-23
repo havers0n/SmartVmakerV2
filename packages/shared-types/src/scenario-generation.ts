@@ -3,6 +3,22 @@ import { z } from "zod";
 const nonBlankString = (field: string, max: number) =>
   z.string().trim().min(1, `${field} must not be empty`).max(max);
 
+export const productionPlanSchema = z
+  .object({
+    sceneCount: z.number().int().positive(),
+    sceneDurations: z.array(z.number().finite().positive()).min(1),
+    cameraMovement: z.enum(["static", "dynamic", "unspecified"]),
+    cameraAngleDegrees: z.number().finite().optional(),
+    framingChanges: z.boolean(),
+    cuts: z.boolean(),
+    slowMotion: z.boolean(),
+    previousFrameContinuity: z.boolean().optional(),
+    persistentWreckage: z.boolean().optional(),
+    vehicleEntryDirection: z.string().trim().min(1).max(100).optional(),
+    obstaclePosition: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict();
+
 export const sceneSchema = z
   .object({
     phase: nonBlankString("Scene phase", 100),
@@ -23,19 +39,22 @@ export const scenarioSchema = z
     hookStrength: z.number().finite().min(0).max(100),
     emotionalCurve: z.array(nonBlankString("Emotion", 100)).min(1).max(20),
     scenes: z.array(sceneSchema).min(1).max(100),
+    productionPlan: productionPlanSchema.optional(),
   })
   .strict();
 
 export const scenariosSchema = z.array(scenarioSchema).min(1).max(10);
 export type Scene = z.infer<typeof sceneSchema>;
 export type Scenario = z.infer<typeof scenarioSchema>;
+export type ProductionPlan = z.infer<typeof productionPlanSchema>;
 
 export type ScenarioGenerationErrorCode =
   | "SCENARIO_GENERATION_INVALID_TYPE"
   | "SCENARIO_GENERATION_JSON_PARSE_FAILED"
   | "SCENARIO_GENERATION_SCHEMA_VALIDATION_FAILED"
   | "SCENARIO_GENERATION_EMPTY"
-  | "SCENARIO_GENERATION_TRUNCATED";
+  | "SCENARIO_GENERATION_TRUNCATED"
+  | "SCENARIO_FORMAT_ADHERENCE_FAILED";
 
 const errorMessages: Record<ScenarioGenerationErrorCode, string> = {
   SCENARIO_GENERATION_INVALID_TYPE:
@@ -47,6 +66,8 @@ const errorMessages: Record<ScenarioGenerationErrorCode, string> = {
   SCENARIO_GENERATION_EMPTY: "The model did not generate any scenarios.",
   SCENARIO_GENERATION_TRUNCATED:
     "The model response was incomplete. Please retry scenario generation.",
+  SCENARIO_FORMAT_ADHERENCE_FAILED:
+    "The generated scenarios violated the required Content Format.",
 };
 
 export class ScenarioGenerationError extends Error {

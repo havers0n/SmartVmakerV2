@@ -27,6 +27,13 @@ const creationWizardMigration = readFileSync(
   ),
   "utf8",
 );
+const productionContractMigration = readFileSync(
+  resolve(
+    root,
+    "packages/db/migrations/0031_allow_versioned_content_format_production_contracts.sql",
+  ),
+  "utf8",
+);
 const migrationJournal = JSON.parse(
   readFileSync(
     resolve(root, "packages/db/migrations/meta/_journal.json"),
@@ -42,13 +49,18 @@ const scenarioJournalEntry = migrationJournal.entries.find(
 const creationWizardJournalEntry = migrationJournal.entries.find(
   ({ tag }) => tag === "0030_creation_wizard_v2_content_formats",
 );
+const productionContractJournalEntry = migrationJournal.entries.find(
+  ({ tag }) =>
+    tag === "0031_allow_versioned_content_format_production_contracts",
+);
 if (
   !foundationJournalEntry ||
   !scenarioJournalEntry ||
-  !creationWizardJournalEntry
+  !creationWizardJournalEntry ||
+  !productionContractJournalEntry
 ) {
   throw new Error(
-    "0028, 0029 and 0030 must be present in the local migration journal",
+    "0028, 0029, 0030 and 0031 must be present in the local migration journal",
   );
 }
 const migrationHistory = `
@@ -59,7 +71,8 @@ CREATE TABLE drizzle.__drizzle_migrations (
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
   ('${createHash("sha256").update(foundationMigration).digest("hex")}', ${foundationJournalEntry.when}),
   ('${createHash("sha256").update(scenarioMigration).digest("hex")}', ${scenarioJournalEntry.when}),
-  ('${createHash("sha256").update(creationWizardMigration).digest("hex")}', ${creationWizardJournalEntry.when});
+  ('${createHash("sha256").update(creationWizardMigration).digest("hex")}', ${creationWizardJournalEntry.when}),
+  ('${createHash("sha256").update(productionContractMigration).digest("hex")}', ${productionContractJournalEntry.when});
 `;
 
 const bootstrap = `
@@ -182,6 +195,7 @@ try {
   psql(foundationMigration);
   psql(scenarioMigration);
   psql(creationWizardMigration);
+  psql(productionContractMigration);
   psql(migrationHistory);
   run(pnpm, ["--filter", "@scrimspec/db", "migrations:preflight:generation"], {
     shell: process.platform === "win32",
@@ -206,8 +220,11 @@ try {
         "exec",
         "vitest",
         "run",
+        "--no-file-parallelism",
         "src/server/generation-runs.integration.test.ts",
+        "src/server/scenario-execution.integration.test.ts",
         "src/server/creation-v2.integration.test.ts",
+        "src/server/content-format-production-rules.integration.test.ts",
       ],
       {
         shell: process.platform === "win32",
