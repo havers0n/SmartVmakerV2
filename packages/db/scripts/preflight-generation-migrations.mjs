@@ -34,9 +34,15 @@ const TARGETS = [
     constraints: [
       "public.content_formats.content_formats_input_schema_object_check",
       "public.content_formats.content_formats_production_defaults_object_check",
-      "public.content_formats.content_formats_production_rules_array_check",
       "generation_pipeline.video_projects.video_projects_owner_submission_unique",
       "generation_pipeline.generation_runs.generation_runs_project_submission_unique",
+    ],
+  },
+  {
+    tag: "0031_allow_versioned_content_format_production_contracts",
+    objects: [],
+    constraints: [
+      "public.content_formats.content_formats_production_rules_contract_v1_check",
     ],
   },
 ];
@@ -59,7 +65,7 @@ export function hashMigrationSql(sql) {
 }
 
 export function classifyGenerationMigrationState(targets) {
-  const [migration0028, migration0029, migration0030] = targets;
+  const [migration0028, migration0029, migration0030, migration0031] = targets;
   for (const target of targets) {
     if (target.hashMismatch) {
       return {
@@ -104,6 +110,13 @@ export function classifyGenerationMigrationState(targets) {
       message: "0030 objects exist without the 0029 durable scenario pipeline",
     };
   }
+  if (migration0031.schemaPresent && !migration0030.schemaPresent) {
+    return {
+      safe: false,
+      code: "0031_WITHOUT_0030",
+      message: "0031 exists without 0030",
+    };
+  }
   if (
     migration0028.journalPresent &&
     migration0029.journalPresent &&
@@ -113,6 +126,17 @@ export function classifyGenerationMigrationState(targets) {
       safe: false,
       code: "MIGRATION_ORDER_INVALID",
       message: "0028 must precede 0029 in the Drizzle journal",
+    };
+  }
+  if (
+    migration0030.journalPresent &&
+    migration0031.journalPresent &&
+    migration0030.createdAt >= migration0031.createdAt
+  ) {
+    return {
+      safe: false,
+      code: "MIGRATION_ORDER_INVALID",
+      message: "0030 must precede 0031",
     };
   }
   if (
@@ -129,8 +153,8 @@ export function classifyGenerationMigrationState(targets) {
   if (!migration0028.schemaPresent && !migration0028.journalPresent) {
     return {
       safe: true,
-      code: "APPLY_0028_THEN_0029_THEN_0030",
-      message: "Safe to apply 0028 followed by 0029 and 0030",
+      code: "APPLY_0028_THEN_0029_THEN_0030_THEN_0031",
+      message: "Safe to apply 0028 followed by 0029, 0030 and 0031",
     };
   }
   if (migration0028.schemaPresent && !migration0029.schemaPresent) {
@@ -147,10 +171,13 @@ export function classifyGenerationMigrationState(targets) {
       message: "Safe to apply 0030",
     };
   }
+  if (migration0030.schemaPresent && !migration0031.schemaPresent) {
+    return { safe: true, code: "APPLY_0031", message: "Safe to apply 0031" };
+  }
   return {
     safe: true,
     code: "UP_TO_DATE",
-    message: "0028, 0029 and 0030 are present in schema and journal",
+    message: "0028, 0029, 0030 and 0031 are present in schema and journal",
   };
 }
 

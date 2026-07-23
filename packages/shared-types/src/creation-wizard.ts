@@ -135,9 +135,123 @@ export const contentFormatProductionDefaultsSchema = z
   })
   .strict();
 
-export const contentFormatProductionRulesSchema = z
-  .array(z.string().trim().min(1).max(1_000))
-  .max(100);
+const positiveSeconds = z.number().finite().positive().max(3_600);
+
+/** The immutable, provider-enforceable format contract used by new runs. */
+export const contentFormatProductionRulesV1Schema = z
+  .object({
+    version: z.literal(1),
+    instructions: z
+      .array(z.string().trim().min(1).max(1_000))
+      .max(100)
+      .default([]),
+    timing: z
+      .object({
+        exactSceneCount: z.number().int().positive().max(100).optional(),
+        sceneDurationSeconds: positiveSeconds.optional(),
+        totalDurationSeconds: positiveSeconds.optional(),
+      })
+      .strict()
+      .default({}),
+    camera: z
+      .object({
+        movement: z.enum(["static", "dynamic", "unspecified"]).optional(),
+        angleDegrees: z
+          .object({ min: z.number().finite(), max: z.number().finite() })
+          .strict()
+          .optional(),
+        framingLocked: z.boolean().optional(),
+        noZoom: z.boolean().optional(),
+        noPan: z.boolean().optional(),
+        noTilt: z.boolean().optional(),
+        noShake: z.boolean().optional(),
+        noCuts: z.boolean().optional(),
+      })
+      .strict()
+      .default({}),
+    continuity: z
+      .object({
+        sameSceneAcrossClips: z.boolean().optional(),
+        usePreviousFinalFrame: z.boolean().optional(),
+        persistentWreckage: z.boolean().optional(),
+        vehicleEntryDirection: z.string().trim().min(1).max(100).optional(),
+        obstaclePosition: z.string().trim().min(1).max(100).optional(),
+      })
+      .strict()
+      .default({}),
+    forbidden: z
+      .object({
+        slowMotion: z.boolean().optional(),
+        fireExplosions: z.boolean().optional(),
+        humans: z.boolean().optional(),
+        gore: z.boolean().optional(),
+        hud: z.boolean().optional(),
+        watermarks: z.boolean().optional(),
+        textOverlays: z.boolean().optional(),
+      })
+      .strict()
+      .default({}),
+    requiredConcepts: z
+      .array(z.string().trim().min(1).max(200))
+      .max(100)
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const timing = value.timing;
+    if (
+      timing.exactSceneCount &&
+      timing.sceneDurationSeconds &&
+      timing.totalDurationSeconds &&
+      Math.abs(
+        timing.exactSceneCount * timing.sceneDurationSeconds -
+          timing.totalDurationSeconds,
+      ) > 0.001
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["timing"],
+        message: "Scene count × scene duration must equal total duration",
+      });
+    if (
+      value.camera.angleDegrees &&
+      value.camera.angleDegrees.min > value.camera.angleDegrees.max
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["camera", "angleDegrees", "min"],
+        message: "Minimum camera angle cannot exceed maximum",
+      });
+    if (value.camera.movement === "dynamic" && value.camera.framingLocked)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["camera"],
+        message: "Dynamic movement conflicts with locked framing",
+      });
+  });
+
+export type ContentFormatProductionRulesV1 = z.infer<
+  typeof contentFormatProductionRulesV1Schema
+>;
+
+/** Legacy string arrays stay readable; new configuration writes the versioned object. */
+export const contentFormatProductionRulesSchema = z.union([
+  contentFormatProductionRulesV1Schema,
+  z.array(z.string().trim().min(1).max(1_000)).max(100),
+]);
+
+export function resolveContentFormatProductionRules(
+  value: unknown,
+): ContentFormatProductionRulesV1 {
+  if (Array.isArray(value))
+    return contentFormatProductionRulesV1Schema.parse({
+      version: 1,
+      instructions: value,
+    });
+  if (value == null)
+    return contentFormatProductionRulesV1Schema.parse({ version: 1 });
+  return contentFormatProductionRulesV1Schema.parse(value);
+}
 
 function validateFieldValue(
   field: z.infer<typeof formatInputFieldSchema>,
