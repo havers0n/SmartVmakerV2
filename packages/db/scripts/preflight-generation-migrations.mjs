@@ -52,6 +52,16 @@ const TARGETS = [
       "generation_pipeline.current_approved_scenario_revisions",
     ],
   },
+  {
+    tag: "0033_durable_image_generation",
+    objects: [
+      "generation_pipeline.scene_plans",
+      "generation_pipeline.image_generation_requests",
+      "generation_pipeline.image_attempts",
+      "generation_pipeline.image_artifacts",
+      "jobs.image_generation_job_queue",
+    ],
+  },
 ];
 
 /**
@@ -72,7 +82,14 @@ export function hashMigrationSql(sql) {
 }
 
 export function classifyGenerationMigrationState(targets) {
-  const [migration0028, migration0029, migration0030, migration0031, migration0032] = targets;
+  const [
+    migration0028,
+    migration0029,
+    migration0030,
+    migration0031,
+    migration0032,
+    migration0033,
+  ] = targets;
   for (const target of targets) {
     if (target.hashMismatch) {
       return {
@@ -125,7 +142,18 @@ export function classifyGenerationMigrationState(targets) {
     };
   }
   if (migration0032.schemaPresent && !migration0031.schemaPresent) {
-    return { safe: false, code: "0032_WITHOUT_0031", message: "0032 exists without 0031" };
+    return {
+      safe: false,
+      code: "0032_WITHOUT_0031",
+      message: "0032 exists without 0031",
+    };
+  }
+  if (migration0033.schemaPresent && !migration0032.schemaPresent) {
+    return {
+      safe: false,
+      code: "0033_WITHOUT_0032",
+      message: "0033 exists without 0032",
+    };
   }
   if (
     migration0028.journalPresent &&
@@ -149,8 +177,27 @@ export function classifyGenerationMigrationState(targets) {
       message: "0030 must precede 0031",
     };
   }
-  if (migration0031.journalPresent && migration0032.journalPresent && migration0031.createdAt >= migration0032.createdAt) {
-    return { safe: false, code: "MIGRATION_ORDER_INVALID", message: "0031 must precede 0032" };
+  if (
+    migration0031.journalPresent &&
+    migration0032.journalPresent &&
+    migration0031.createdAt >= migration0032.createdAt
+  ) {
+    return {
+      safe: false,
+      code: "MIGRATION_ORDER_INVALID",
+      message: "0031 must precede 0032",
+    };
+  }
+  if (
+    migration0032.journalPresent &&
+    migration0033.journalPresent &&
+    migration0032.createdAt >= migration0033.createdAt
+  ) {
+    return {
+      safe: false,
+      code: "MIGRATION_ORDER_INVALID",
+      message: "0032 must precede 0033",
+    };
   }
   if (
     migration0029.journalPresent &&
@@ -166,8 +213,8 @@ export function classifyGenerationMigrationState(targets) {
   if (!migration0028.schemaPresent && !migration0028.journalPresent) {
     return {
       safe: true,
-    code: "APPLY_0028_THEN_0029_THEN_0030_THEN_0031_THEN_0032",
-    message: "Safe to apply 0028 followed by 0029, 0030, 0031 and 0032",
+      code: "APPLY_0028_THEN_0029_THEN_0030_THEN_0031_THEN_0032_THEN_0033",
+      message: "Safe to apply 0028 followed by 0029, 0030, 0031, 0032 and 0033",
     };
   }
   if (migration0028.schemaPresent && !migration0029.schemaPresent) {
@@ -190,10 +237,13 @@ export function classifyGenerationMigrationState(targets) {
   if (migration0031.schemaPresent && !migration0032.schemaPresent) {
     return { safe: true, code: "APPLY_0032", message: "Safe to apply 0032" };
   }
+  if (migration0032.schemaPresent && !migration0033.schemaPresent) {
+    return { safe: true, code: "APPLY_0033", message: "Safe to apply 0033" };
+  }
   return {
     safe: true,
     code: "UP_TO_DATE",
-    message: "0028 through 0032 are present in schema and journal",
+    message: "0028 through 0033 are present in schema and journal",
   };
 }
 

@@ -838,6 +838,174 @@ export const scenarioArtifacts = generationPipeline.table(
   }),
 );
 
+// =================== IMAGE GENERATION TABLES ===================
+
+export const scenePlans = generationPipeline.table(
+  "scene_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").notNull(),
+    scenes: jsonb("scenes").notNull(),
+    productionPlan: jsonb("production_plan"),
+    requiredFrames: jsonb("required_frames")
+      .default(["first", "last"])
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runRevisionUnique: unique("scene_plans_run_revision_unique").on(
+      table.runId,
+      table.revisionId,
+    ),
+    runIdIdUnique: unique("scene_plans_run_id_id_unique").on(
+      table.runId,
+      table.id,
+    ),
+    runCreatedIdx: index("scene_plans_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const imageGenerationRequests = generationPipeline.table(
+  "image_generation_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    scenePlanId: uuid("scene_plan_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    targets: jsonb("targets").notNull(),
+    provider: text("provider").notNull(),
+    modelId: text("model_id").notNull(),
+    modelCatalogRevision: text("model_catalog_revision"),
+    settings: jsonb("settings").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runIdempotencyUnique: unique(
+      "image_generation_requests_run_idempotency_unique",
+    ).on(table.runId, table.idempotencyKey),
+    runIdScenePlanUnique: unique(
+      "image_generation_requests_run_id_scene_plan_unique",
+    ).on(table.runId, table.id, table.scenePlanId),
+    runCreatedIdx: index("image_generation_requests_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const imageAttempts = generationPipeline.table(
+  "image_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    requestId: uuid("request_id").notNull(),
+    scenePlanId: uuid("scene_plan_id").notNull(),
+    sceneIndex: integer("scene_index").notNull(),
+    frameRole: text("frame_role").notNull(),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: text("status").default("queued").notNull(),
+    prompt: text("prompt").notNull(),
+    provider: text("provider").notNull(),
+    modelId: text("model_id").notNull(),
+    settings: jsonb("settings").notNull(),
+    failureCode: text("failure_code"),
+    failureSummary: text("failure_summary"),
+    internalDiagnostics: jsonb("internal_diagnostics"),
+    queuedAt: timestamp("queued_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
+  },
+  (table) => ({
+    planSceneRoleNumberUnique: unique(
+      "image_attempts_plan_scene_role_number_unique",
+    ).on(
+      table.scenePlanId,
+      table.sceneIndex,
+      table.frameRole,
+      table.attemptNumber,
+    ),
+    runStatusIdx: index("image_attempts_run_status_idx").on(
+      table.runId,
+      table.status,
+    ),
+    requestIdx: index("image_attempts_request_idx").on(table.requestId),
+  }),
+);
+
+export const imageArtifacts = generationPipeline.table(
+  "image_artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .unique()
+      .references(() => imageAttempts.id, { onDelete: "cascade" }),
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    checksum: text("checksum").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    attemptIdx: index("image_artifacts_attempt_idx").on(table.attemptId),
+  }),
+);
+
+export const imageGenerationJobQueue = jobs.table(
+  "image_generation_job_queue",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .unique()
+      .references(() => imageAttempts.id, { onDelete: "cascade" }),
+    status: text("status").default("queued").notNull(),
+    availableAt: timestamp("available_at", {
+      withTimezone: true,
+      mode: "string",
+    })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true, mode: "string" }),
+    lockedBy: uuid("locked_by"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    claimIdx: index("image_generation_job_queue_claim_idx").on(
+      table.status,
+      table.availableAt,
+      table.createdAt,
+    ),
+  }),
+);
+
 /** Immutable, user-approved snapshots selected from scenario artifacts. */
 export const approvedScenarioRevisions = generationPipeline.table(
   "approved_scenario_revisions",

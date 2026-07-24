@@ -36,6 +36,12 @@ function state(
   journal0029,
   schema0030 = false,
   journal0030 = false,
+  schema0031 = false,
+  journal0031 = false,
+  schema0032 = false,
+  journal0032 = false,
+  schema0033 = false,
+  journal0033 = false,
 ) {
   return [
     {
@@ -65,13 +71,40 @@ function state(
       objectTotal: 11,
       createdAt: journal0030 ? 30 : null,
     },
+    {
+      tag: "0031",
+      schemaPresent: schema0031,
+      journalPresent: journal0031,
+      hashMismatch: false,
+      objectCount: schema0031 ? 1 : 0,
+      objectTotal: 1,
+      createdAt: journal0031 ? 31 : null,
+    },
+    {
+      tag: "0032",
+      schemaPresent: schema0032,
+      journalPresent: journal0032,
+      hashMismatch: false,
+      objectCount: schema0032 ? 3 : 0,
+      objectTotal: 3,
+      createdAt: journal0032 ? 32 : null,
+    },
+    {
+      tag: "0033",
+      schemaPresent: schema0033,
+      journalPresent: journal0033,
+      hashMismatch: false,
+      objectCount: schema0033 ? 5 : 0,
+      objectTotal: 5,
+      createdAt: journal0033 ? 33 : null,
+    },
   ];
 }
 
 test("allows a normal 0028 then 0029 then 0030 migration", () => {
   assert.equal(
     classifyGenerationMigrationState(state(false, false, false, false)).code,
-    "APPLY_0028_THEN_0029_THEN_0030",
+    "APPLY_0028_THEN_0029_THEN_0030_THEN_0031_THEN_0032_THEN_0033",
   );
 });
 
@@ -126,8 +159,22 @@ test("blocks a journal timestamp with a different local hash", () => {
 
 test("accepts a fully applied state", () => {
   assert.equal(
-    classifyGenerationMigrationState(state(true, true, true, true, true, true))
-      .code,
+    classifyGenerationMigrationState(
+      state(
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ),
+    ).code,
     "UP_TO_DATE",
   );
 });
