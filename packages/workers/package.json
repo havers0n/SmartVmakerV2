@@ -14,8 +14,11 @@
     "dev:scenario": "cross-env NODE_ENV=development tsx --watch src/scenario-worker.ts",
     "dev:keyframe": "cross-env NODE_ENV=development tsx --watch src/keyframe-worker.ts",
     "dev:animation": "cross-env NODE_ENV=development tsx --watch src/animation-worker.ts",
+    "dev:image": "cross-env NODE_ENV=development tsx --watch src/image-generation/image-worker-entry.ts",
+    "dev:image:smoke": "cross-env NODE_ENV=development ALLOW_PAID_IMAGE_SMOKE_TEST=true tsx src/image-generation/smoke-test.ts",
     "dev:cleanup": "tsx --watch src/cleanup-worker.ts",
     "test": "vitest run src/__tests__/scenario-worker.test.ts",
+    "test:image": "vitest run src/__tests__/routing-provider-adapter.test.ts src/__tests__/image-normalizer.test.ts src/__tests__/r2-storage-adapter.test.ts src/__tests__/image-worker-runtime.test.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -27,7 +30,9 @@
     "@scrimspec/halu-client": "workspace:*",
     "@scrimspec/shared-types": "workspace:*",
     "dotenv": "^16.3.1",
-    "p-retry": "^6.2.1"
+    "drizzle-orm": "^0.44.7",
+    "p-retry": "^6.2.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

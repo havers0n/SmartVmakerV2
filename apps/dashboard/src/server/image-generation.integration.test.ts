@@ -28,7 +28,12 @@ import {
   processImageGenerationAttempt,
   computeStorageKey,
 } from "@scrimspec/hwar-core";
-import type { ProviderAdapter, StorageAdapter } from "@scrimspec/hwar-core";
+import type {
+  ProviderAdapter,
+  StorageAdapter,
+  ImageProviderInput,
+  ImageProviderResult,
+} from "@scrimspec/hwar-core";
 
 const owner = randomUUID();
 const projects: string[] = [];
@@ -293,7 +298,12 @@ describe.sequential("image-generation integration", () => {
 
   describe("worker processing", () => {
     const fakeProvider: ProviderAdapter = {
-      generate: async () => MINIMAL_PNG,
+      generate: async (
+        _input: ImageProviderInput,
+      ): Promise<ImageProviderResult> => ({
+        buffer: MINIMAL_PNG,
+        sourceMimeType: "image/png",
+      }),
     };
     const inMemoryStorage: Map<string, Buffer> & {
       keys: string[];
@@ -343,6 +353,7 @@ describe.sequential("image-generation integration", () => {
       const result = await processImageGenerationAttempt(
         { db, schema },
         attempt!,
+        workerId,
         fakeProvider,
         inMemoryStorage,
       );
@@ -389,7 +400,9 @@ describe.sequential("image-generation integration", () => {
       );
 
       const failingProvider: ProviderAdapter = {
-        generate: async () => {
+        generate: async (
+          _input: ImageProviderInput,
+        ): Promise<ImageProviderResult> => {
           throw new Error("Provider API error");
         },
       };
@@ -405,12 +418,13 @@ describe.sequential("image-generation integration", () => {
       const result = await processImageGenerationAttempt(
         { db, schema },
         attempt!,
+        workerId,
         failingProvider,
         inMemoryStorage,
       );
 
       expect(result.status).toBe("failed");
-      expect(result.failureCode).toBe("PROVIDER_FAILURE");
+      expect(result.failureCode).toBe("PROVIDER_REJECTED");
 
       const artifacts = await db
         .select()
@@ -440,7 +454,12 @@ describe.sequential("image-generation integration", () => {
       );
 
       const invalidProvider: ProviderAdapter = {
-        generate: async () => Buffer.from("not a png"),
+        generate: async (
+          _input: ImageProviderInput,
+        ): Promise<ImageProviderResult> => ({
+          buffer: Buffer.from("not a png"),
+          sourceMimeType: "image/png",
+        }),
       };
 
       const attempt = await claimImageGenerationJob(
@@ -454,6 +473,7 @@ describe.sequential("image-generation integration", () => {
       const result = await processImageGenerationAttempt(
         { db, schema },
         attempt!,
+        workerId,
         invalidProvider,
         inMemoryStorage,
       );
@@ -500,6 +520,7 @@ describe.sequential("image-generation integration", () => {
       const result = await processImageGenerationAttempt(
         { db, schema },
         attempt!,
+        workerId,
         fakeProvider,
         failingStorage,
       );
@@ -539,15 +560,19 @@ describe.sequential("image-generation integration", () => {
       await processImageGenerationAttempt(
         { db, schema },
         attempt!,
+        workerId,
         fakeProvider,
         inMemoryStorage,
       );
 
       const replayResult = await processImageGenerationAttempt(
         { db, schema },
-        { ...attempt!, status: "succeeded", queueStatus: "completed" },
+        attempt!,
+        workerId,
         {
-          generate: async () => {
+          generate: async (
+            _input: ImageProviderInput,
+          ): Promise<ImageProviderResult> => {
             throw new Error("Should not be called");
           },
         },

@@ -23,8 +23,24 @@ export interface ImageAttemptWithJob {
   queueStatus: string;
 }
 
+export interface ImageProviderInput {
+  attemptId: string;
+  provider: string;
+  modelId: string;
+  prompt: string;
+  settings: Record<string, unknown>;
+  signal: AbortSignal;
+}
+
+export interface ImageProviderResult {
+  buffer: Buffer;
+  providerRequestId?: string;
+  finishReason?: string;
+  sourceMimeType?: string;
+}
+
 export interface ProviderAdapter {
-  generate(prompt: string, settings: Record<string, unknown>): Promise<Buffer>;
+  generate(input: ImageProviderInput): Promise<ImageProviderResult>;
 }
 
 export interface StorageAdapter {

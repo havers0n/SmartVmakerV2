@@ -37,6 +37,8 @@ export async function processNextImageJob(
       attemptId: attempt.attemptId,
       sceneIndex: attempt.sceneIndex,
       frameRole: attempt.frameRole,
+      provider: attempt.provider,
+      modelId: attempt.modelId,
     },
     "Processing image generation attempt",
   );
@@ -44,6 +46,7 @@ export async function processNextImageJob(
   const result = await processImageGenerationAttempt(
     { db, logger: log, schema },
     attempt,
+    deps.workerId,
     deps.provider,
     deps.storage,
   );

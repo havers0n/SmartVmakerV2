@@ -35,6 +35,7 @@
     "@scrimspec/shared-types": "workspace:*",
     "@aec/logger": "workspace:*",
     "@aec/storage-client": "workspace:*",
+    "drizzle-orm": "^0.44.7",
     "p-retry": "^6.2.1"
   },
   "devDependencies": {

@@ -20,6 +20,12 @@ const idempotencyKeySchema = z.string().trim().min(1).max(200);
 const PROMPT_COMPILER_VERSION = "keyframe-prompt-compiler:v1";
 const SETTINGS_VERSION = "1";
 
+const SUPPORTED_IMAGE_PROVIDERS = [
+  "gemini",
+  "google_gemini",
+  "minimax",
+] as const;
+
 export class ImageGenerationError extends Error {
   constructor(
     readonly code:
@@ -29,7 +35,10 @@ export class ImageGenerationError extends Error {
       | "TARGET_SCENE_INDEX_OUT_OF_RANGE"
       | "TARGET_FRAME_ROLE_NOT_ALLOWED"
       | "ATTEMPT_NOT_FAILED"
-      | "NO_FAILED_ATTEMPTS",
+      | "NO_FAILED_ATTEMPTS"
+      | "IMAGE_PROVIDER_MISSING"
+      | "IMAGE_MODEL_MISSING"
+      | "IMAGE_PROVIDER_UNSUPPORTED",
     readonly status: 404 | 409 | 400,
     message: string,
   ) {
@@ -219,9 +228,45 @@ export async function enqueueImageGeneration(
       : defaultTargets(scenes.length, allRequired);
 
     const modelSnapshot = (runRow.input_snapshot as any)?.models;
-    const provider = modelSnapshot?.image?.provider ?? "unknown";
-    const modelId = modelSnapshot?.image?.modelId ?? "unknown";
+    const provider = modelSnapshot?.image?.provider;
+    const modelId = modelSnapshot?.image?.modelId;
     const modelCatalogRevision = null;
+
+    if (!provider) {
+      throw new ImageGenerationError(
+        "IMAGE_PROVIDER_MISSING",
+        400,
+        "Image provider is not configured for this Run",
+      );
+    }
+    if (!modelId) {
+      throw new ImageGenerationError(
+        "IMAGE_MODEL_MISSING",
+        400,
+        "Image modelId is not configured for this Run",
+      );
+    }
+    if (provider === "unknown") {
+      throw new ImageGenerationError(
+        "IMAGE_PROVIDER_MISSING",
+        400,
+        "Image provider has not been selected for this Run",
+      );
+    }
+    if (modelId === "unknown") {
+      throw new ImageGenerationError(
+        "IMAGE_MODEL_MISSING",
+        400,
+        "Image modelId has not been selected for this Run",
+      );
+    }
+    if (!(SUPPORTED_IMAGE_PROVIDERS as readonly string[]).includes(provider)) {
+      throw new ImageGenerationError(
+        "IMAGE_PROVIDER_UNSUPPORTED",
+        400,
+        `Image provider "${provider}" is not supported for production generation`,
+      );
+    }
 
     const inputSnapshot = runRow.input_snapshot as any;
     const production = inputSnapshot?.production ?? {};
