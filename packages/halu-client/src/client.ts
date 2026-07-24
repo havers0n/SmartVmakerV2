@@ -17,17 +17,17 @@ import {
   ImageGenerationResponse,
   HaluApiError,
   MinimaxErrorCode,
-} from './types';
+} from "./types";
 
 /**
  * Default configuration values
  */
-const DEFAULT_BASE_URL = 'https://api.minimax.io/v1';
+const DEFAULT_BASE_URL = "https://api.minimax.io/v1";
 const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
 
 function isAllowedDownloadHost(hostname: string): boolean {
   const configured = process.env.HALU_ALLOWED_VIDEO_HOSTS;
-  const rules = (configured ? configured.split(',') : ['minimax.io'])
+  const rules = (configured ? configured.split(",") : ["minimax.io"])
     .map((rule) => rule.trim().toLowerCase())
     .filter(Boolean);
   const host = hostname.toLowerCase();
@@ -46,7 +46,7 @@ export class HaluClient {
     this.baseUrl = config.baseUrl || DEFAULT_BASE_URL;
 
     if (!this.apiKey) {
-      throw new Error('HALU API key is required');
+      throw new Error("HALU API key is required");
     }
   }
 
@@ -59,52 +59,65 @@ export class HaluClient {
    */
   private async request<T>(
     endpoint: string,
-    method: 'GET' | 'POST' = 'GET',
-    body?: any
+    method: "GET" | "POST" = "GET",
+    body?: any,
+    options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
     };
 
-    if (method === 'POST') {
-      headers['Content-Type'] = 'application/json';
+    if (method === "POST") {
+      headers["Content-Type"] = "application/json";
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const combinedController = new AbortController();
+    const timeoutId = setTimeout(() => combinedController.abort(), timeoutMs);
+
+    // Combine external signal with internal timeout controller
+    const externalSignal = options?.signal;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        combinedController.abort();
+      } else {
+        const onAbort = () => combinedController.abort();
+        externalSignal.addEventListener("abort", onAbort, { once: true });
+      }
+    }
 
     try {
       const response = await fetch(url, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
+        signal: combinedController.signal,
       });
 
       clearTimeout(timeoutId);
 
-      // Parse response
-      const data = await response.json() as any;
+      const data = (await response.json()) as any;
 
-      // Check for API errors
       if (!response.ok) {
         throw new HaluApiError(
           data.base_resp?.status_msg || `HTTP ${response.status}`,
           data.base_resp?.status_code || response.status,
           data.base_resp?.status_msg || response.statusText,
-          data
+          data,
         );
       }
 
-      // Check base_resp status code
-      if (data.base_resp && data.base_resp.status_code !== MinimaxErrorCode.SUCCESS) {
+      if (
+        data.base_resp &&
+        data.base_resp.status_code !== MinimaxErrorCode.SUCCESS
+      ) {
         throw new HaluApiError(
-          data.base_resp.status_msg || 'API request failed',
+          data.base_resp.status_msg || "API request failed",
           data.base_resp.status_code,
           data.base_resp.status_msg,
-          data
+          data,
         );
       }
 
@@ -117,13 +130,13 @@ export class HaluClient {
       }
 
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error(`Request timeout after ${DEFAULT_TIMEOUT_MS}ms`);
+        if (error.name === "AbortError") {
+          throw new Error(`Request timeout after ${timeoutMs}ms`);
         }
         throw error;
       }
 
-      throw new Error('Unknown error occurred during API request');
+      throw new Error("Unknown error occurred during API request");
     }
   }
 
@@ -153,9 +166,13 @@ export class HaluClient {
    * ```
    */
   async createSubjectReferenceTask(
-    payload: SubjectReferenceVideoRequest
+    payload: SubjectReferenceVideoRequest,
   ): Promise<CreateVideoTaskResponse> {
-    return this.request<CreateVideoTaskResponse>('/video_generation', 'POST', payload);
+    return this.request<CreateVideoTaskResponse>(
+      "/video_generation",
+      "POST",
+      payload,
+    );
   }
 
   /**
@@ -180,9 +197,13 @@ export class HaluClient {
    * ```
    */
   async createFirstLastFrameTask(
-    payload: FirstLastFrameVideoRequest
+    payload: FirstLastFrameVideoRequest,
   ): Promise<CreateVideoTaskResponse> {
-    return this.request<CreateVideoTaskResponse>('/video_generation', 'POST', payload);
+    return this.request<CreateVideoTaskResponse>(
+      "/video_generation",
+      "POST",
+      payload,
+    );
   }
 
   /**
@@ -199,7 +220,7 @@ export class HaluClient {
    *   aspect_ratio: '16:9',
    *   response_format: 'base64'
    * });
-   * 
+   *
    * // Save base64 image to file
    * const imageData = response.data[0].image_base64;
    * const imageBuffer = Buffer.from(imageData, 'base64');
@@ -207,9 +228,15 @@ export class HaluClient {
    * ```
    */
   async generateImage(
-    payload: TextToImageRequest
+    payload: TextToImageRequest,
+    options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<ImageGenerationResponse> {
-    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
+    return this.request<ImageGenerationResponse>(
+      "/image_generation",
+      "POST",
+      payload,
+      options,
+    );
   }
 
   /**
@@ -227,15 +254,19 @@ export class HaluClient {
    *   aspect_ratio: '16:9',
    *   response_format: 'url'
    * });
-   * 
+   *
    * // Get image URL
    * const imageUrl = response.data[0].url;
    * ```
    */
   async modifyImage(
-    payload: ImageToImageRequest
+    payload: ImageToImageRequest,
   ): Promise<ImageGenerationResponse> {
-    return this.request<ImageGenerationResponse>('/image_generation', 'POST', payload);
+    return this.request<ImageGenerationResponse>(
+      "/image_generation",
+      "POST",
+      payload,
+    );
   }
 
   /**
@@ -258,7 +289,10 @@ export class HaluClient {
    * ```
    */
   async queryTask(taskId: string): Promise<QueryVideoTaskResponse> {
-    return this.request<QueryVideoTaskResponse>(`/query/video_generation?task_id=${taskId}`, 'GET');
+    return this.request<QueryVideoTaskResponse>(
+      `/query/video_generation?task_id=${taskId}`,
+      "GET",
+    );
   }
 
   /**
@@ -278,7 +312,10 @@ export class HaluClient {
    * ```
    */
   async retrieveFile(fileId: string): Promise<RetrieveFileResponse> {
-    return this.request<RetrieveFileResponse>(`/files/retrieve?file_id=${fileId}`, 'GET');
+    return this.request<RetrieveFileResponse>(
+      `/files/retrieve?file_id=${fileId}`,
+      "GET",
+    );
   }
 
   /**
@@ -300,7 +337,10 @@ export class HaluClient {
     let downloadUrl: string;
 
     // Check if it's a URL or a file_id
-    if (fileIdOrUrl.startsWith('http://') || fileIdOrUrl.startsWith('https://')) {
+    if (
+      fileIdOrUrl.startsWith("http://") ||
+      fileIdOrUrl.startsWith("https://")
+    ) {
       downloadUrl = fileIdOrUrl;
     } else {
       // It's a file_id, retrieve the download URL
@@ -312,14 +352,16 @@ export class HaluClient {
     try {
       parsedUrl = new URL(downloadUrl);
     } catch {
-      throw new Error('Invalid download URL returned by provider');
+      throw new Error("Invalid download URL returned by provider");
     }
 
-    if (parsedUrl.protocol !== 'https:') {
-      throw new Error('Insecure video download URL protocol');
+    if (parsedUrl.protocol !== "https:") {
+      throw new Error("Insecure video download URL protocol");
     }
     if (!isAllowedDownloadHost(parsedUrl.hostname)) {
-      throw new Error(`Video download host is not allowed: ${parsedUrl.hostname}`);
+      throw new Error(
+        `Video download host is not allowed: ${parsedUrl.hostname}`,
+      );
     }
 
     // Download the video
@@ -365,7 +407,7 @@ export class HaluClient {
       intervalMs?: number; // Default: 5000 (5 seconds)
       maxAttempts?: number; // Default: 60 (5 minutes total)
       onProgress?: (status: QueryVideoTaskResponse) => void;
-    }
+    },
   ): Promise<QueryVideoTaskResponse> {
     const intervalMs = options?.intervalMs || 5000;
     const maxAttempts = options?.maxAttempts || 60;
@@ -379,7 +421,7 @@ export class HaluClient {
       }
 
       // Check if task is complete
-      if (status.status === 'success' || status.status === 'failed') {
+      if (status.status === "success" || status.status === "failed") {
         return status;
       }
 

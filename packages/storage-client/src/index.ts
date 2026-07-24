@@ -1,7 +1,12 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { Upload } from '@aws-sdk/lib-storage';
-import { Readable } from 'stream';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Upload } from "@aws-sdk/lib-storage";
+import { Readable } from "stream";
 
 /**
  * Cloudflare R2 Storage Client
@@ -17,12 +22,12 @@ import { Readable } from 'stream';
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
-export const R2_BUCKET = process.env.R2_BUCKET_NAME || 'scrimspec-assets';
+export const R2_BUCKET = process.env.R2_BUCKET_NAME || "scrimspec-assets";
 
 // Validate required environment variables
 if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
   console.warn(
-    '⚠️  R2 credentials not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY environment variables.'
+    "⚠️  R2 credentials not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY environment variables.",
   );
 }
 
@@ -34,11 +39,11 @@ if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
  * S3 Client configured for Cloudflare R2
  */
 export const r2 = new S3Client({
-  region: 'auto', // R2 uses 'auto' for region
+  region: "auto", // R2 uses 'auto' for region
   endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID || '',
-    secretAccessKey: R2_SECRET_ACCESS_KEY || '',
+    accessKeyId: R2_ACCESS_KEY_ID || "",
+    secretAccessKey: R2_SECRET_ACCESS_KEY || "",
   },
 });
 
@@ -61,7 +66,7 @@ export const r2 = new S3Client({
 export async function createUploadUrl(
   key: string,
   contentType: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET,
@@ -86,7 +91,7 @@ export async function createUploadUrl(
  */
 export async function createDownloadUrl(
   key: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: R2_BUCKET,
@@ -126,10 +131,12 @@ export async function createDownloadUrl(
 export async function uploadLargeStream(
   key: string,
   stream: Readable | Buffer,
-  contentType: string
+  contentType: string,
 ): Promise<{ key: string; bucket: string }> {
   // Convert Buffer to Readable stream if needed
-  const readableStream = Buffer.isBuffer(stream) ? Readable.from(stream) : stream;
+  const readableStream = Buffer.isBuffer(stream)
+    ? Readable.from(stream)
+    : stream;
 
   const upload = new Upload({
     client: r2,
@@ -146,7 +153,7 @@ export async function uploadLargeStream(
   });
 
   // Execute upload with progress tracking
-  upload.on('httpUploadProgress', (progress) => {
+  upload.on("httpUploadProgress", (progress) => {
     if (progress.loaded && progress.total) {
       const percent = Math.round((progress.loaded / progress.total) * 100);
       console.log(`Upload progress for ${key}: ${percent}%`);
@@ -162,6 +169,21 @@ export async function uploadLargeStream(
 }
 
 /**
+ * Delete an object from R2 by key
+ *
+ * @param key - The object key (path) in R2
+ * @returns void
+ */
+export async function deleteObject(key: string): Promise<void> {
+  const command = new DeleteObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+  });
+
+  await r2.send(command);
+}
+
+/**
  * Upload a buffer directly to R2 (for smaller files)
  *
  * @param key - The object key (path) in R2
@@ -172,7 +194,7 @@ export async function uploadLargeStream(
 export async function uploadBuffer(
   key: string,
   buffer: Buffer,
-  contentType: string
+  contentType: string,
 ): Promise<{ key: string; bucket: string }> {
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET,
@@ -206,7 +228,7 @@ export function getPublicUrl(key: string): string {
 
   if (!publicDomain) {
     throw new Error(
-      'R2_PUBLIC_DOMAIN not configured. Set up a custom domain in Cloudflare R2 settings.'
+      "R2_PUBLIC_DOMAIN not configured. Set up a custom domain in Cloudflare R2 settings.",
     );
   }
 
@@ -222,7 +244,7 @@ export function getPublicUrl(key: string): string {
 export function parseR2Key(urlOrPath: string): string {
   try {
     const url = new URL(urlOrPath);
-    return url.pathname.replace(/^\//, ''); // Remove leading slash
+    return url.pathname.replace(/^\//, ""); // Remove leading slash
   } catch {
     // Not a URL, assume it's already a key
     return urlOrPath;

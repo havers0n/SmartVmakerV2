@@ -65,5 +65,17 @@ module.exports = {
         NODE_ENV: "development",
       },
     },
+    {
+      name: "worker:image",
+      script: "dotenv",
+      args: "-e ./.env -- npm run dev:image",
+      cwd: path.resolve(__dirname, "packages/workers"),
+      log_date_format: "YYYY-MM-DD HH:mm:ss.SSS",
+      env: {
+        NODE_ENV: "development",
+      },
+      // Provider timeout is 120s; allow current job and finalization to finish
+      kill_timeout: 180000,
+    },
   ],
 };

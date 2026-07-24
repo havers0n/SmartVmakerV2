@@ -9,8 +9,10 @@ export {
   claimImageGenerationJob,
   computeStorageKey,
 } from "./handler";
-export type { ImageGenerationDeps } from "./handler";
+export type { ImageGenerationDeps, ImageNormalizeFn } from "./handler";
 export type {
+  ImageProviderInput,
+  ImageProviderResult,
   ProviderAdapter,
   StorageAdapter,
   ProcessAttemptResult,
