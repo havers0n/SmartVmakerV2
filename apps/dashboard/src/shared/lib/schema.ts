@@ -33,6 +33,11 @@ export const currentApprovedScenarioRevisions =
   schema.currentApprovedScenarioRevisions;
 export const scenarioGenerationJobQueue = schema.scenarioGenerationJobQueue;
 export const assets = schema.assets;
+export const scenePlans = schema.scenePlans;
+export const imageGenerationRequests = schema.imageGenerationRequests;
+export const imageAttempts = schema.imageAttempts;
+export const imageArtifacts = schema.imageArtifacts;
+export const imageGenerationJobQueue = schema.imageGenerationJobQueue;
 
 // AES Core - use tables mapping for consistency
 export const beats = schema.beats;

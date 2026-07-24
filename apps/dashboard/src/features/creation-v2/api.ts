@@ -89,4 +89,36 @@ export const generationV2Api = {
     request<any>(
       `/api/generation/video-projects/${projectId}/runs/${runId}/approved-scenario-revisions/current`,
     ),
+
+  // Image generation
+  enqueueImageGeneration: (
+    projectId: string,
+    runId: string,
+    body: unknown,
+    key: string,
+  ) =>
+    request<any>(
+      `/api/generation/video-projects/${projectId}/runs/${runId}/image-generation`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": key },
+        body: JSON.stringify(body),
+      },
+    ),
+
+  getImageGenerationStatus: (projectId: string, runId: string) =>
+    request<any>(
+      `/api/generation/video-projects/${projectId}/runs/${runId}/image-generation`,
+    ),
+
+  retryImageAttempt: (
+    projectId: string,
+    runId: string,
+    attemptId: string,
+    key: string,
+  ) =>
+    request<any>(
+      `/api/generation/video-projects/${projectId}/runs/${runId}/image-generation/attempts/${attemptId}/retry`,
+      { method: "POST", headers: { "Idempotency-Key": key } },
+    ),
 };

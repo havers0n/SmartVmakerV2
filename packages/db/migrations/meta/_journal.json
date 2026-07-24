@@ -232,6 +232,13 @@
       "when": 1785169006000,
       "tag": "0032_approved_scenario_revisions",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1785169007000,
+      "tag": "0033_durable_image_generation",
+      "breakpoints": true
     }
   ]
 }

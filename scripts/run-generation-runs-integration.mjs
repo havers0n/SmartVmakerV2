@@ -34,7 +34,14 @@ const productionContractMigration = readFileSync(
   ),
   "utf8",
 );
-const approvalMigration = readFileSync(resolve(root, "packages/db/migrations/0032_approved_scenario_revisions.sql"), "utf8");
+const approvalMigration = readFileSync(
+  resolve(root, "packages/db/migrations/0032_approved_scenario_revisions.sql"),
+  "utf8",
+);
+const imageGenerationMigration = readFileSync(
+  resolve(root, "packages/db/migrations/0033_durable_image_generation.sql"),
+  "utf8",
+);
 const migrationJournal = JSON.parse(
   readFileSync(
     resolve(root, "packages/db/migrations/meta/_journal.json"),
@@ -54,15 +61,22 @@ const productionContractJournalEntry = migrationJournal.entries.find(
   ({ tag }) =>
     tag === "0031_allow_versioned_content_format_production_contracts",
 );
-const approvalJournalEntry = migrationJournal.entries.find(({ tag }) => tag === "0032_approved_scenario_revisions");
+const approvalJournalEntry = migrationJournal.entries.find(
+  ({ tag }) => tag === "0032_approved_scenario_revisions",
+);
+const imageGenerationJournalEntry = migrationJournal.entries.find(
+  ({ tag }) => tag === "0033_durable_image_generation",
+);
 if (
   !foundationJournalEntry ||
   !scenarioJournalEntry ||
   !creationWizardJournalEntry ||
-  !productionContractJournalEntry || !approvalJournalEntry
+  !productionContractJournalEntry ||
+  !approvalJournalEntry ||
+  !imageGenerationJournalEntry
 ) {
   throw new Error(
-    "0028, 0029, 0030 and 0031 must be present in the local migration journal",
+    "0028 through 0033 must all be present in the local migration journal",
   );
 }
 const migrationHistory = `
@@ -76,6 +90,7 @@ INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
   ('${createHash("sha256").update(creationWizardMigration).digest("hex")}', ${creationWizardJournalEntry.when}),
   ('${createHash("sha256").update(productionContractMigration).digest("hex")}', ${productionContractJournalEntry.when});
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('${createHash("sha256").update(approvalMigration).digest("hex")}', ${approvalJournalEntry.when});
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('${createHash("sha256").update(imageGenerationMigration).digest("hex")}', ${imageGenerationJournalEntry.when});
 `;
 
 const bootstrap = `
@@ -200,6 +215,7 @@ try {
   psql(creationWizardMigration);
   psql(productionContractMigration);
   psql(approvalMigration);
+  psql(imageGenerationMigration);
   psql(migrationHistory);
   run(pnpm, ["--filter", "@scrimspec/db", "migrations:preflight:generation"], {
     shell: process.platform === "win32",
@@ -230,6 +246,7 @@ try {
         "src/server/creation-v2.integration.test.ts",
         "src/server/content-format-production-rules.integration.test.ts",
         "src/server/scenario-approval.integration.test.ts",
+        "src/server/image-generation.integration.test.ts",
       ],
       {
         shell: process.platform === "win32",
