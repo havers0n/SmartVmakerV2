@@ -34,6 +34,7 @@ const productionContractMigration = readFileSync(
   ),
   "utf8",
 );
+const approvalMigration = readFileSync(resolve(root, "packages/db/migrations/0032_approved_scenario_revisions.sql"), "utf8");
 const migrationJournal = JSON.parse(
   readFileSync(
     resolve(root, "packages/db/migrations/meta/_journal.json"),
@@ -53,11 +54,12 @@ const productionContractJournalEntry = migrationJournal.entries.find(
   ({ tag }) =>
     tag === "0031_allow_versioned_content_format_production_contracts",
 );
+const approvalJournalEntry = migrationJournal.entries.find(({ tag }) => tag === "0032_approved_scenario_revisions");
 if (
   !foundationJournalEntry ||
   !scenarioJournalEntry ||
   !creationWizardJournalEntry ||
-  !productionContractJournalEntry
+  !productionContractJournalEntry || !approvalJournalEntry
 ) {
   throw new Error(
     "0028, 0029, 0030 and 0031 must be present in the local migration journal",
@@ -73,6 +75,7 @@ INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
   ('${createHash("sha256").update(scenarioMigration).digest("hex")}', ${scenarioJournalEntry.when}),
   ('${createHash("sha256").update(creationWizardMigration).digest("hex")}', ${creationWizardJournalEntry.when}),
   ('${createHash("sha256").update(productionContractMigration).digest("hex")}', ${productionContractJournalEntry.when});
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('${createHash("sha256").update(approvalMigration).digest("hex")}', ${approvalJournalEntry.when});
 `;
 
 const bootstrap = `
@@ -196,6 +199,7 @@ try {
   psql(scenarioMigration);
   psql(creationWizardMigration);
   psql(productionContractMigration);
+  psql(approvalMigration);
   psql(migrationHistory);
   run(pnpm, ["--filter", "@scrimspec/db", "migrations:preflight:generation"], {
     shell: process.platform === "win32",
@@ -225,6 +229,7 @@ try {
         "src/server/scenario-execution.integration.test.ts",
         "src/server/creation-v2.integration.test.ts",
         "src/server/content-format-production-rules.integration.test.ts",
+        "src/server/scenario-approval.integration.test.ts",
       ],
       {
         shell: process.platform === "win32",

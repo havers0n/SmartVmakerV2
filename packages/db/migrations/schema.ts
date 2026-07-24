@@ -838,6 +838,61 @@ export const scenarioArtifacts = generationPipeline.table(
   }),
 );
 
+/** Immutable, user-approved snapshots selected from scenario artifacts. */
+export const approvedScenarioRevisions = generationPipeline.table(
+  "approved_scenario_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    scenarioArtifactId: uuid("scenario_artifact_id")
+      .notNull()
+      .references(() => scenarioArtifacts.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    sourceCandidateIndex: integer("source_candidate_index").notNull(),
+    selectedCandidate: jsonb("selected_candidate").notNull(),
+    scenes: jsonb("scenes").notNull(),
+    productionPlan: jsonb("production_plan"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    runRevisionUnique: unique(
+      "approved_scenario_revisions_run_revision_unique",
+    ).on(table.runId, table.revisionNumber),
+    runIdempotencyUnique: unique(
+      "approved_scenario_revisions_run_idempotency_unique",
+    ).on(table.runId, table.idempotencyKey),
+    runIdIdUnique: unique("approved_scenario_revisions_run_id_id_unique").on(
+      table.runId,
+      table.id,
+    ),
+    runCreatedIdx: index("approved_scenario_revisions_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
+  }),
+);
+
+/** Mutable pointer; downstream consumers resolve only through this table. */
+export const currentApprovedScenarioRevisions = generationPipeline.table(
+  "current_approved_scenario_revisions",
+  {
+    runId: uuid("run_id")
+      .primaryKey()
+      .notNull()
+      .references(() => generationRuns.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+);
+
 export const assets = generationPipeline.table(
   "assets",
   {

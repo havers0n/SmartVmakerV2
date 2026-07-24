@@ -225,6 +225,13 @@
       "when": 1785169005000,
       "tag": "0031_allow_versioned_content_format_production_contracts",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785169006000,
+      "tag": "0032_approved_scenario_revisions",
+      "breakpoints": true
     }
   ]
 }
