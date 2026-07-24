@@ -29,7 +29,8 @@ export const generationRuns = schema.generationRuns;
 export const scenarioGenerationAttempts = schema.scenarioGenerationAttempts;
 export const scenarioArtifacts = schema.scenarioArtifacts;
 export const approvedScenarioRevisions = schema.approvedScenarioRevisions;
-export const currentApprovedScenarioRevisions = schema.currentApprovedScenarioRevisions;
+export const currentApprovedScenarioRevisions =
+  schema.currentApprovedScenarioRevisions;
 export const scenarioGenerationJobQueue = schema.scenarioGenerationJobQueue;
 export const assets = schema.assets;
 

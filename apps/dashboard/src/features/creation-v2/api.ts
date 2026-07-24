@@ -75,8 +75,18 @@ export const generationV2Api = {
       undefined,
       scenarioArtifactResponseSchema,
     ),
-  approveScenario: (projectId: string, runId: string, body: unknown, key: string) =>
-    request<any>(`/api/generation/video-projects/${projectId}/runs/${runId}/approved-scenario-revisions`, { ...json("POST", body), headers: { "Idempotency-Key": key } }),
+  approveScenario: (
+    projectId: string,
+    runId: string,
+    body: unknown,
+    key: string,
+  ) =>
+    request<any>(
+      `/api/generation/video-projects/${projectId}/runs/${runId}/approved-scenario-revisions`,
+      { ...json("POST", body), headers: { "Idempotency-Key": key } },
+    ),
   currentApprovedScenario: (projectId: string, runId: string) =>
-    request<any>(`/api/generation/video-projects/${projectId}/runs/${runId}/approved-scenario-revisions/current`),
+    request<any>(
+      `/api/generation/video-projects/${projectId}/runs/${runId}/approved-scenario-revisions/current`,
+    ),
 };

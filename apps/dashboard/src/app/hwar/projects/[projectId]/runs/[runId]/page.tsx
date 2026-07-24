@@ -201,16 +201,23 @@ export default function GenerationRunPage() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {artifact.data && <ScenarioCandidateApprovalPanel
-                artifactId={artifact.data.id}
-                candidates={artifact.data.scenarios}
-                currentRevision={currentApproval.data ?? null}
-                approve={async (body, key) => {
-                  const result = await generationV2Api.approveScenario(projectId, runId, body, key);
-                  await currentApproval.refetch();
-                  return result;
-                }}
-              />}
+              {artifact.data && (
+                <ScenarioCandidateApprovalPanel
+                  artifactId={artifact.data.id}
+                  candidates={artifact.data.scenarios}
+                  currentRevision={currentApproval.data ?? null}
+                  approve={async (body, key) => {
+                    const result = await generationV2Api.approveScenario(
+                      projectId,
+                      runId,
+                      body,
+                      key,
+                    );
+                    await currentApproval.refetch();
+                    return result;
+                  }}
+                />
+              )}
               {artifact.data?.scenarios.map((scenario, index) => (
                 <Card key={`${scenario.title}-${index}`} className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
